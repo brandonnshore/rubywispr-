@@ -1,0 +1,20 @@
+# Local secrets and environment
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Swift / Xcode local state
+.build/
+DerivedData/
+*.xcuserstate
+*.xcuserdata/
+xcuserdata/
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
