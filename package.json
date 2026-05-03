@@ -1,0 +1,21 @@
+{
+  "name": "rubywhisper",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @rubywhisper/web",
+    "lint": "npm run lint --workspace @rubywhisper/web",
+    "typecheck": "npm run typecheck --workspace @rubywhisper/web",
+    "test": "npm run test --workspace @rubywhisper/web",
+    "build": "npm run build --workspace @rubywhisper/web"
+  },
+  "overrides": {
+    "postcss": "8.5.10"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
