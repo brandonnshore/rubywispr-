@@ -49,7 +49,7 @@ Never paste or print secret values into chat, Linear, PRs, logs, or docs.
 
 `SYMPHONY_CODEX_HOME` is a dedicated worker home for sessions and runtime files. The runner links the existing Codex auth, config, plugins, skills, and helper binaries into that home without reading secret contents. Workers keep access to configured MCP/app tools, while RubyWhisper issue bookkeeping should still use Symphony's injected `linear_graphql` tool.
 
-Workers run with Codex `workspaceWrite` turn sandboxing plus `networkAccess: true`. The local runner expands the Symphony workspace root into `writableRoots` so normal Git metadata writes, Git fetch/push, GitHub PR creation, and connected MCP/app calls can work inside issue workspaces.
+Workers run with Codex `danger-full-access` thread sandboxing and a `dangerFullAccess` turn policy inside isolated per-ticket Symphony workspaces. This is intentional for the local operator harness: Codex `workspaceWrite` can edit normal files but may still block Git metadata writes such as `.git/index.lock`, which prevents `git add`, commits, pushes, and PR handoff. The safety boundary is the Linear queue, one issue workspace per ticket, scoped worker instructions, git review, and the explicit `--i-understand-that-this-will-be-running-without-the-usual-guardrails` Symphony flag.
 
 ## Local Setup
 
@@ -187,6 +187,7 @@ After that wave, review the artifacts and split the next backlog into leaves bef
 - Workers fail instantly with zero tokens: verify `SYMPHONY_CODEX_COMMAND` points to a Codex CLI new enough for `gpt-5.5`; Homebrew `codex-cli 0.113.0` rejects `gpt-5.5`.
 - Workers fail with `unknown variant reject`: use string-form `approval_policy: never`; newer Codex app-server schemas no longer accept Symphony's older object-form `reject` policy.
 - Workers stall on `mcpServer/elicitation/request`: rerun `scripts/setup-symphony.sh` and confirm the Codex 0.128 MCP elicitation compatibility patch applies. The patch declines non-interactive MCP input prompts instead of leaving the turn wedged.
+- Workers can edit files but fail `git add` with `.git/index.lock: Operation not permitted`: restart Symphony after confirming the runtime workflow uses `thread_sandbox: danger-full-access` and `turn_sandbox_policy.type: dangerFullAccess`. Existing Symphony processes do not reload workflow policy changes.
 - Workers stall on missing external authorization: update the workpad with the exact missing auth/tool/action and move the issue to `In Review` or the project's equivalent human review state so Symphony does not keep retrying the same blocker.
 
 ## Sources

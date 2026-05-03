@@ -40,16 +40,9 @@ agent:
 codex:
   command: 'CODEX_HOME="${SYMPHONY_CODEX_HOME}" "${SYMPHONY_CODEX_COMMAND:-/Users/brandonshore/.npm-global/bin/codex}" --config shell_environment_policy.inherit=all --config "model=\"${SYMPHONY_CODEX_MODEL:-gpt-5.5}\"" --config "model_reasoning_effort=\"${SYMPHONY_CODEX_REASONING:-high}\"" --config model_reasoning_summary=\"none\" app-server'
   approval_policy: never
-  thread_sandbox: workspace-write
+  thread_sandbox: danger-full-access
   turn_sandbox_policy:
-    type: workspaceWrite
-    writableRoots:
-      - "__SYMPHONY_WORKSPACE_ROOT__"
-    readOnlyAccess:
-      type: fullAccess
-    networkAccess: true
-    excludeTmpdirEnvVar: false
-    excludeSlashTmp: false
+    type: dangerFullAccess
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
