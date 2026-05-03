@@ -56,6 +56,11 @@ if ! grep -q '{:castore,' mix.exs; then
   perl -0pi -e 's/(\{:req, "~> 0\.5"\},)/$1\n      {:castore, "~> 1.0"},/' mix.exs
 fi
 
+linear_client="lib/symphony_elixir/linear/client.ex"
+if ! grep -q 'SYMPHONY_CACERTFILE' "$linear_client"; then
+  perl -0pi -e 's/connect_options: \[timeout: 30_000\]/connect_options: [\n        timeout: 30_000,\n        transport_opts: [cacertfile: System.get_env("SYMPHONY_CACERTFILE", "\/etc\/ssl\/cert.pem")]\n      ]/' "$linear_client"
+fi
+
 mise trust
 mise install
 mise exec -- mix setup
