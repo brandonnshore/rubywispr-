@@ -49,7 +49,7 @@ Never paste or print secret values into chat, Linear, PRs, logs, or docs.
 
 `SYMPHONY_CODEX_HOME` is a dedicated worker home for sessions and runtime files. The runner links the existing Codex auth, config, plugins, skills, and helper binaries into that home without reading secret contents. Workers keep access to configured MCP/app tools, while RubyWhisper issue bookkeeping should still use Symphony's injected `linear_graphql` tool.
 
-Workers run with Codex `workspaceWrite` turn sandboxing plus `networkAccess: true`. That keeps writes scoped to the issue workspace while allowing expected external handoff actions such as Git fetch/push, GitHub PR creation, and connected MCP/app calls.
+Workers run with Codex `workspaceWrite` turn sandboxing plus `networkAccess: true`. The local runner expands the Symphony workspace root into `writableRoots` so normal Git metadata writes, Git fetch/push, GitHub PR creation, and connected MCP/app calls can work inside issue workspaces.
 
 ## Local Setup
 

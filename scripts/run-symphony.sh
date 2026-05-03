@@ -139,6 +139,9 @@ require_env LINEAR_PROJECT_SLUG
 require_env SYMPHONY_WORKSPACE_ROOT
 require_env SYMPHONY_CODEX_HOME
 
+SYMPHONY_WORKSPACE_ROOT="$(expand_path "$SYMPHONY_WORKSPACE_ROOT")"
+export SYMPHONY_WORKSPACE_ROOT
+
 symphony_ref_dir="$(expand_path "${SYMPHONY_REFERENCE_DIR:-.tools/symphony}")"
 logs_root="$(expand_path "${SYMPHONY_LOGS_ROOT:-.tools/symphony-logs}")"
 runtime_dir="$repo_root/.tools"
@@ -176,10 +179,12 @@ link_codex_home_item plugins
 link_codex_home_item skills
 link_codex_home_item bin
 
-awk -v slug="$LINEAR_PROJECT_SLUG" '
+awk -v slug="$LINEAR_PROJECT_SLUG" -v workspace_root="$SYMPHONY_WORKSPACE_ROOT" '
   BEGIN {
     gsub(/\\/,"\\\\",slug)
     gsub(/"/,"\\\"",slug)
+    gsub(/\\/,"\\\\",workspace_root)
+    gsub(/"/,"\\\"",workspace_root)
   }
   /^[[:space:]]*project_slug:[[:space:]]*"\$LINEAR_PROJECT_SLUG"[[:space:]]*$/ {
     match($0, /^[[:space:]]*/)
@@ -187,7 +192,10 @@ awk -v slug="$LINEAR_PROJECT_SLUG" '
     print indent "project_slug: \"" slug "\""
     next
   }
-  { print }
+  {
+    gsub(/__SYMPHONY_WORKSPACE_ROOT__/, workspace_root)
+    print
+  }
 ' "$workflow_source" > "$runtime_workflow"
 
 args=("$runtime_workflow" "--logs-root" "$logs_root")

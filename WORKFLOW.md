@@ -43,7 +43,13 @@ codex:
   thread_sandbox: workspace-write
   turn_sandbox_policy:
     type: workspaceWrite
+    writableRoots:
+      - "__SYMPHONY_WORKSPACE_ROOT__"
+    readOnlyAccess:
+      type: fullAccess
     networkAccess: true
+    excludeTmpdirEnvVar: false
+    excludeSlashTmp: false
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
