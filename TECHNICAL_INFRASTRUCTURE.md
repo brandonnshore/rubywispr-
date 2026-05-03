@@ -368,6 +368,90 @@ Mac app:
 - Auto-update through Sparkle or chosen updater.
 - Mac App Store is future/later.
 
+### Direct-Download macOS Release Spike
+
+Status: recommendation for the future repo-local macOS app. The selected base has
+not been imported into this repo yet; `docs/FREEFLOW_AUDIT_RUB_24.md` confirms
+FreeFlow is a Swift/AppKit/SwiftUI Makefile-based candidate and that its local
+audit build used ad hoc signing only.
+
+Recommendation:
+
+- Use Sparkle 2 for direct-download auto-updates once the macOS app is imported.
+- Keep Mac App Store distribution future/later. The first release path should be
+  Developer ID direct download from the RubyWhisper website.
+- Revisit the updater only if RW-060 imports a base that cannot support Sparkle
+  2's macOS floor or if product direction changes to Mac App Store first.
+
+Release prerequisites and credentials:
+
+- Active Apple Developer Program membership for the RubyWhisper legal entity or
+  approved developer account.
+- Stable bundle identifier and Team ID recorded in non-secret release config.
+- Developer ID Application certificate with its private key available only in a
+  release maintainer keychain or CI signing secret.
+- Developer ID Installer certificate only if the release artifact becomes a
+  signed `.pkg`; it is not required for a plain `.app` inside a `.dmg`.
+- Hardened Runtime enabled for release builds, with only required entitlements.
+- Notarization credentials stored outside git: prefer an App Store Connect Team
+  API key for automation, or an Apple ID plus app-specific password for manual
+  `notarytool` use. Store key IDs, issuer IDs, passwords, `.p8` files, and
+  keychain profile names outside the repo.
+- Sparkle EdDSA private key stored outside git, ideally in Keychain or a release
+  secret store. Only the Sparkle public key belongs in the app's `Info.plist`.
+- HTTPS hosting for downloads, appcasts, release notes, and any delta archives.
+
+Release artifact shape:
+
+- Build archive from the repo-local macOS project after RW-060 imports it.
+- Export a Developer ID-signed `.app` with Hardened Runtime.
+- Package the signed app in a `.dmg` with an `/Applications` symlink for website
+  distribution and Sparkle updates. A `.zip` can be used for Sparkle if needed,
+  but the website download should prefer a notarized/stapled `.dmg`.
+- Submit the distributable container to Apple's notary service with `xcrun
+  notarytool submit --wait` or Xcode Organizer, then staple and validate with
+  `xcrun stapler validate`.
+- Verify Gatekeeper launch behavior on a clean, quarantine-preserving download
+  path before publishing.
+
+Sparkle appcast and update needs:
+
+- Add Sparkle through the native app's dependency mechanism after import.
+- Add `SUFeedURL`, `SUPublicEDKey`, and a monotonically increasing
+  `CFBundleVersion` to the app metadata.
+- Publish `appcast.xml` over HTTPS with release notes and EdDSA signatures for
+  each update archive.
+- Use separate beta/stable appcast URLs only if product rollout needs channels;
+  otherwise keep one public beta channel for the first release.
+- Keep old update archives long enough to test update paths and rollback-forward
+  recovery; Sparkle should move users to a newer fixed build rather than
+  downgrade them.
+
+Human approval gates:
+
+- Approval before creating, exporting, rotating, or revoking Apple Developer ID
+  certificates.
+- Approval before storing Apple notarization credentials in any CI or release
+  machine.
+- Approval before generating or rotating Sparkle EdDSA keys.
+- Approval before the first notarized public build.
+- Approval before publishing or changing the public download URL or appcast.
+- Approval before any Mac App Store packaging or entitlement work.
+
+References:
+
+- Apple Xcode Help,
+  [Distribute outside the Mac App Store (macOS)](https://help.apple.com/xcode/mac/current/en.lproj/dev033e997ca.html).
+- Apple Xcode Help,
+  [Upload a macOS app to be notarized](https://help.apple.com/xcode/mac/current/en.lproj/dev88332a81e.html).
+- `xcrun notarytool` and `xcrun stapler` command help from the local Xcode
+  command line tools.
+- Sparkle
+  [documentation](https://sparkle-project.org/documentation/) and
+  [upgrade notes](https://sparkle-project.github.io/documentation/upgrading/)
+  for EdDSA signing, appcasts, supported update archive formats, and macOS
+  version floor.
+
 Release gating:
 
 - Human approval before live Stripe mode.
