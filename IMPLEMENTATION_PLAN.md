@@ -190,7 +190,7 @@ npm run build
 stripe listen --forward-to localhost:<port>/api/stripe/webhook
 ```
 
-Exact package manager and port are TBD until the Next.js app is created.
+The package manager is npm. The exact local webhook port is set by RW-020 when `apps/web` is scaffolded.
 
 Required tests:
 
@@ -343,7 +343,7 @@ xcodebuild -scheme RubyWhisper -configuration Debug build
 xcodebuild test -scheme RubyWhisper
 ```
 
-Exact workspace/scheme commands are TBD after import.
+These are placeholders only. Exact repo-local workspace/scheme commands are blocked until RW-010 audits FreeFlow and RW-060 imports the selected macOS base.
 
 Manual validation:
 
@@ -428,6 +428,8 @@ Validation by running:
 ```bash
 xcodebuild test -scheme RubyWhisper
 ```
+
+This is a placeholder only. Exact repo-local workspace/scheme commands are blocked until RW-010 audits FreeFlow and RW-060 imports the selected macOS base.
 
 Manual validation:
 
@@ -569,7 +571,7 @@ Validation by running:
 xcodebuild -scheme RubyWhisper -configuration Release archive
 ```
 
-Exact signing/export/notarization commands are TBD after app import and Apple account setup.
+This is a placeholder only. Exact signing/export/notarization commands are blocked until RW-060 imports the selected macOS base and the Apple account setup tickets record signing constraints.
 
 Manual validation:
 
@@ -693,15 +695,22 @@ Every implementation PR or agent task should include:
 
 Expected command contracts after scaffolding:
 
+- npm is the chosen package manager.
+- `apps/web` is the Next.js app and backend API route path.
+- `apps/macos` is reserved for the imported macOS app after FreeFlow audit/import.
+- `packages/*` is reserved for shared code only when needed.
+- Web/backend commands become active after RW-020 (`RUB-31`) creates the root npm workspace and `apps/web`.
+
 ```bash
+npm install
+npm run dev
 npm run lint
 npm run typecheck
 npm run test
 npm run build
-xcodebuild test -scheme RubyWhisper
 ```
 
-Commands are provisional until the Next.js app and macOS project are imported.
+macOS `xcodebuild` commands are blocked until RW-010 records the FreeFlow scheme/build commands and the import/ADR path records the repo-local Xcode project or workspace. Do not cite a placeholder scheme as an active command.
 
 ## Security And Privacy Checkpoints
 
