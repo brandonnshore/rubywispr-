@@ -38,7 +38,7 @@ agent:
     in progress: 2
     rework: 1
 codex:
-  command: '"${SYMPHONY_CODEX_COMMAND:-/Users/brandonshore/.npm-global/bin/codex}" --config shell_environment_policy.inherit=all --config "model=\"${SYMPHONY_CODEX_MODEL:-gpt-5.5}\"" --config "model_reasoning_effort=\"${SYMPHONY_CODEX_REASONING:-high}\"" app-server'
+  command: 'CODEX_HOME="${SYMPHONY_CODEX_HOME}" "${SYMPHONY_CODEX_COMMAND:-/Users/brandonshore/.npm-global/bin/codex}" --config shell_environment_policy.inherit=all --config mcp_servers={} --config "model=\"${SYMPHONY_CODEX_MODEL:-gpt-5.5}\"" --config "model_reasoning_effort=\"${SYMPHONY_CODEX_REASONING:-high}\"" --config model_reasoning_summary=\"none\" app-server'
   approval_policy: never
   thread_sandbox: workspace-write
   turn_sandbox_policy:
@@ -56,6 +56,7 @@ Continuation context:
 {% endif %}
 
 Issue context:
+- Issue ID: {{ issue.id }}
 - Identifier: {{ issue.identifier }}
 - Title: {{ issue.title }}
 - Current status: {{ issue.state }}
@@ -93,6 +94,76 @@ Do not read every planning document "just in case." Missing future docs are not 
 - Use `rg`/`rg --files` before opening files. Prefer section reads (`sed -n`) over full-file reads for long docs.
 - Do not paste full repo docs, secret values, private env content, or giant command output into Linear, PRs, commits, or workpads.
 - If the task appears too broad, split or request a smaller leaf issue instead of expanding context indefinitely.
+
+## Linear Tool Contract
+
+Use Symphony's injected `linear_graphql` dynamic tool for Linear reads and writes. Do not use interactive Codex app connectors or MCP tools for Linear unless the issue explicitly says they are configured for this run.
+
+Use the `Issue ID` from this prompt for current-issue queries and mutations. Do not query `issues(filter: {identifier: ...})`; Linear's public GraphQL filters do not support that shape.
+
+Known-good operations:
+
+```graphql
+query RubyWhisperIssue($id: String!) {
+  issue(id: $id) {
+    id
+    identifier
+    title
+    description
+    url
+    state { id name }
+    labels { nodes { name } }
+    comments(first: 25) {
+      nodes { id body createdAt updatedAt }
+    }
+    inverseRelations {
+      nodes {
+        type
+        issue { id identifier title state { name } url }
+      }
+    }
+  }
+}
+```
+
+```graphql
+mutation RubyWhisperCreateWorkpad($issueId: String!, $body: String!) {
+  commentCreate(input: {issueId: $issueId, body: $body}) {
+    success
+    comment { id url }
+  }
+}
+```
+
+```graphql
+mutation RubyWhisperUpdateWorkpad($commentId: String!, $body: String!) {
+  commentUpdate(id: $commentId, input: {body: $body}) {
+    success
+    comment { id url }
+  }
+}
+```
+
+```graphql
+query RubyWhisperStateId($issueId: String!, $stateName: String!) {
+  issue(id: $issueId) {
+    team {
+      states(filter: {name: {eq: $stateName}}, first: 1) {
+        nodes { id name }
+      }
+    }
+  }
+}
+```
+
+```graphql
+mutation RubyWhisperUpdateIssueState($issueId: String!, $stateId: String!) {
+  issueUpdate(id: $issueId, input: {stateId: $stateId}) {
+    success
+    issue { id identifier state { name } }
+  }
+}
+```
 
 ## Core Rules
 

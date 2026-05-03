@@ -53,6 +53,7 @@ pre_LINEAR_API_KEY="${LINEAR_API_KEY:-}"
 pre_LINEAR_PROJECT_SLUG="${LINEAR_PROJECT_SLUG:-}"
 pre_SYMPHONY_SOURCE_REF="${SYMPHONY_SOURCE_REF:-}"
 pre_SYMPHONY_WORKSPACE_ROOT="${SYMPHONY_WORKSPACE_ROOT:-}"
+pre_SYMPHONY_CODEX_HOME="${SYMPHONY_CODEX_HOME:-}"
 pre_SYMPHONY_CODEX_COMMAND="${SYMPHONY_CODEX_COMMAND:-}"
 pre_SYMPHONY_CODEX_MODEL="${SYMPHONY_CODEX_MODEL:-}"
 pre_SYMPHONY_CODEX_REASONING="${SYMPHONY_CODEX_REASONING:-}"
@@ -74,17 +75,20 @@ restore_if_blank LINEAR_API_KEY "$pre_LINEAR_API_KEY"
 restore_if_blank LINEAR_PROJECT_SLUG "$pre_LINEAR_PROJECT_SLUG"
 restore_if_blank SYMPHONY_SOURCE_REF "$pre_SYMPHONY_SOURCE_REF"
 restore_if_blank SYMPHONY_WORKSPACE_ROOT "$pre_SYMPHONY_WORKSPACE_ROOT"
+restore_if_blank SYMPHONY_CODEX_HOME "$pre_SYMPHONY_CODEX_HOME"
 restore_if_blank SYMPHONY_CODEX_COMMAND "$pre_SYMPHONY_CODEX_COMMAND"
 restore_if_blank SYMPHONY_CODEX_MODEL "$pre_SYMPHONY_CODEX_MODEL"
 restore_if_blank SYMPHONY_CODEX_REASONING "$pre_SYMPHONY_CODEX_REASONING"
 
 : "${LINEAR_PROJECT_SLUG:=rubywhisper-paid-beta-launch-caaab48c6aa9}"
 : "${SYMPHONY_WORKSPACE_ROOT:=~/code/rubywhisper-symphony-workspaces}"
+: "${SYMPHONY_CODEX_HOME:=$repo_root/.tools/codex-symphony-home}"
 : "${SYMPHONY_CODEX_COMMAND:=/Users/brandonshore/.npm-global/bin/codex}"
 : "${SYMPHONY_CODEX_MODEL:=gpt-5.5}"
 : "${SYMPHONY_CODEX_REASONING:=high}"
 export LINEAR_PROJECT_SLUG
 export SYMPHONY_WORKSPACE_ROOT
+export SYMPHONY_CODEX_HOME
 export SYMPHONY_CODEX_COMMAND
 export SYMPHONY_CODEX_MODEL
 export SYMPHONY_CODEX_REASONING
@@ -133,17 +137,35 @@ expand_path() {
 require_env LINEAR_API_KEY
 require_env LINEAR_PROJECT_SLUG
 require_env SYMPHONY_WORKSPACE_ROOT
+require_env SYMPHONY_CODEX_HOME
 
 symphony_ref_dir="$(expand_path "${SYMPHONY_REFERENCE_DIR:-.tools/symphony}")"
 logs_root="$(expand_path "${SYMPHONY_LOGS_ROOT:-.tools/symphony-logs}")"
 runtime_dir="$repo_root/.tools"
 runtime_workflow="$runtime_dir/WORKFLOW.runtime.md"
+codex_home="$(expand_path "$SYMPHONY_CODEX_HOME")"
 
 if [[ ! -x "$symphony_ref_dir/elixir/bin/symphony" ]]; then
   scripts/setup-symphony.sh
 fi
 
-mkdir -p "$runtime_dir" "$logs_root"
+mkdir -p "$runtime_dir" "$logs_root" "$codex_home"
+export SYMPHONY_CODEX_HOME="$codex_home"
+
+if [[ ! -e "$codex_home/auth.json" && -e "$HOME/.codex/auth.json" ]]; then
+  ln -s "$HOME/.codex/auth.json" "$codex_home/auth.json"
+fi
+
+cat > "$codex_home/config.toml" <<'EOF'
+# Dedicated non-interactive Symphony worker profile.
+# Keep this lean: Linear access is provided by Symphony's injected `linear_graphql` dynamic tool.
+model = "gpt-5.5"
+model_reasoning_effort = "high"
+model_reasoning_summary = "none"
+
+[shell_environment_policy]
+inherit = "all"
+EOF
 
 awk -v slug="$LINEAR_PROJECT_SLUG" '
   BEGIN {
@@ -185,6 +207,9 @@ Source ref:
 
 Codex command:
   $SYMPHONY_CODEX_COMMAND
+
+Codex home:
+  $SYMPHONY_CODEX_HOME
 
 Codex version:
   ${codex_version:-unknown}
