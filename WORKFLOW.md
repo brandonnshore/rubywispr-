@@ -38,7 +38,7 @@ agent:
     in progress: 2
     rework: 1
 codex:
-  command: 'codex --config shell_environment_policy.inherit=all --config "model=\"${SYMPHONY_CODEX_MODEL:-gpt-5.5}\"" --config "model_reasoning_effort=\"${SYMPHONY_CODEX_REASONING:-xhigh}\"" app-server'
+  command: 'codex --config shell_environment_policy.inherit=all --config "model=\"${SYMPHONY_CODEX_MODEL:-gpt-5.2}\"" --config "model_reasoning_effort=\"${SYMPHONY_CODEX_REASONING:-high}\"" app-server'
   approval_policy:
     reject:
       sandbox_approval: true

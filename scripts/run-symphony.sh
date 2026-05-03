@@ -53,6 +53,8 @@ pre_LINEAR_API_KEY="${LINEAR_API_KEY:-}"
 pre_LINEAR_PROJECT_SLUG="${LINEAR_PROJECT_SLUG:-}"
 pre_SYMPHONY_SOURCE_REF="${SYMPHONY_SOURCE_REF:-}"
 pre_SYMPHONY_WORKSPACE_ROOT="${SYMPHONY_WORKSPACE_ROOT:-}"
+pre_SYMPHONY_CODEX_MODEL="${SYMPHONY_CODEX_MODEL:-}"
+pre_SYMPHONY_CODEX_REASONING="${SYMPHONY_CODEX_REASONING:-}"
 
 set -a
 # shellcheck disable=SC1091
@@ -71,11 +73,17 @@ restore_if_blank LINEAR_API_KEY "$pre_LINEAR_API_KEY"
 restore_if_blank LINEAR_PROJECT_SLUG "$pre_LINEAR_PROJECT_SLUG"
 restore_if_blank SYMPHONY_SOURCE_REF "$pre_SYMPHONY_SOURCE_REF"
 restore_if_blank SYMPHONY_WORKSPACE_ROOT "$pre_SYMPHONY_WORKSPACE_ROOT"
+restore_if_blank SYMPHONY_CODEX_MODEL "$pre_SYMPHONY_CODEX_MODEL"
+restore_if_blank SYMPHONY_CODEX_REASONING "$pre_SYMPHONY_CODEX_REASONING"
 
 : "${LINEAR_PROJECT_SLUG:=rubywhisper-paid-beta-launch-caaab48c6aa9}"
 : "${SYMPHONY_WORKSPACE_ROOT:=~/code/rubywhisper-symphony-workspaces}"
+: "${SYMPHONY_CODEX_MODEL:=gpt-5.2}"
+: "${SYMPHONY_CODEX_REASONING:=high}"
 export LINEAR_PROJECT_SLUG
 export SYMPHONY_WORKSPACE_ROOT
+export SYMPHONY_CODEX_MODEL
+export SYMPHONY_CODEX_REASONING
 
 if [[ -z "${SYMPHONY_SOURCE_REF:-}" ]]; then
   current_ref="$(git branch --show-current 2>/dev/null || true)"
@@ -133,7 +141,9 @@ args=("$runtime_workflow" "--logs-root" "$logs_root")
 if [[ -n "${SYMPHONY_PORT:-4007}" && "${SYMPHONY_PORT:-4007}" != "0" ]]; then
   args+=("--port" "${SYMPHONY_PORT:-4007}")
 fi
-args+=("${passthrough_args[@]}")
+if ((${#passthrough_args[@]})); then
+  args+=("${passthrough_args[@]}")
+fi
 
 if [[ "$dry_run" -eq 1 ]]; then
   cat <<EOF
