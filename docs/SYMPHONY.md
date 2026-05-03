@@ -26,11 +26,12 @@ Put these values in the private RubyWhisper env source, not in git:
 LINEAR_API_KEY=...
 LINEAR_PROJECT_SLUG=rubywhisper-paid-beta-launch-caaab48c6aa9
 SYMPHONY_SOURCE_REPO_URL=https://github.com/brandonnshore/rubywispr-.git
+SYMPHONY_SOURCE_REF=
 SYMPHONY_WORKSPACE_ROOT=~/code/rubywhisper-symphony-workspaces
 SYMPHONY_PORT=4007
 ```
 
-`LINEAR_PROJECT_SLUG` and `SYMPHONY_WORKSPACE_ROOT` have RubyWhisper defaults in `scripts/run-symphony.sh`, but keeping them in private env makes the runtime explicit.
+`LINEAR_PROJECT_SLUG` and `SYMPHONY_WORKSPACE_ROOT` have RubyWhisper defaults in `scripts/run-symphony.sh`, but keeping them in private env makes the runtime explicit. `SYMPHONY_SOURCE_REF` is optional; when blank, the runner uses the current branch so control-test workers clone the same pushed branch you are operating from.
 
 Optional:
 

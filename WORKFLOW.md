@@ -21,7 +21,11 @@ hooks:
   timeout_ms: 120000
   after_create: |
     : "${SYMPHONY_SOURCE_REPO_URL:=https://github.com/brandonnshore/rubywispr-.git}"
-    git clone "$SYMPHONY_SOURCE_REPO_URL" .
+    if [[ -n "${SYMPHONY_SOURCE_REF:-}" ]]; then
+      git clone --branch "$SYMPHONY_SOURCE_REF" --single-branch "$SYMPHONY_SOURCE_REPO_URL" .
+    else
+      git clone "$SYMPHONY_SOURCE_REPO_URL" .
+    fi
     scripts/setup-chat-env.sh
   before_run: |
     scripts/setup-chat-env.sh

@@ -46,6 +46,7 @@ fi
 
 pre_LINEAR_API_KEY="${LINEAR_API_KEY:-}"
 pre_LINEAR_PROJECT_SLUG="${LINEAR_PROJECT_SLUG:-}"
+pre_SYMPHONY_SOURCE_REF="${SYMPHONY_SOURCE_REF:-}"
 pre_SYMPHONY_WORKSPACE_ROOT="${SYMPHONY_WORKSPACE_ROOT:-}"
 
 set -a
@@ -63,12 +64,20 @@ restore_if_blank() {
 
 restore_if_blank LINEAR_API_KEY "$pre_LINEAR_API_KEY"
 restore_if_blank LINEAR_PROJECT_SLUG "$pre_LINEAR_PROJECT_SLUG"
+restore_if_blank SYMPHONY_SOURCE_REF "$pre_SYMPHONY_SOURCE_REF"
 restore_if_blank SYMPHONY_WORKSPACE_ROOT "$pre_SYMPHONY_WORKSPACE_ROOT"
 
 : "${LINEAR_PROJECT_SLUG:=rubywhisper-paid-beta-launch-caaab48c6aa9}"
 : "${SYMPHONY_WORKSPACE_ROOT:=~/code/rubywhisper-symphony-workspaces}"
 export LINEAR_PROJECT_SLUG
 export SYMPHONY_WORKSPACE_ROOT
+
+if [[ -z "${SYMPHONY_SOURCE_REF:-}" ]]; then
+  current_ref="$(git branch --show-current 2>/dev/null || true)"
+  if [[ -n "$current_ref" ]]; then
+    export SYMPHONY_SOURCE_REF="$current_ref"
+  fi
+fi
 
 require_env() {
   if [[ -z "${!1:-}" ]]; then
