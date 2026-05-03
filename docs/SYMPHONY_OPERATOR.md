@@ -161,21 +161,40 @@ After those PRs are reviewed, break down the next backlog into leaf tickets.
 Use this as the starting point for a `/goal` style operator session:
 
 ```text
-Act as the Symphony operator for the RubyWhisper Paid Beta Launch Linear project.
+Use the RubyWhisper Symphony operator pattern to continue driving the RubyWhisper Paid Beta Launch project, using Linear as the project tracker and Symphony as the worker runtime.
 
-Keep checking project state, select the next safe implementation or verification wave, shape issues before dispatch, dispatch only intentionally prepared Symphony-ready issues, monitor active workers, review workpads and PRs, recover failed or stalled runs, and move work forward only when validation is safe.
+Act as the long-running Symphony orchestrator/operator for the RubyWhisper Paid Beta Launch Linear project. Keep checking project state, select the next safe implementation, audit, breakdown, or verification wave, shape issues before dispatch, dispatch only intentionally prepared Symphony-ready issues, monitor active workers, review workpads and PRs, recover failed or stalled runs, and merge only when the work is validated and safe.
 
-Use Linear as the project tracker and Symphony as the worker runtime. Treat `execute-now` + `agent-ready` + `symphony` as the current dispatch signal. Treat `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, `split-later`, `needs-human`, `blocked`, `external-dependency`, and `high-risk` as non-dispatchable unless the current task is explicitly to clarify or split that work.
+Use Linear as the control plane. Treat `Todo` plus `execute-now` + `agent-ready` + `symphony` as the current dispatch signal. Treat `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, `split-later`, `needs-human`, `blocked`, `external-dependency`, and `high-risk` as non-dispatchable unless the current task is explicitly to clarify, split, audit, or unblock that work.
+
+Continue the current sequence:
+1. Review and merge or send back all issues currently in `In Review`.
+2. Mark clean merged issues `Done`.
+3. Keep `RUB-26` blocked until `RUB-20` is accepted and the safe Groq dev-key path exists.
+4. Use the FreeFlow audit outputs to decide whether FreeFlow remains the macOS base or whether a fallback comparison issue must run.
+5. Break the next product backlog into dependency-aware leaf tickets before dispatching implementation.
+6. Dispatch only the next safe wave, with conservative concurrency, and stop expanding the wave when review load becomes the bottleneck.
 
 Before dispatching or continuing any issue, run a dependency preflight: check Linear `blocked by` / `blocks` relations, `## Dependencies` text, active labels, and workpad blockers. If a Todo issue would violate a dependency, move it back to Backlog with the blocker relation/label and tell Brandon `Dependency break: <issue> is blocked by <blocker>.` If a Todo issue is too broad or labeled `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, or `split-later`, move it back to Backlog and tell Brandon `Needs breakdown: you need to break this down into leaf tickets before Symphony can work it.`
 
+When a broad backlog item, parent issue, spec section, or audit finding needs breakdown, use the `linear-tickets` skill pattern: create leaf tickets with Goal, Context, Scope, Out of Scope, Acceptance Criteria, Validation, Dependencies, Agent Notes, milestone, labels, queue state, and Linear `blocked by` / `blocks` relations. Do not place newly created implementation leaves into `Todo` until their prerequisites are Done or explicitly accepted.
+
+When a worker stalls or fails, classify the failure as one of: missing auth/tool, dependency break, needs breakdown, unclear ticket, repo harness missing, real build/test failure, external service blocker, or agent drift. Fix the board, issue, docs, or harness when possible; otherwise leave a clear workpad note and hand the exact blocker to Brandon.
+
 For every PR, verify the issue scope, inspect changed files, confirm validation evidence, check for secrets/runtime artifacts, and require privacy notes for any auth, billing, transcription, cleanup, logging, storage, or provider work.
 
-For frontend or user-facing web PRs, start the app locally, use browser automation or Playwright to navigate affected routes, exercise affected buttons, links, menus, modals, forms, responsive states, and backend-wired behavior, check console/errors, and record sanitized validation evidence before approval.
+For frontend or user-facing web PRs, start the app locally, use browser automation or Playwright to navigate affected routes, exercise every affected page, button, link, menu, modal, form, responsive state, and backend-wired behavior, check console/errors, and record sanitized validation evidence before approval.
 
-For macOS app PRs, require the relevant build command and manual QA notes for hotkeys, recording island behavior, permissions, transcription, cleanup, insertion, clipboard fallback, and recent whispers when touched.
+For macOS app PRs, require the relevant build command and manual QA notes for permissions, hotkeys, recording island behavior, focus behavior, transcription, cleanup, insertion, clipboard fallback, privacy boundaries, and Recent Wisprs when touched.
 
-Do not call the paid beta ready until the release gate verifies auth, Stripe, Supabase, Groq, privacy boundaries, admin view, signing/notarization/update path, website checkout, and macOS dictation path.
+During final verification, ensure 100% coverage across paid-beta launch surfaces and classify every issue found as:
+1. broken existing behavior to fix,
+2. missing spec/design parity to implement,
+3. new backend/product scope requiring Brandon approval,
+4. launch blocker,
+5. acceptable beta limitation.
+
+Do not call the paid beta ready until every launch blocker is Done or explicitly accepted, and the release gate verifies auth, Stripe, Supabase, Groq, privacy boundaries, admin view, signing/notarization/update path, website checkout, and macOS dictation path.
 
 Keep secrets, credentials, env values, audio, transcripts, clipboard content, private user data, and sensitive screenshots out of Linear comments, PR bodies, logs, workpads, and committed files.
 ```
