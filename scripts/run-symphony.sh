@@ -19,6 +19,7 @@ USAGE
 
 dry_run=0
 workflow_source="$repo_root/WORKFLOW.md"
+passthrough_args=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -29,6 +30,10 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       usage
       exit 0
+      ;;
+    --i-understand-that-this-will-be-running-without-the-usual-guardrails)
+      passthrough_args+=("$1")
+      shift
       ;;
     *)
       workflow_source="$1"
@@ -128,6 +133,7 @@ args=("$runtime_workflow" "--logs-root" "$logs_root")
 if [[ -n "${SYMPHONY_PORT:-4007}" && "${SYMPHONY_PORT:-4007}" != "0" ]]; then
   args+=("--port" "${SYMPHONY_PORT:-4007}")
 fi
+args+=("${passthrough_args[@]}")
 
 if [[ "$dry_run" -eq 1 ]]; then
   cat <<EOF
