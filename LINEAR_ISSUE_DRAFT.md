@@ -139,13 +139,13 @@ The specs define provisional commands for Next.js and Xcode, but the repo curren
 - Configuring CI.
 
 ## Acceptance Criteria
-- [ ] Done means a short command-contract section exists in repo docs.
+- [ ] Done means a short command-contract section exists in `TECHNICAL_INFRASTRUCTURE.md`.
 - [ ] The chosen package manager and expected app paths are documented.
 - [ ] Unknown Xcode commands are explicitly tied to the FreeFlow audit/import.
 - [ ] Future tickets can cite exact commands or the exact blocker ticket.
 
 ## Validation
-- [ ] Run `rg -n "npm run|pnpm|xcodebuild|command contract" *.md`.
+- [ ] Run `rg -n "npm run|pnpm|xcodebuild|command contract" *.md docs`.
 - [ ] Verify no ticket relies on an undocumented command.
 - [ ] Attach the updated doc path in the Linear issue.
 
@@ -304,6 +304,7 @@ Define and implement the first CI checks once the web scaffold and macOS project
 
 ## Context
 The specs require lint, typecheck, tests, builds, and Xcode validation, but commands are provisional until scaffolding/import.
+RW-001 sets npm, `apps/web`, and `apps/macos` as the command-contract baseline. Mac CI remains blocked until FreeFlow audit/import records the exact Xcode project/workspace and scheme.
 
 ## Scope
 - Add CI workflow for web commands after RW-020.
@@ -714,6 +715,7 @@ Create the initial Next.js application that will host marketing pages, auth/acco
 
 ## Context
 The infrastructure spec recommends one Next.js app for speed. The repo currently has no app scaffold.
+RW-001 chooses npm and `apps/web`, with backend API routes living in the same Next.js app.
 
 ## Scope
 - Add Next.js with TypeScript in the chosen repo layout.
@@ -1622,6 +1624,7 @@ Import the selected macOS app base into the RubyWhisper repo and rebrand top-lev
 
 ## Context
 FreeFlow is the preferred base only after audit approval. RubyWhisper must become the app name, with clean bundle metadata and preserved attribution.
+RW-001 reserves `apps/macos` for this import. Exact `xcodebuild` commands remain blocked until FreeFlow audit/import discovers the repo-local project/workspace and scheme.
 
 ## Scope
 - Import selected app source into chosen repo path.
