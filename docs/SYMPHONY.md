@@ -99,11 +99,34 @@ Do not expand this into a mandatory read-everything list. If workers stall or bu
 
 ## Linear Contract
 
+Live RubyWhisper project metadata:
+
+- Team: `RubyAdvisory` (`RUB`)
+- Project: `RubyWhisper Paid Beta Launch`
+- Project slug ID: `rubywhisper-paid-beta-launch-caaab48c6aa9`
+- Milestones: `Wave 1 - Project Harness`, `Wave 2 - Discovery And Audit`, `Wave 3 - Web Foundation`, `Wave 4 - Transcription Gateway`, `Wave 5 - Mac App`, `Wave 6 - Website Admin Design`, `Wave 7 - Quality Release`
+
 Active states in `WORKFLOW.md`:
 
 - `Todo`
 - `In Progress`
-- `Rework`
+- `Rework` if that state exists in the Linear workflow
+
+Current RubyWhisper Linear statuses:
+
+- `Backlog`
+- `Todo`
+- `In Progress`
+- `In Review`
+- `Done`
+- `Canceled`
+- `Duplicate`
+
+Current state mapping:
+
+- `Blocked` is not a Linear status in the current workflow; use `Backlog` plus the `blocked` label.
+- `Rework` is not a Linear status in the current workflow; if review feedback needs agent action, move the issue back to `Todo` or `In Progress` with a workpad note, or add a `Rework` state before configuring Symphony to poll it.
+- `Human Review` is not a Linear status in the current workflow; use `In Review`.
 
 Handoff state:
 
@@ -120,12 +143,16 @@ Terminal states:
 
 Current launch policy:
 
+- `Todo`: only unblocked current-wave tickets.
+- `Backlog`: future work, split-later candidates, and blocked work that is not ready for dispatch.
 - `execute-now`: safe to dispatch in the current wave.
 - `agent-ready`: sufficiently specified for an agent.
 - `symphony`: intended for Symphony.
 - `needs-breakdown`: useful backlog, but later split into smaller leaf issues.
 - `needs-human`: human decision needed before implementation.
 - `blocked`: blocked by dependency, auth, vendor, unclear product call, or missing repo harness.
+
+Symphony dispatch should require `Todo` plus `execute-now`, `agent-ready`, and `symphony`. Later-wave issues stay in `Backlog`; blocked work stays in `Backlog` with `blocked` and any more specific blocker label.
 
 ## Concurrency Policy
 

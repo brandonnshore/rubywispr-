@@ -1,9 +1,9 @@
 # RubyWhisper Linear Issue Draft
 
-Status: Draft mode, not yet created in Linear
+Status: Imported into Linear; keep this file as the creation/import policy reference
 Generated: 2026-04-30
 Project: RubyWhisper Paid Beta Launch
-Recommended creation policy: first-wave Todo, all later work Backlog or Blocked
+Recommended creation policy: first-wave Todo, all later work Backlog or blocked with labels
 
 ## Source Corpus Reviewed
 
@@ -19,7 +19,10 @@ Recommended creation policy: first-wave Todo, all later work Backlog or Blocked
 
 ## Recommended Linear Project Setup
 
+- Team: `RubyAdvisory` (`RUB`)
 - Project name: `RubyWhisper Paid Beta Launch`
+- Project slug ID for Symphony: `rubywhisper-paid-beta-launch-caaab48c6aa9`
+- Current Linear project state: `planned`
 - Project summary: `Ship RubyWhisper as a paid macOS dictation beta with website, auth, billing, backend transcription, local history, admin, signing, and updater.`
 - Milestones:
   - `Wave 1 - Project Harness`
@@ -29,21 +32,54 @@ Recommended creation policy: first-wave Todo, all later work Backlog or Blocked
   - `Wave 5 - Mac App`
   - `Wave 6 - Website Admin Design`
   - `Wave 7 - Quality Release`
+- Milestone creation order: create milestones in wave order from Wave 1 through Wave 7 before importing issues, then assign every issue to exactly one wave milestone.
+- Current Linear statuses:
+  - `Backlog`
+  - `Todo`
+  - `In Progress`
+  - `In Review`
+  - `Done`
+  - `Canceled`
+  - `Duplicate`
+- Status concepts not present in the current workflow:
+  - `Blocked`: use `Backlog` plus the `blocked` label for blocked future work.
+  - `Rework`: only configure Symphony to poll `Rework` if that status is added later; until then, operator-driven fixes should move issues from `In Review` back to `Todo` or `In Progress` with a workpad note.
+  - `Human Review`: use `In Review` for handoff in the current RubyWhisper workflow.
 - Labels:
-  - Areas: `macos`, `backend`, `frontend`, `infra`, `data`, `api`, `design`, `docs`, `qa`, `security`
-  - Types: `feature`, `spike`, `chore`, `test`, `release`
-  - Agent: `agent-ready`, `needs-human`, `blocked`, `symphony`
+  - Areas: `macos`, `backend`, `frontend`, `infra`, `data`, `api`, `design`, `docs`, `qa`, `security`, `billing`, `admin`, `performance`
+  - Types: `Feature`, `Improvement`, `Bug`, `spike`, `chore`, `test`, `release`
+  - Agent: `execute-now`, `agent-ready`, `needs-breakdown`, `needs-human`, `blocked`, `symphony`
   - Validation: `unit`, `integration`, `e2e`, `manual-qa`, `build`, `visual`
   - Risk: `privacy`, `high-risk`, `external-dependency`, `migration`
 
 ## Queue Policy
 
-- `Todo`: only unblocked first-wave audit/harness tickets.
-- `Backlog`: fully specified future tickets blocked by earlier implementation choices.
-- `Blocked`: tickets that need a named decision, imported codebase, provider setup, or live credentials.
-- `Human Review`: decisions involving production secrets, live billing, signing/notarization, privacy posture, or public launch.
+- Symphony dispatch signal: issue is in `Todo` and has `execute-now`, `agent-ready`, and `symphony`.
+- Active worker states: Symphony may continue tracking `Todo` and `In Progress`; include `Rework` only if that state is added to the team workflow.
+- `Todo`: only unblocked current-wave tickets with one clear outcome, acceptance criteria, validation, and no unresolved human decision.
+- `In Progress`: exactly the tickets currently owned by active workers.
+- `In Review`: PR/artifact handoff for operator or human review; Symphony should not start new implementation work from this state.
+- `Backlog`: future work, split-later candidates, and blocked work that is not ready for dispatch.
+- `Blocked`: not a current Linear status; represent blocked work as `Backlog` plus `blocked`, and add `needs-human`, `external-dependency`, or `high-risk` when the blocker type is known.
+- First-wave import policy: first-wave unblocked tickets start in `Todo`; first-wave blocked tickets start in `Backlog` with `blocked` and should not carry `execute-now`.
+- Later-wave import policy: later work starts in `Backlog`; add `needs-breakdown` to broad implementation tickets until preceding decisions and repo source shape are known.
+- Review policy: decisions involving production secrets, live billing, signing/notarization, privacy posture, or public launch stay in `In Review` for handoff or `Backlog` with `needs-human` until the decision is recorded.
+
+## Issue Shape And Creation Order
+
+- Prefer flat issues in one project over parent/sub-issue trees for the imported RW queue.
+- Use project milestones for wave grouping and explicit issue relations for blockers instead of parent containers.
+- Create in this order:
+  1. Team labels.
+  2. Project `RubyWhisper Paid Beta Launch`.
+  3. Wave milestones from Wave 1 through Wave 7.
+  4. Issues in ticket-index order, with milestone, status, labels, and dependency relations.
+  5. First dispatch labels only after the operator confirms the wave is intentionally ready.
+- Do not create additional implementation tickets outside the approved queue from this file; record follow-up discoveries as separate Backlog issues only after operator approval.
 
 ## Ticket Index
+
+Status values in this index are queue concepts from the original draft. In the current Linear workflow, every `Blocked` entry maps to `Backlog` plus the `blocked` label.
 
 | ID | Title | Milestone | Status |
 | --- | --- | --- | --- |
@@ -259,7 +295,7 @@ Labels: `docs`, `chore`, `agent-ready`
 Prepare the exact Linear project, milestone, label, and queue policy for live issue creation.
 
 ## Context
-This draft is intentionally not live Linear work yet. The `linear-tickets` workflow requires team/project/status confirmation before creating real issues.
+The RW queue is now live in Linear. This ticket records the exact team, project, milestone, label, status, issue-shape, and queue policy that future Symphony operation should follow.
 
 ## Scope
 - Confirm recommended project name, milestones, labels, statuses, and creation order.
@@ -268,23 +304,22 @@ This draft is intentionally not live Linear work yet. The `linear-tickets` workf
 - Prepare a creation report template.
 
 ## Out of Scope
-- Creating live issues without explicit confirmation.
-- Editing ticket content beyond metadata.
+- Creating more implementation tickets beyond the approved queue.
+- Editing product scope.
 
 ## Acceptance Criteria
-- [ ] Done means live creation can proceed after one human confirmation.
-- [ ] The policy says first-wave unblocked tickets go to Todo and future work goes to Backlog/Blocked.
-- [ ] The team/project/status names needed by Linear are listed as open confirmation items.
+- [ ] Live creation policy is documented.
+- [ ] First-wave unblocked tickets are Todo and future work is Backlog/Blocked.
+- [ ] Team/project/status names are recorded.
 - [ ] Parent/sub-issue preference is documented.
 
 ## Validation
-- [ ] Run `rg -n "Recommended Linear Project Setup|Queue Policy|Todo|Backlog|Blocked" LINEAR_ISSUE_DRAFT.md`.
-- [ ] Manual review with the user before live creation.
-- [ ] No Linear API writes occur in this ticket.
+- [ ] Run `rg -n "Recommended Linear Project Setup|Queue Policy|Todo|Backlog|Blocked" LINEAR_ISSUE_DRAFT.md docs`.
+- [ ] Manual review against current Linear project.
 
 ## Dependencies
 - Blocked by: None.
-- Blocks: Live Linear project creation.
+- Blocks: Live Linear/Symphony setup.
 - Related: All tickets.
 
 ## Agent Notes
@@ -2987,7 +3022,7 @@ RubyWhisper is a paid public beta. Launch requires real users, real payments, pr
 
 ## Creation Report
 
-- Total draft tickets: 63.
+- Total imported tickets: 63.
 - Wave 1 Project Harness: 5 tickets.
 - Wave 2 Discovery And Audit: 8 tickets.
 - Wave 3 Web Foundation: 12 tickets.
@@ -2995,15 +3030,19 @@ RubyWhisper is a paid public beta. Launch requires real users, real payments, pr
 - Wave 5 Mac App: 14 tickets.
 - Wave 6 Website Admin Design: 8 tickets.
 - Wave 7 Quality Release: 8 tickets.
-- Active/Todo draft tickets: RW-001, RW-002, RW-003, RW-004, RW-010, RW-011, RW-012, RW-015, RW-016.
-- Human Review draft tickets: RW-017.
-- Blocked draft tickets: RW-005, RW-013, RW-014, RW-060, RW-107 and downstream work as dependency relations indicate.
+- Initial dispatch tickets: RW-001, RW-002, RW-003, RW-004, RW-010, RW-011, RW-012, RW-015, RW-016.
+- Human-decision ticket: RW-017.
+- Blocked-at-import tickets: RW-005, RW-013, RW-014, RW-060, RW-107 and downstream work as dependency relations indicate.
 
-## Gaps And Confirmation Needed Before Live Linear Creation
+## Resolved Linear Creation Decisions
 
-- Confirm Linear team name.
-- Confirm whether to create a new Linear project named `RubyWhisper Paid Beta Launch`.
-- Confirm statuses available in the workspace: Todo, Backlog, Blocked, Human Review.
-- Confirm whether to create flat issues with dependency relations or parent issues/sub-issues.
-- Confirm whether all tickets should be created now, or first-wave Todo plus future Backlog/Blocked only.
-- Confirm whether to assign issues to Brandon, leave unassigned, or delegate later.
+- Linear team: `RubyAdvisory` (`RUB`).
+- Linear project: `RubyWhisper Paid Beta Launch`.
+- Linear project slug ID: `rubywhisper-paid-beta-launch-caaab48c6aa9`.
+- Statuses available in the workspace: `Backlog`, `Todo`, `In Progress`, `In Review`, `Done`, `Canceled`, `Duplicate`.
+- Blocked policy: no `Blocked` state exists; use `Backlog` plus `blocked`.
+- Review policy: no `Human Review` state exists; use `In Review`.
+- Rework policy: no `Rework` state exists; only add it to Symphony polling after adding that Linear status.
+- Issue shape: flat issues with milestone grouping and explicit dependency relations, not parent/sub-issue containers.
+- Queue import policy: first-wave unblocked tickets can be `Todo`; future and blocked work stays `Backlog` with blocker/breakdown labels.
+- Assignment policy: leave issues unassigned unless the operator explicitly assigns ownership during dispatch.

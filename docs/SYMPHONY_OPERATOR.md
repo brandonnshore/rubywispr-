@@ -41,9 +41,10 @@ Check:
 
 - `Todo`: only current wave, unblocked, agent-ready.
 - `In Progress`: workers currently active.
-- `Rework`: review feedback needing agent action.
+- `Rework`: review feedback needing agent action, if that state exists in the team workflow.
 - `In Review` / `Human Review`: PRs/artifacts needing human/operator review.
 - `Backlog`: future work and breakdown candidates.
+- Current RubyWhisper mapping: blocked work stays in `Backlog` with the `blocked` label, and handoff uses `In Review`.
 
 ### 3. Dispatch Wave
 

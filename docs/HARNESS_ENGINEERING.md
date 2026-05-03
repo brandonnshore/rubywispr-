@@ -58,7 +58,8 @@ Do not rely on chat memory for rules that should shape future PRs.
 - `SYMPHONY_WORKSPACE_ROOT` points outside the repo or to a gitignored local directory.
 - `scripts/setup-symphony.sh` has successfully cloned and built the OpenAI reference implementation.
 - `scripts/run-symphony.sh --dry-run` passes.
-- Linear has active states used by `WORKFLOW.md`: `Todo`, `In Progress`, and `Rework`.
+- Linear has active states used by `WORKFLOW.md`: `Todo`, `In Progress`, and `Rework` if that state exists in the team workflow.
+- Current RubyWhisper Linear state mapping uses `Backlog` plus the `blocked` label for blocked work, and `In Review` for human/operator handoff.
 - Linear has a review handoff state such as `In Review` or `Human Review`.
 - Only unblocked, agent-ready tickets are in `Todo`.
 
