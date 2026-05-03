@@ -1,7 +1,7 @@
 # RubyWhisper Research Log
 
 Status: Draft
-Last updated: 2026-04-30
+Last updated: 2026-05-03
 
 ## Research Questions
 
@@ -51,6 +51,81 @@ Risks:
 - Backend-proxy architecture may require meaningful refactor.
 - Rebranding may touch many Xcode/signing files.
 - Need to verify insertion reliability and focus behavior.
+
+#### RW-010 FreeFlow Build Reliability Audit
+
+Audit target:
+
+- Repository: `https://github.com/zachlatta/freeflow`
+- Checkout: upstream `main` at `b91a5fb01a6fa46853b2a718a3dc6f43cff1f56c`
+- Local path: `tmp/freeflow-rub-23` in this workspace
+- Local environment: `Brandons-MacBook-Pro`, macOS 26.2 `25C56`, arm64, Xcode 26.3 `17C519`, Swift 6.2.4
+
+Project shape:
+
+- No `.xcodeproj`, `.xcworkspace`, `Package.swift`, `Podfile`, `Cartfile`, `project.yml`, or `.xcconfig` files were present.
+- There are no Xcode schemes. `xcodebuild` cannot be the current FreeFlow build entrypoint.
+- The app is built by `Makefile` with direct `swiftc -parse-as-library`, `Info.plist`, `FreeFlow.entitlements`, resources, and `codesign`.
+- Runtime source is under `Sources/`. No third-party Swift package manager dependencies were identified.
+- The Makefile defaults to `APP_NAME="FreeFlow Dev"`, `BUNDLE_ID=com.zachlatta.freeflow.dev`, `ARCH=$(uname -m)`, and `CODESIGN_IDENTITY="FreeFlow Dev"`.
+- Optional DMG/release dependencies are `create-dmg` and `fileicon`; GitHub release workflows install them with Homebrew and import a Developer ID certificate before running `make`.
+
+Commands and evidence:
+
+```bash
+git clone https://github.com/zachlatta/freeflow.git tmp/freeflow-rub-23
+cd tmp/freeflow-rub-23
+git rev-parse HEAD
+# b91a5fb01a6fa46853b2a718a3dc6f43cff1f56c
+```
+
+```bash
+xcodebuild -list
+# exit 66
+# xcodebuild: error: The directory .../tmp/freeflow-rub-23 does not contain an Xcode project, workspace or package.
+```
+
+```bash
+make clean && make
+# swiftc compile started successfully.
+# failed at codesign: FreeFlow Dev: no identity found
+```
+
+```bash
+make clean && make CODESIGN_IDENTITY=-
+# Built build/FreeFlow Dev.app
+```
+
+```bash
+codesign -dv "build/FreeFlow Dev.app"
+# Signature=adhoc
+# Identifier=com.zachlatta.freeflow.dev
+# TeamIdentifier=not set
+```
+
+```bash
+open -n "build/FreeFlow Dev.app"
+pgrep -fl "FreeFlow Dev"
+# process observed at build/FreeFlow Dev.app/Contents/MacOS/FreeFlow Dev
+osascript -e 'tell application "FreeFlow Dev" to quit'
+```
+
+Build result:
+
+- Passed for a local developer build when using ad-hoc signing: `make CODESIGN_IDENTITY=-`.
+- Failed with default Makefile settings on this machine because the expected local code signing identity `FreeFlow Dev` was not installed.
+- `xcodebuild` validation failed because the repo has no Xcode project, workspace, package, or schemes. Exact Xcode scheme names: none.
+
+Actionable blockers and follow-up:
+
+- If RubyWhisper requires Xcode/CI commands, the import should add or generate an Xcode project/workspace or SwiftPM package; FreeFlow currently cannot satisfy `xcodebuild -scheme ... -configuration Debug build`.
+- Local setup docs should tell developers to run `make CODESIGN_IDENTITY=-` for ad-hoc Debug-style builds or install/configure the expected signing identity.
+- Release/notarized builds need Apple Developer ID credentials plus `create-dmg` and `fileicon`, matching upstream GitHub Actions.
+- No real production API keys were used. The smoke test only launched and quit the app; no provider validation, transcription, or cleanup API calls were made.
+
+Recommendation from build audit:
+
+- FreeFlow is buildable enough to remain the preferred macOS base for the next audit/import step, with a clear caveat: its current build system is Makefile/direct-`swiftc`, not Xcode. Treat Xcode project creation or documented Makefile-based CI as part of the import plan.
 
 ### Fallback Candidates
 
