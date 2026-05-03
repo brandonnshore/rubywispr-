@@ -51,6 +51,11 @@ else
 fi
 
 cd "$symphony_ref_dir/elixir"
+
+if ! grep -q '{:castore,' mix.exs; then
+  perl -0pi -e 's/(\{:req, "~> 0\.5"\},)/$1\n      {:castore, "~> 1.0"},/' mix.exs
+fi
+
 mise trust
 mise install
 mise exec -- mix setup
