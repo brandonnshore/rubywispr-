@@ -393,3 +393,13 @@ Proceed with:
 - Privacy-safe logging/observability.
 
 Do not create Linear issues or start implementation until these specs are approved.
+
+## FreeFlow Audit Follow-Up
+
+See `docs/FREEFLOW_AUDIT_RUB_24.md` for the RUB-24 source audit against the `FORK_STRATEGY.md` evaluation criteria.
+
+Audit result:
+
+- FreeFlow is a viable harness for build, Swift structure, hotkeys, cleanup pipeline, permissions, license, and a non-activating overlay.
+- FreeFlow should not be imported unchanged because direct provider calls, desktop provider key storage, broad local run-log storage, and insertion success assumptions conflict with RubyWhisper privacy and recovery requirements.
+- Required pre-import plan: backend proxy, no desktop Groq keys, reduced local history, insertion failure recovery, expanded island states, and privacy-safe context controls.
