@@ -164,6 +164,9 @@ Runtime workflow:
 Logs root:
   $logs_root
 
+Source ref:
+  ${SYMPHONY_SOURCE_REF:-<default clone ref>}
+
 Codex model:
   $SYMPHONY_CODEX_MODEL
 
