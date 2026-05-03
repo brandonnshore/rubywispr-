@@ -18,3 +18,8 @@ xcuserdata/
 tmp/
 temp/
 
+# Local Symphony runtime
+.tools/
+.symphony/
+symphony-workspaces/
+symphony-logs/
