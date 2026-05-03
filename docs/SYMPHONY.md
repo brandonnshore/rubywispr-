@@ -37,7 +37,7 @@ Optional:
 
 ```bash
 SYMPHONY_CODEX_MODEL=gpt-5.5
-SYMPHONY_CODEX_REASONING=xhigh
+SYMPHONY_CODEX_REASONING=high
 SYMPHONY_REFERENCE_DIR=.tools/symphony
 SYMPHONY_LOGS_ROOT=.tools/symphony-logs
 SYMPHONY_REPO_URL=https://github.com/openai/symphony.git
@@ -79,6 +79,17 @@ http://localhost:4007
 - `docs/HARNESS_ENGINEERING.md`: repo harness rules for agent-safe work.
 - `docs/SYMPHONY_OPERATOR.md`: human/operator runbook for shaping and supervising waves.
 - `.tools/`: gitignored runtime directory for the reference implementation, generated workflow, and logs.
+
+## Worker Context Policy
+
+Workers should receive a map first, then load details only when the issue requires them. `WORKFLOW.md` always points workers to `AGENTS.md` and the Linear issue/workpad, then routes them to the smallest relevant doc:
+
+- harness/setup/Symphony work: `docs/HARNESS_ENGINEERING.md` and `docs/SYMPHONY.md`
+- operator/queue/review work: `docs/SYMPHONY_OPERATOR.md`
+- reusable Ruby build pipeline work: `docs/RUBY_BUILD_PIPELINE.md`
+- product/fork/privacy work: `PRODUCT_BRIEF.md`, `FORK_STRATEGY.md`, and targeted docs discovered with `rg`
+
+Do not expand this into a mandatory read-everything list. If workers stall or burn excessive context, shrink the entry prompt or split the Linear ticket before retrying broadly.
 
 ## Linear Contract
 

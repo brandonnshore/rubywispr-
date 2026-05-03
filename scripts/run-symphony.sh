@@ -78,12 +78,18 @@ restore_if_blank SYMPHONY_CODEX_REASONING "$pre_SYMPHONY_CODEX_REASONING"
 
 : "${LINEAR_PROJECT_SLUG:=rubywhisper-paid-beta-launch-caaab48c6aa9}"
 : "${SYMPHONY_WORKSPACE_ROOT:=~/code/rubywhisper-symphony-workspaces}"
-: "${SYMPHONY_CODEX_MODEL:=gpt-5.2}"
+: "${SYMPHONY_CODEX_MODEL:=gpt-5.5}"
 : "${SYMPHONY_CODEX_REASONING:=high}"
 export LINEAR_PROJECT_SLUG
 export SYMPHONY_WORKSPACE_ROOT
 export SYMPHONY_CODEX_MODEL
 export SYMPHONY_CODEX_REASONING
+
+if [[ "$SYMPHONY_CODEX_MODEL" != "gpt-5.5" ]]; then
+  echo "Refusing to start Symphony: SYMPHONY_CODEX_MODEL must be gpt-5.5 for this harness." >&2
+  echo "Set SYMPHONY_CODEX_MODEL=gpt-5.5 in your private env or shell, then rerun." >&2
+  exit 1
+fi
 
 if [[ -z "${SYMPHONY_SOURCE_REF:-}" ]]; then
   current_ref="$(git branch --show-current 2>/dev/null || true)"
@@ -157,6 +163,12 @@ Runtime workflow:
 
 Logs root:
   $logs_root
+
+Codex model:
+  $SYMPHONY_CODEX_MODEL
+
+Codex reasoning:
+  $SYMPHONY_CODEX_REASONING
 
 Start command:
   scripts/run-symphony.sh

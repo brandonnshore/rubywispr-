@@ -38,7 +38,7 @@ agent:
     in progress: 2
     rework: 1
 codex:
-  command: 'codex --config shell_environment_policy.inherit=all --config "model=\"${SYMPHONY_CODEX_MODEL:-gpt-5.2}\"" --config "model_reasoning_effort=\"${SYMPHONY_CODEX_REASONING:-high}\"" app-server'
+  command: 'codex --config shell_environment_policy.inherit=all --config "model=\"${SYMPHONY_CODEX_MODEL:-gpt-5.5}\"" --config "model_reasoning_effort=\"${SYMPHONY_CODEX_REASONING:-high}\"" app-server'
   approval_policy:
     reject:
       sandbox_approval: true
@@ -72,23 +72,31 @@ Issue context:
 No description provided.
 {% endif %}
 
-## Source Of Truth
+## Context Map
 
-Read these before changing files:
+Start with a map, not a manual.
+
+Always read:
 
 1. `AGENTS.md`
-2. `docs/HARNESS_ENGINEERING.md`
-3. `docs/SYMPHONY.md`
-4. `docs/SYMPHONY_OPERATOR.md`
-5. `docs/RUBY_BUILD_PIPELINE.md`
-6. `PRODUCT_BRIEF.md`
-7. `IMPLEMENTATION_PLAN.md`
-8. `TECHNICAL_INFRASTRUCTURE.md`
-9. `TECHNICAL_SPEC.md`
-10. `WEB_DESIGN_SPEC.md`
-11. `FORK_STRATEGY.md`
+2. The current Linear issue, existing `## Codex Workpad`, linked PRs, and relevant review comments.
 
-If product docs conflict, prefer the latest explicit user-approved decision in `IMPLEMENTATION_PLAN.md`, `TECHNICAL_INFRASTRUCTURE.md`, `TECHNICAL_SPEC.md`, and the current Linear issue. If the conflict affects privacy, billing, architecture, or release risk, document it in the workpad and stop only when a reasonable safe choice cannot be made.
+Then load only the smallest repo context needed for this issue:
+
+- Harness, setup, workflow, Linear, or Symphony tickets: read the relevant sections of `docs/HARNESS_ENGINEERING.md` and `docs/SYMPHONY.md`.
+- Operator, queue, state, wave dispatch, or review-process tickets: read the relevant sections of `docs/SYMPHONY_OPERATOR.md`.
+- Ruby Advisory client-pipeline, scope/spec/ticketing, or reusable-build-system tickets: read the relevant sections of `docs/RUBY_BUILD_PIPELINE.md`.
+- Product, privacy, FreeFlow fork/import, or paid-beta direction tickets: read `PRODUCT_BRIEF.md` and `FORK_STRATEGY.md`, then use `rg --files`/`rg` to find any more specific product docs if they exist.
+- App implementation tickets after source import: use `rg --files`, package manifests, README files, and local source structure to identify the few relevant files before reading broad docs.
+
+Do not read every planning document "just in case." Missing future docs are not blockers unless this issue explicitly requires them. If product docs conflict, prefer the current Linear issue and the latest explicit user-approved repo decision; document privacy, billing, architecture, or release-risk conflicts in the workpad.
+
+## Context Discipline
+
+- Keep the first turn small: identify the issue scope, inspect git state, update the workpad, and gather targeted context.
+- Use `rg`/`rg --files` before opening files. Prefer section reads (`sed -n`) over full-file reads for long docs.
+- Do not paste full repo docs, secret values, private env content, or giant command output into Linear, PRs, commits, or workpads.
+- If the task appears too broad, split or request a smaller leaf issue instead of expanding context indefinitely.
 
 ## Core Rules
 
