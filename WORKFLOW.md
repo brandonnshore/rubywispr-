@@ -38,7 +38,7 @@ agent:
     in progress: 2
     rework: 1
 codex:
-  command: 'CODEX_HOME="${SYMPHONY_CODEX_HOME}" "${SYMPHONY_CODEX_COMMAND:-/Users/brandonshore/.npm-global/bin/codex}" --config shell_environment_policy.inherit=all --config mcp_servers={} --config "model=\"${SYMPHONY_CODEX_MODEL:-gpt-5.5}\"" --config "model_reasoning_effort=\"${SYMPHONY_CODEX_REASONING:-high}\"" --config model_reasoning_summary=\"none\" app-server'
+  command: 'CODEX_HOME="${SYMPHONY_CODEX_HOME}" "${SYMPHONY_CODEX_COMMAND:-/Users/brandonshore/.npm-global/bin/codex}" --config shell_environment_policy.inherit=all --config "model=\"${SYMPHONY_CODEX_MODEL:-gpt-5.5}\"" --config "model_reasoning_effort=\"${SYMPHONY_CODEX_REASONING:-high}\"" --config model_reasoning_summary=\"none\" app-server'
   approval_policy: never
   thread_sandbox: workspace-write
   turn_sandbox_policy:
@@ -97,7 +97,7 @@ Do not read every planning document "just in case." Missing future docs are not 
 
 ## Linear Tool Contract
 
-Use Symphony's injected `linear_graphql` dynamic tool for Linear reads and writes. Do not use interactive Codex app connectors or MCP tools for Linear unless the issue explicitly says they are configured for this run.
+Use Symphony's injected `linear_graphql` dynamic tool for current Linear issue reads and writes. Other MCP/app tools are allowed when the issue genuinely requires them, but `linear_graphql` is the default for issue state, workpads, comments, and queue bookkeeping because it is non-interactive and uses Symphony's tracker auth.
 
 Use the `Issue ID` from this prompt for current-issue queries and mutations. Do not query `issues(filter: {identifier: ...})`; Linear's public GraphQL filters do not support that shape.
 

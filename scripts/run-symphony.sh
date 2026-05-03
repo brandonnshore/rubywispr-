@@ -152,20 +152,29 @@ fi
 mkdir -p "$runtime_dir" "$logs_root" "$codex_home"
 export SYMPHONY_CODEX_HOME="$codex_home"
 
-if [[ ! -e "$codex_home/auth.json" && -e "$HOME/.codex/auth.json" ]]; then
-  ln -s "$HOME/.codex/auth.json" "$codex_home/auth.json"
-fi
+link_codex_home_item() {
+  local name="$1"
+  local source="$HOME/.codex/$name"
+  local target="$codex_home/$name"
 
-cat > "$codex_home/config.toml" <<'EOF'
-# Dedicated non-interactive Symphony worker profile.
-# Keep this lean: Linear access is provided by Symphony's injected `linear_graphql` dynamic tool.
-model = "gpt-5.5"
-model_reasoning_effort = "high"
-model_reasoning_summary = "none"
+  if [[ -e "$target" && ! -L "$target" ]]; then
+    if [[ "$name" == "config.toml" ]] && grep -q "Dedicated non-interactive Symphony worker profile" "$target"; then
+      mv "$target" "$target.generated-minimal.bak"
+    else
+      return
+    fi
+  fi
 
-[shell_environment_policy]
-inherit = "all"
-EOF
+  if [[ ! -e "$target" && -e "$source" ]]; then
+    ln -s "$source" "$target"
+  fi
+}
+
+link_codex_home_item auth.json
+link_codex_home_item config.toml
+link_codex_home_item plugins
+link_codex_home_item skills
+link_codex_home_item bin
 
 awk -v slug="$LINEAR_PROJECT_SLUG" '
   BEGIN {

@@ -1,0 +1,111 @@
+diff --git a/elixir/lib/symphony_elixir/codex/app_server.ex b/elixir/lib/symphony_elixir/codex/app_server.ex
+index 9f36bc7..b985ba1 100644
+--- a/elixir/lib/symphony_elixir/codex/app_server.ex
++++ b/elixir/lib/symphony_elixir/codex/app_server.ex
+@@ -668,6 +668,27 @@ defmodule SymphonyElixir.Codex.AppServer do
+     )
+   end
+ 
++  defp maybe_handle_approval_request(
++         port,
++         "mcpServer/elicitation/request",
++         %{"id" => id, "params" => params} = payload,
++         payload_string,
++         on_message,
++         metadata,
++         _tool_executor,
++         _auto_approve_requests
++       ) do
++    reply_with_non_interactive_mcp_elicitation(
++      port,
++      id,
++      params,
++      payload,
++      payload_string,
++      on_message,
++      metadata
++    )
++  end
++
+   defp maybe_handle_approval_request(
+          _port,
+          _method,
+@@ -880,6 +901,35 @@ defmodule SymphonyElixir.Codex.AppServer do
+ 
+   defp tool_request_user_input_unavailable_answers(_params), do: :error
+ 
++  defp reply_with_non_interactive_mcp_elicitation(
++         port,
++         id,
++         params,
++         payload,
++         payload_string,
++         on_message,
++         metadata
++       ) do
++    action = non_interactive_mcp_elicitation_action(params)
++
++    Logger.debug(
++      "Auto-answering MCP elicitation request server=#{inspect(Map.get(params, "serverName"))} mode=#{inspect(Map.get(params, "mode"))} action=#{action}"
++    )
++
++    send_message(port, %{"id" => id, "result" => %{"action" => action}})
++
++    emit_message(
++      on_message,
++      :tool_input_auto_answered,
++      %{payload: payload, raw: payload_string, answer: action},
++      metadata
++    )
++
++    :approved
++  end
++
++  defp non_interactive_mcp_elicitation_action(_params), do: "decline"
++
+   defp tool_request_user_input_question_id(%{"id" => question_id}) when is_binary(question_id),
+     do: {:ok, question_id}
+ 
+diff --git a/elixir/lib/symphony_elixir/status_dashboard.ex b/elixir/lib/symphony_elixir/status_dashboard.ex
+index 8cd4b17..b7726e0 100644
+--- a/elixir/lib/symphony_elixir/status_dashboard.ex
++++ b/elixir/lib/symphony_elixir/status_dashboard.ex
+@@ -1127,8 +1127,13 @@ defmodule SymphonyElixir.StatusDashboard do
+   defp humanize_codex_event(:tool_input_auto_answered, message, payload) do
+     answer = map_value(message, ["answer", :answer])
+ 
++    method =
++      map_value(payload, ["method", :method]) ||
++        map_path(message, ["payload", "method"]) ||
++        map_path(message, [:payload, :method])
++
+     base =
+-      case humanize_codex_method("item/tool/requestUserInput", payload) do
++      case humanize_codex_method(method || "item/tool/requestUserInput", payload) do
+         nil -> "tool input auto-answered"
+         text -> "#{text} (auto-answered)"
+       end
+@@ -1364,6 +1369,23 @@ defmodule SymphonyElixir.StatusDashboard do
+   defp humanize_codex_method("tool/requestUserInput", payload),
+     do: humanize_codex_method("item/tool/requestUserInput", payload)
+ 
++  defp humanize_codex_method("mcpServer/elicitation/request", payload) do
++    server =
++      map_path(payload, ["params", "serverName"]) ||
++        map_path(payload, [:params, :serverName]) ||
++        "mcp"
++
++    mode =
++      map_path(payload, ["params", "mode"]) ||
++        map_path(payload, [:params, :mode])
++
++    if is_binary(mode) do
++      "#{server} requested #{mode} input"
++    else
++      "#{server} requested input"
++    end
++  end
++
+   defp humanize_codex_method("account/updated", payload) do
+     auth_mode =
+       map_path(payload, ["params", "authMode"]) ||

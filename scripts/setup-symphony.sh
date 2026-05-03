@@ -37,17 +37,34 @@ require_command codex
 
 symphony_repo_url="${SYMPHONY_REPO_URL:-https://github.com/openai/symphony.git}"
 symphony_ref_dir="$(expand_path "${SYMPHONY_REFERENCE_DIR:-.tools/symphony}")"
+compat_patch="$repo_root/patches/symphony/codex-0.128-mcp-elicitation.patch"
 
 mkdir -p "$(dirname "$symphony_ref_dir")"
 
 if [[ -d "$symphony_ref_dir/.git" ]]; then
   echo "Updating Symphony reference implementation in $symphony_ref_dir"
+  if [[ -f "$compat_patch" ]] && git -C "$symphony_ref_dir" apply --reverse --check "$compat_patch" >/dev/null 2>&1; then
+    echo "Temporarily removing Symphony Codex 0.128 MCP elicitation patch before update"
+    git -C "$symphony_ref_dir" apply --reverse "$compat_patch"
+  fi
   git -C "$symphony_ref_dir" fetch --depth 1 origin main
   git -C "$symphony_ref_dir" checkout main
   git -C "$symphony_ref_dir" pull --ff-only origin main
 else
   echo "Cloning Symphony reference implementation into $symphony_ref_dir"
   git clone --depth 1 "$symphony_repo_url" "$symphony_ref_dir"
+fi
+
+if [[ -f "$compat_patch" ]]; then
+  if git -C "$symphony_ref_dir" apply --reverse --check "$compat_patch" >/dev/null 2>&1; then
+    echo "Symphony Codex 0.128 MCP elicitation patch already applied"
+  elif git -C "$symphony_ref_dir" apply --check "$compat_patch" >/dev/null 2>&1; then
+    echo "Applying Symphony Codex 0.128 MCP elicitation patch"
+    git -C "$symphony_ref_dir" apply "$compat_patch"
+  else
+    echo "Could not apply $compat_patch. Symphony may have changed upstream; inspect the patch before running workers." >&2
+    exit 1
+  fi
 fi
 
 cd "$symphony_ref_dir/elixir"

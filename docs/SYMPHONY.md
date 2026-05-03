@@ -47,7 +47,7 @@ SYMPHONY_REPO_URL=https://github.com/openai/symphony.git
 
 Never paste or print secret values into chat, Linear, PRs, logs, or docs.
 
-`SYMPHONY_CODEX_HOME` is a dedicated non-interactive worker profile. The runner creates it under `.tools/`, writes a minimal config, and links the existing Codex auth file without reading it. Workers still manage Linear directly through Symphony's injected `linear_graphql` tool; they do not need the interactive Codex app connectors.
+`SYMPHONY_CODEX_HOME` is a dedicated worker home for sessions and runtime files. The runner links the existing Codex auth, config, plugins, skills, and helper binaries into that home without reading secret contents. Workers keep access to configured MCP/app tools, while RubyWhisper issue bookkeeping should still use Symphony's injected `linear_graphql` tool.
 
 ## Local Setup
 
@@ -183,7 +183,7 @@ After that wave, review the artifacts and split the next backlog into leaves bef
 - Workers cannot clone: verify `SYMPHONY_SOURCE_REPO_URL` and GitHub auth.
 - Workers fail instantly with zero tokens: verify `SYMPHONY_CODEX_COMMAND` points to a Codex CLI new enough for `gpt-5.5`; Homebrew `codex-cli 0.113.0` rejects `gpt-5.5`.
 - Workers fail with `unknown variant reject`: use string-form `approval_policy: never`; newer Codex app-server schemas no longer accept Symphony's older object-form `reject` policy.
-- Workers stall on `mcpServer/elicitation/request`: verify `SYMPHONY_CODEX_HOME` points at the lean worker profile and `codex.command` disables inherited `mcp_servers`. Workers should use `linear_graphql` for Linear, not interactive Codex app connectors.
+- Workers stall on `mcpServer/elicitation/request`: rerun `scripts/setup-symphony.sh` and confirm the Codex 0.128 MCP elicitation compatibility patch applies. The patch declines non-interactive MCP input prompts instead of leaving the turn wedged.
 - Workers stall on missing external authorization: move the issue to `Human Review` with the exact missing auth/tool/action.
 
 ## Sources
