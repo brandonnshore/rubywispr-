@@ -53,6 +53,7 @@ pre_LINEAR_API_KEY="${LINEAR_API_KEY:-}"
 pre_LINEAR_PROJECT_SLUG="${LINEAR_PROJECT_SLUG:-}"
 pre_SYMPHONY_SOURCE_REF="${SYMPHONY_SOURCE_REF:-}"
 pre_SYMPHONY_WORKSPACE_ROOT="${SYMPHONY_WORKSPACE_ROOT:-}"
+pre_SYMPHONY_CODEX_COMMAND="${SYMPHONY_CODEX_COMMAND:-}"
 pre_SYMPHONY_CODEX_MODEL="${SYMPHONY_CODEX_MODEL:-}"
 pre_SYMPHONY_CODEX_REASONING="${SYMPHONY_CODEX_REASONING:-}"
 
@@ -73,17 +74,32 @@ restore_if_blank LINEAR_API_KEY "$pre_LINEAR_API_KEY"
 restore_if_blank LINEAR_PROJECT_SLUG "$pre_LINEAR_PROJECT_SLUG"
 restore_if_blank SYMPHONY_SOURCE_REF "$pre_SYMPHONY_SOURCE_REF"
 restore_if_blank SYMPHONY_WORKSPACE_ROOT "$pre_SYMPHONY_WORKSPACE_ROOT"
+restore_if_blank SYMPHONY_CODEX_COMMAND "$pre_SYMPHONY_CODEX_COMMAND"
 restore_if_blank SYMPHONY_CODEX_MODEL "$pre_SYMPHONY_CODEX_MODEL"
 restore_if_blank SYMPHONY_CODEX_REASONING "$pre_SYMPHONY_CODEX_REASONING"
 
 : "${LINEAR_PROJECT_SLUG:=rubywhisper-paid-beta-launch-caaab48c6aa9}"
 : "${SYMPHONY_WORKSPACE_ROOT:=~/code/rubywhisper-symphony-workspaces}"
+: "${SYMPHONY_CODEX_COMMAND:=/Users/brandonshore/.npm-global/bin/codex}"
 : "${SYMPHONY_CODEX_MODEL:=gpt-5.5}"
 : "${SYMPHONY_CODEX_REASONING:=high}"
 export LINEAR_PROJECT_SLUG
 export SYMPHONY_WORKSPACE_ROOT
+export SYMPHONY_CODEX_COMMAND
 export SYMPHONY_CODEX_MODEL
 export SYMPHONY_CODEX_REASONING
+
+if [[ ! -x "$SYMPHONY_CODEX_COMMAND" ]]; then
+  echo "Refusing to start Symphony: SYMPHONY_CODEX_COMMAND is not executable: $SYMPHONY_CODEX_COMMAND" >&2
+  exit 1
+fi
+
+codex_version="$("$SYMPHONY_CODEX_COMMAND" --version 2>/dev/null || true)"
+if [[ "$codex_version" == *"0.113.0"* ]]; then
+  echo "Refusing to start Symphony: $SYMPHONY_CODEX_COMMAND reports $codex_version, which rejects gpt-5.5." >&2
+  echo "Point SYMPHONY_CODEX_COMMAND at a newer Codex CLI, such as /Users/brandonshore/.npm-global/bin/codex." >&2
+  exit 1
+fi
 
 if [[ "$SYMPHONY_CODEX_MODEL" != "gpt-5.5" ]]; then
   echo "Refusing to start Symphony: SYMPHONY_CODEX_MODEL must be gpt-5.5 for this harness." >&2
@@ -166,6 +182,12 @@ Logs root:
 
 Source ref:
   ${SYMPHONY_SOURCE_REF:-<default clone ref>}
+
+Codex command:
+  $SYMPHONY_CODEX_COMMAND
+
+Codex version:
+  ${codex_version:-unknown}
 
 Codex model:
   $SYMPHONY_CODEX_MODEL

@@ -36,6 +36,7 @@ SYMPHONY_PORT=4007
 Optional:
 
 ```bash
+SYMPHONY_CODEX_COMMAND=/Users/brandonshore/.npm-global/bin/codex
 SYMPHONY_CODEX_MODEL=gpt-5.5
 SYMPHONY_CODEX_REASONING=high
 SYMPHONY_REFERENCE_DIR=.tools/symphony
@@ -177,6 +178,7 @@ After that wave, review the artifacts and split the next backlog into leaves bef
 - Missing `mise`: install `mise` before building the Elixir reference implementation.
 - Missing `codex`: install/authenticate Codex before running workers.
 - Workers cannot clone: verify `SYMPHONY_SOURCE_REPO_URL` and GitHub auth.
+- Workers fail instantly with zero tokens: verify `SYMPHONY_CODEX_COMMAND` points to a Codex CLI new enough for `gpt-5.5`; Homebrew `codex-cli 0.113.0` rejects `gpt-5.5`.
 - Workers stall on approvals: Symphony rejects interactive approval flows by design; move the issue to `Human Review` with the exact missing auth/tool/action.
 
 ## Sources
