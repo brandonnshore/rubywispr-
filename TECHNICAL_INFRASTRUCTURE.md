@@ -42,12 +42,14 @@ Current repo:
 
 Target repo contents:
 
-- `apps/web` or equivalent Next.js app path.
-- `apps/macos` or imported Xcode project path after FreeFlow audit.
+- Root npm workspace once product code is scaffolded. Use npm, not pnpm/yarn/bun, unless a future ADR changes the repo contract.
+- `apps/web` for the Next.js app. This app also owns backend API routes, auth/account/admin routes, Stripe webhooks, and provider gateway endpoints.
+- `apps/macos` for the imported macOS app after the FreeFlow audit/import decision. The exact Xcode project/workspace path is unknown until that import lands.
+- `packages/*` only when shared code is justified by real duplication.
 - `docs` or root-level planning/spec files.
 - `scripts` for setup and release support.
 
-Exact monorepo structure is TBD after choosing package manager and importing the macOS project.
+The current repo is docs/scripts only. Product app directories and package manifests are created by follow-up scaffold/import tickets, not by this command-contract decision.
 
 ## Runtime Environments
 
@@ -290,7 +292,7 @@ set +a
 
 Do not print or inspect `.env.local`.
 
-Expected web setup after scaffold:
+Expected web/backend setup after RW-020 scaffolds `apps/web` and the root npm workspace:
 
 ```bash
 npm install
@@ -301,29 +303,40 @@ npm run test
 npm run build
 ```
 
-Expected macOS setup after import:
+Backend validation uses the same commands because backend routes live inside the Next.js app. If a future ticket adds a narrower backend-only script, it must update this command contract before other tickets cite it.
+
+Blocked macOS command discovery after RW-010 audits FreeFlow and the import decision records the final project path:
 
 ```bash
 xcodebuild -list
-xcodebuild -scheme RubyWhisper -configuration Debug build
-xcodebuild test -scheme RubyWhisper
+xcodebuild -scheme <DiscoveredScheme> -configuration Debug build
+xcodebuild test -scheme <DiscoveredScheme>
 ```
 
-Exact commands are provisional until project scaffold/import.
+Do not treat the placeholder scheme as an active repo command. Until FreeFlow is audited/imported, macOS implementation tickets should cite the FreeFlow audit/import blocker instead of relying on a repo-local `xcodebuild` command.
 
 ## Build, Test, Lint, Typecheck Commands
 
-Target command contract:
+Repo command contract:
+
+- Package manager: npm.
+- Workspace shape: root npm workspace with `apps/web`, future `apps/macos`, and optional `packages/*`.
+- Current runnable app commands: none. This repo currently has no `package.json`, Next.js app, or Xcode project.
+- Web/backend commands after RW-020 (`RUB-31`) creates `apps/web`:
 
 ```bash
+npm install
+npm run dev
 npm run lint
 npm run typecheck
 npm run test
 npm run build
-xcodebuild test -scheme RubyWhisper
 ```
 
-If a package manager other than npm is chosen, update this doc and all future issues.
+- macOS commands: blocked until RW-010 records FreeFlow build commands and the import/ADR path records the repo-local Xcode project or workspace. Future tickets must cite that blocker instead of a placeholder `xcodebuild` command.
+- CI command selection is blocked on RW-005 after the web scaffold and macOS import decisions exist.
+
+If a package manager other than npm is chosen, update this doc and all future issues before implementation work cites the new command.
 
 ## CI/CD
 
