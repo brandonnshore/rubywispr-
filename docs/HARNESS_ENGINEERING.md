@@ -59,7 +59,7 @@ Do not rely on chat memory for rules that should shape future PRs.
 - `scripts/setup-symphony.sh` has successfully cloned and built the OpenAI reference implementation.
 - `scripts/run-symphony.sh --dry-run` passes.
 - Linear has active states used by `WORKFLOW.md`: `Todo`, `In Progress`, and `Rework`.
-- Linear has a review handoff state such as `Human Review`.
+- Linear has a review handoff state such as `In Review` or `Human Review`.
 - Only unblocked, agent-ready tickets are in `Todo`.
 
 ## Verification Ladder

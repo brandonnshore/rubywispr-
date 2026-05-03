@@ -43,6 +43,7 @@ codex:
   thread_sandbox: workspace-write
   turn_sandbox_policy:
     type: workspaceWrite
+    networkAccess: true
   turn_timeout_ms: 3600000
   read_timeout_ms: 5000
   stall_timeout_ms: 300000
@@ -173,7 +174,7 @@ mutation RubyWhisperUpdateIssueState($issueId: String!, $stateId: String!) {
 4. Keep the workpad current with plan, acceptance criteria, validation, notes, blockers, and current environment stamp.
 5. Operate end-to-end unless blocked by missing auth, missing external permissions, or ambiguous product direction that cannot be resolved from repo docs.
 6. Prefer small, reviewable PRs. Keep out-of-scope discoveries as separate Linear issues instead of expanding the current task.
-7. Do not move work to human review until validation evidence is recorded.
+7. Do not move work to review until validation evidence is recorded and either a PR is linked or the exact external blocker is documented.
 8. Do not merge, deploy production, change live billing, change DNS, change Apple signing credentials, or touch real customer data unless the issue explicitly authorizes that action.
 
 ## Status Flow
@@ -181,7 +182,7 @@ mutation RubyWhisperUpdateIssueState($issueId: String!, $stateId: String!) {
 - `Todo`: move the issue to `In Progress`, create or update the `## Codex Workpad`, then begin work.
 - `In Progress`: continue implementation from the current workpad and workspace.
 - `Rework`: read all review feedback, update the workpad, address feedback, revalidate, and return to review readiness.
-- `Human Review`: do not make code changes unless new feedback explicitly requires rework.
+- `In Review` or `Human Review`: do not make code changes unless new feedback explicitly requires rework.
 - Terminal states (`Done`, `Closed`, `Cancelled`, `Canceled`, `Duplicate`): do nothing and exit cleanly.
 
 ## Queue Policy
@@ -209,7 +210,7 @@ mutation RubyWhisperUpdateIssueState($issueId: String!, $stateId: String!) {
    - UI-facing work: record screenshot, video, or written browser/manual proof in the workpad/PR
 7. Commit and push when work is coherent, with no private env files or runtime artifacts staged.
 8. Open or update a PR, link it to the Linear issue, and add concise validation summary.
-9. Move to `Human Review` only after acceptance criteria are checked off and validation evidence is recorded.
+9. Move to `In Review` only after acceptance criteria are checked off and validation evidence is recorded. If the implementation is complete but PR handoff is blocked by missing external access, record the exact failed command/tool/error in the workpad and move to `In Review` so the operator can resolve the blocker instead of re-running the same turn.
 
 ## Workpad Template
 
@@ -245,5 +246,6 @@ Use this structure for the persistent Linear issue comment:
 - Tests or targeted validation pass for the latest commit.
 - No secrets, local runtime artifacts, generated `.tools` content, or private env files are staged.
 - PR is pushed and linked, or a blocker is clearly documented with exact missing external requirement.
+- If push or PR creation is blocked by network/GitHub auth/permission, stop after documenting the blocker and move to `In Review`; do not keep retrying the same external operation.
 - UI-facing work includes browser/manual proof.
 - Security/privacy-sensitive work includes a privacy note and confirms no server-side audio/transcript storage.

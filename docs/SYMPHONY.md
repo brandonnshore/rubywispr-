@@ -49,6 +49,8 @@ Never paste or print secret values into chat, Linear, PRs, logs, or docs.
 
 `SYMPHONY_CODEX_HOME` is a dedicated worker home for sessions and runtime files. The runner links the existing Codex auth, config, plugins, skills, and helper binaries into that home without reading secret contents. Workers keep access to configured MCP/app tools, while RubyWhisper issue bookkeeping should still use Symphony's injected `linear_graphql` tool.
 
+Workers run with Codex `workspaceWrite` turn sandboxing plus `networkAccess: true`. That keeps writes scoped to the issue workspace while allowing expected external handoff actions such as Git fetch/push, GitHub PR creation, and connected MCP/app calls.
+
 ## Local Setup
 
 Build or update the OpenAI reference implementation:
@@ -105,7 +107,8 @@ Active states in `WORKFLOW.md`:
 
 Handoff state:
 
-- `Human Review`
+- `In Review` in the current RubyWhisper Linear workflow.
+- `Human Review` in older docs or imported projects; treat it as the same handoff concept if that state exists.
 
 Terminal states:
 
@@ -184,7 +187,7 @@ After that wave, review the artifacts and split the next backlog into leaves bef
 - Workers fail instantly with zero tokens: verify `SYMPHONY_CODEX_COMMAND` points to a Codex CLI new enough for `gpt-5.5`; Homebrew `codex-cli 0.113.0` rejects `gpt-5.5`.
 - Workers fail with `unknown variant reject`: use string-form `approval_policy: never`; newer Codex app-server schemas no longer accept Symphony's older object-form `reject` policy.
 - Workers stall on `mcpServer/elicitation/request`: rerun `scripts/setup-symphony.sh` and confirm the Codex 0.128 MCP elicitation compatibility patch applies. The patch declines non-interactive MCP input prompts instead of leaving the turn wedged.
-- Workers stall on missing external authorization: move the issue to `Human Review` with the exact missing auth/tool/action.
+- Workers stall on missing external authorization: update the workpad with the exact missing auth/tool/action and move the issue to `In Review` or the project's equivalent human review state so Symphony does not keep retrying the same blocker.
 
 ## Sources
 

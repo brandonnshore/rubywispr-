@@ -42,7 +42,7 @@ Check:
 - `Todo`: only current wave, unblocked, agent-ready.
 - `In Progress`: workers currently active.
 - `Rework`: review feedback needing agent action.
-- `Human Review`: PRs/artifacts needing human/operator review.
+- `In Review` / `Human Review`: PRs/artifacts needing human/operator review.
 - `Backlog`: future work and breakdown candidates.
 
 ### 3. Dispatch Wave
@@ -87,7 +87,7 @@ When a worker stalls:
    - real bug/test failure
    - agent drift
 4. Fix the harness/ticket when possible.
-5. Move the issue to `Rework` or `Human Review` with the exact blocker.
+5. Move the issue to `Rework` or `In Review` / `Human Review` with the exact blocker.
 
 ### 5. Review PRs
 
