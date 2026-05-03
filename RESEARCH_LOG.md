@@ -127,6 +127,89 @@ Recommendation from build audit:
 
 - FreeFlow is buildable enough to remain the preferred macOS base for the next audit/import step, with a clear caveat: its current build system is Makefile/direct-`swiftc`, not Xcode. Treat Xcode project creation or documented Makefile-based CI as part of the import plan.
 
+#### RW-012 FreeFlow License, Attribution, And Rebrand Audit
+
+Audit target:
+
+- Repository: `https://github.com/zachlatta/freeflow`
+- Checkout: upstream `main` at `b91a5fb01a6fa46853b2a718a3dc6f43cff1f56c`
+- Local path: `tmp/freeflow-rub-25` in this workspace
+
+License and attribution:
+
+- Root `LICENSE` is MIT with copyright `Copyright (c) 2026 Zach Latta`.
+- Engineering obligation: preserve the upstream copyright notice and MIT permission notice in all RubyWhisper source copies and in any distributed app/release package that includes substantial FreeFlow code or assets.
+- Recommended RubyWhisper notices:
+  - Keep an upstream notice file, for example `THIRD_PARTY_NOTICES.md` or `NOTICE`, with the full FreeFlow MIT license text and source URL.
+  - Include the same notice in the signed app distribution, for example `RubyWhisper.app/Contents/Resources/ThirdPartyNotices.md`, an About/Acknowledgments settings panel, or both.
+  - Keep release/website copy clear that RubyWhisper is derived from FreeFlow where attribution is shown, without implying Zach Latta or FreeFlow maintainers endorse RubyWhisper.
+- No copyleft, source-disclosure, patent-field, network-use, or paid-product blocker was identified from the FreeFlow license. This is an engineering license review, not legal advice.
+
+Third-party dependency and license inventory:
+
+- No `Package.swift`, `Package.resolved`, `Podfile`, `Cartfile`, `.xcodeproj`, `.xcworkspace`, `project.yml`, `Gemfile`, `package.json`, `Cargo.toml`, `go.mod`, `requirements.txt`, or submodules were present.
+- App code imports Apple platform frameworks only: SwiftUI/AppKit/Cocoa, Foundation/Combine, AVFoundation/CoreMedia/CoreAudio, ApplicationServices/Carbon, ScreenCaptureKit, Security, CoreData, UniformTypeIdentifiers, and `os.log`.
+- Optional build/release tooling is not bundled into the app but should be re-evaluated for RubyWhisper CI: Homebrew `create-dmg` and `fileicon`, GitHub Actions `actions/checkout@v4`, `softprops/action-gh-release` pinned to `a06a81a03ee405af7f2048a818ed3f03bbf83c7b`, and `codelytv/pr-size-labeler@v1`.
+- Runtime external services/brand strings are not vendored dependencies but must be reworked for RubyWhisper product policy: Groq/OpenAI-compatible provider URLs, GitHub release/update URLs, and GitHub star/contributor metadata.
+
+Rebrand touchpoints found by search:
+
+- Build and bundle identity:
+  - `Makefile`: defaults `APP_NAME=FreeFlow Dev`, `BUNDLE_ID=com.zachlatta.freeflow.dev`, `CODESIGN_IDENTITY=FreeFlow Dev`; release builds pass `APP_NAME=FreeFlow` and `BUNDLE_ID=com.zachlatta.freeflow`.
+  - `Info.plist`: `CFBundleName`, `CFBundleDisplayName`, `CFBundleExecutable`, `CFBundleIdentifier`, version keys, icon file, and microphone/speech/accessibility usage strings.
+  - `FreeFlow.entitlements`: file name should be renamed even though the current entitlement payload is generic audio input only.
+  - `.github/workflows/release.yml` and `.github/workflows/dev-release.yml`: `FreeFlowBuildTag`, DMG names, GitHub release names/body, bundle ID, signing/notarization flow, and artifact names.
+  - `.agents/skills/freeflow-release/**`: release skill name, prompts, helper script paths, and FreeFlow-specific release language.
+- App source identity:
+  - `Sources/App.swift`: app type is `FreeFlowApp`.
+  - `Sources/AppName.swift`: fallback display name is `FreeFlow`.
+  - `Sources/AppState.swift`: dev-bundle check for `FreeFlow Dev`, recording flag comments/path defaults, dispatch label `com.zachlatta.freeflow.recording-state-flag`, and automatic-termination reason text.
+  - `Sources/AudioRecorder.swift`, `Sources/GlobalShortcutBackend.swift`, `Sources/RealtimeTranscriptionService.swift`, `Sources/TranscriptionService.swift`: OSLog subsystems and dispatch queue labels under `com.zachlatta.freeflow`.
+  - `Sources/KeychainStorage.swift`: fallback keychain service `com.zachlatta.freeflow`; import should plan migration from any FreeFlow dev data only if intentionally needed.
+  - `Sources/UpdateManager.swift`: update checks use `https://api.github.com/repos/zachlatta/freeflow/releases`, `FreeFlowBuildTag`, `FreeFlow.dmg`, and temporary `freeflow-*` directories. RubyWhisper needs its own update channel or Sparkle plan before release.
+  - `Sources/SettingsView.swift` and `Sources/SetupView.swift`: visible `zachlatta/freeflow` star/contributor cards, GitHub API calls, avatar URL, support links, `FreeFlowBuildTag`, settings copy, and a test context bundle ID of `com.zachlatta.freeflow`.
+  - `Sources/TestCaseExporter.swift`: exported ZIP names and temp directories use `freeflow-case-*`.
+- Assets and docs:
+  - `Resources/AppIcon-Source.png`, `Resources/AppIcon.icns`, `Resources/AppIcon-Dev-Source.png`, `Resources/AppIcon-Dev.icns`: FreeFlow app icons should be replaced for RubyWhisper identity.
+  - `Resources/demo.gif`, `website/assets/demo.gif`, `website/assets/app-icon.png`: FreeFlow demo/website assets should not ship as RubyWhisper product media unless deliberately retained with attribution.
+  - `README.md`, `CHANGELOG.md`, `website/**`: FreeFlow product, website, sitemap, download, license, privacy, and domain copy. RubyWhisper already has separate product docs, so upstream website files should likely be excluded from import or archived only as attribution/source reference.
+
+Recommended import stance:
+
+- No license blocker was identified before import.
+- Treat attribution as a release checklist item: RubyWhisper must preserve the FreeFlow MIT notice in source and distributed app artifacts before any external beta build.
+- Treat rebrand as medium scope. The build system supports `APP_NAME`/`BUNDLE_ID` overrides, but the source still has hardcoded OSLog labels, update URLs, GitHub attribution/star UI, app icon/demo assets, release workflow names, and support docs that should be cleaned during RW-060.
+- Do not carry over FreeFlow's update channel, website, or public release workflows as-is; they point at `zachlatta/freeflow` and publish `FreeFlow.dmg`.
+
+Validation commands and evidence:
+
+```bash
+git clone https://github.com/zachlatta/freeflow.git tmp/freeflow-rub-25
+cd tmp/freeflow-rub-25
+git rev-parse HEAD
+# b91a5fb01a6fa46853b2a718a3dc6f43cff1f56c
+```
+
+```bash
+sed -n '1,220p' LICENSE
+# MIT License; Copyright (c) 2026 Zach Latta
+```
+
+```bash
+find . -maxdepth 3 \( -name 'Package.swift' -o -name 'Package.resolved' -o -name 'Podfile' -o -name 'Cartfile' -o -name 'project.yml' -o -name '*.xcodeproj' -o -name '*.xcworkspace' -o -name 'Gemfile' -o -name 'package.json' -o -name 'Cargo.toml' -o -name 'go.mod' -o -name 'requirements.txt' -o -name 'pyproject.toml' -o -name 'LICENSE*' -o -name 'NOTICE*' -o -name 'COPYING*' \) -print
+# ./LICENSE only
+```
+
+```bash
+git submodule status --recursive
+# no submodules
+```
+
+```bash
+rg -n "FreeFlow|freeflow|com\.zachlatta|FreeFlowBuildTag|zachlatta/freeflow|FreeFlow Dev" Sources Makefile Info.plist README.md CHANGELOG.md .github website .agents
+# branding/release/update references found in files listed above
+```
+
 ### Fallback Candidates
 
 Keep as references if FreeFlow fails audit:
