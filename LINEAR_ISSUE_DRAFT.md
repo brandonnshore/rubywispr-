@@ -3,7 +3,7 @@
 Status: Imported into Linear; keep this file as the creation/import policy reference
 Generated: 2026-04-30
 Project: RubyWhisper Paid Beta Launch
-Recommended creation policy: first-wave Todo, all later work Backlog or blocked with labels
+Recommended creation policy: first-wave Todo only when unblocked and leaf-level; all later, blocked, or needs-breakdown work stays Backlog with Linear relations and labels
 
 ## Source Corpus Reviewed
 
@@ -48,22 +48,25 @@ Recommended creation policy: first-wave Todo, all later work Backlog or blocked 
 - Labels:
   - Areas: `macos`, `backend`, `frontend`, `infra`, `data`, `api`, `design`, `docs`, `qa`, `security`, `billing`, `admin`, `performance`
   - Types: `Feature`, `Improvement`, `Bug`, `spike`, `chore`, `test`, `release`
-  - Agent: `execute-now`, `agent-ready`, `needs-breakdown`, `needs-human`, `blocked`, `symphony`
+  - Agent: `execute-now`, `agent-ready`, `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, `needs-human`, `blocked`, `symphony`
   - Validation: `unit`, `integration`, `e2e`, `manual-qa`, `build`, `visual`
   - Risk: `privacy`, `high-risk`, `external-dependency`, `migration`
 
 ## Queue Policy
 
-- Symphony dispatch signal: issue is in `Todo` and has `execute-now`, `agent-ready`, and `symphony`.
+- Symphony dispatch signal: issue is in `Todo`, has `execute-now`, `agent-ready`, and `symphony`, and has no unresolved `blocked by` relation.
 - Active worker states: Symphony may continue tracking `Todo` and `In Progress`; include `Rework` only if that state is added to the team workflow.
-- `Todo`: only unblocked current-wave tickets with one clear outcome, acceptance criteria, validation, and no unresolved human decision.
+- `Todo`: only unblocked, leaf-level current-wave tickets with one clear outcome, acceptance criteria, validation, and no unresolved human decision.
 - `In Progress`: exactly the tickets currently owned by active workers.
 - `In Review`: PR/artifact handoff for operator or human review; Symphony should not start new implementation work from this state.
 - `Backlog`: future work, split-later candidates, and blocked work that is not ready for dispatch.
 - `Blocked`: not a current Linear status; represent blocked work as `Backlog` plus `blocked`, and add `needs-human`, `external-dependency`, or `high-risk` when the blocker type is known.
-- First-wave import policy: first-wave unblocked tickets start in `Todo`; first-wave blocked tickets start in `Backlog` with `blocked` and should not carry `execute-now`.
-- Later-wave import policy: later work starts in `Backlog`; add `needs-breakdown` to broad implementation tickets until preceding decisions and repo source shape are known.
+- First-wave import policy: first-wave unblocked leaf tickets start in `Todo`; first-wave blocked tickets start in `Backlog` with `blocked` and should not carry `execute-now`.
+- Later-wave import policy: later work starts in `Backlog`; add `needs-breakdown`, `needs-leaf`, or `needs-leaf-ticket` to broad implementation tickets until preceding decisions and repo source shape are known.
 - Review policy: decisions involving production secrets, live billing, signing/notarization, privacy posture, or public launch stay in `In Review` for handoff or `Backlog` with `needs-human` until the decision is recorded.
+- Dependency policy: create issues first, then add Linear `blocked by` / `blocks` relations for hard order. The `## Dependencies` text remains human-readable, but relations are the dispatch control surface.
+- Dependency break policy: if a ticket would run before a prerequisite is Done or explicitly accepted, keep it in `Backlog` and report `Dependency break: <issue> is blocked by <blocker>.`
+- Breakdown policy: if a ticket is too broad or labeled `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, or `split-later`, keep it in `Backlog` and report `Needs breakdown: you need to break this down into leaf tickets before Symphony can work it.`
 
 ## Issue Shape And Creation Order
 
@@ -93,7 +96,7 @@ Status values in this index are queue concepts from the original draft. In the c
 | RW-012 | Audit FreeFlow license, attribution, and rebrand scope | Wave 2 | Todo |
 | RW-013 | Record FreeFlow import decision ADR | Wave 2 | Blocked |
 | RW-014 | Compare fallback macOS bases if FreeFlow fails | Wave 2 | Blocked |
-| RW-015 | Benchmark Groq latency and cost assumptions | Wave 2 | Todo |
+| RW-015 | Benchmark Groq latency and cost assumptions | Wave 2 | Blocked |
 | RW-016 | Spike Apple signing, notarization, and updater path | Wave 2 | Todo |
 | RW-017 | Resolve domain, legal, and public policy content ownership | Wave 2 | Human Review |
 | RW-020 | Scaffold the Next.js web/backend app | Wave 3 | Backlog |
@@ -603,9 +606,9 @@ Fallbacks include Dictate Anywhere, Handy, Steno, CustomWispr, and Murmur. They 
 
 ## RW-015: Benchmark Groq latency and cost assumptions
 
-Status: Todo
+Status: Blocked
 Priority: High
-Labels: `backend`, `spike`, `agent-ready`, `performance`, `external-dependency`
+Labels: `backend`, `spike`, `agent-ready`, `performance`, `external-dependency`, `blocked`
 
 ## Goal
 Validate whether Groq can support RubyWhisper's speed and unit economics assumptions.
@@ -3030,7 +3033,7 @@ RubyWhisper is a paid public beta. Launch requires real users, real payments, pr
 - Wave 5 Mac App: 14 tickets.
 - Wave 6 Website Admin Design: 8 tickets.
 - Wave 7 Quality Release: 8 tickets.
-- Initial dispatch tickets: RW-001, RW-002, RW-003, RW-004, RW-010, RW-011, RW-012, RW-015, RW-016.
+- Initial dispatch tickets: RW-001, RW-002, RW-003, RW-004, RW-010, RW-011, RW-012, RW-016. RW-015 waits in Backlog until RW-003 is accepted and the safe Groq dev-key path exists.
 - Human-decision ticket: RW-017.
 - Blocked-at-import tickets: RW-005, RW-013, RW-014, RW-060, RW-107 and downstream work as dependency relations indicate.
 
@@ -3044,5 +3047,5 @@ RubyWhisper is a paid public beta. Launch requires real users, real payments, pr
 - Review policy: no `Human Review` state exists; use `In Review`.
 - Rework policy: no `Rework` state exists; only add it to Symphony polling after adding that Linear status.
 - Issue shape: flat issues with milestone grouping and explicit dependency relations, not parent/sub-issue containers.
-- Queue import policy: first-wave unblocked tickets can be `Todo`; future and blocked work stays `Backlog` with blocker/breakdown labels.
+- Queue import policy: first-wave unblocked leaf tickets can be `Todo`; future, blocked, and needs-breakdown work stays `Backlog` with blocker/breakdown labels and Linear relations.
 - Assignment policy: leave issues unassigned unless the operator explicitly assigns ownership during dispatch.

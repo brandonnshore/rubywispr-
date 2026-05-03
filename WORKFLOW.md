@@ -116,6 +116,12 @@ query RubyWhisperIssue($id: String!) {
     comments(first: 25) {
       nodes { id body createdAt updatedAt }
     }
+    relations {
+      nodes {
+        type
+        relatedIssue { id identifier title state { name } url }
+      }
+    }
     inverseRelations {
       nodes {
         type
@@ -176,6 +182,38 @@ mutation RubyWhisperUpdateIssueState($issueId: String!, $stateId: String!) {
 7. Do not move work to review until validation evidence is recorded and either a PR is linked or the exact external blocker is documented.
 8. Do not merge, deploy production, change live billing, change DNS, change Apple signing credentials, or touch real customer data unless the issue explicitly authorizes that action.
 
+## Dependency Gate
+
+Before moving a `Todo` issue to `In Progress` or editing files, check the issue labels, `## Dependencies` text, existing workpad blockers, and Linear relations/inverse relations returned by `linear_graphql`.
+
+Do not implement the issue if any of these are true:
+
+- It has `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, or `split-later`, unless the issue explicitly asks you to create the breakdown/leaf tickets.
+- It has `blocked` or `needs-human`, unless the issue explicitly asks you to unblock, clarify, or document the blocker.
+- It has `external-dependency` or `high-risk` and the issue does not include an explicit safe, non-production path for the external action.
+- Its description or Linear relations say it is blocked by another issue that is not in a terminal state.
+- It depends on secrets, credentials, production services, Apple signing, live billing, DNS, customer data, or other human-held access that is not already provided through a safe dev path.
+
+If the dependency gate fails:
+
+1. Do not code, commit, push, or open a PR.
+2. Create or update the `## Codex Workpad`.
+3. Record the exact blocker in `### Blockers`.
+4. Add `### Operator Action` with one of these plain-language messages:
+   - `Needs breakdown: you need to break this down into leaf tickets before Symphony can work it.`
+   - `Dependency break: this issue is blocked by <issue>; keep it out of Todo until the blocker is Done or explicitly accepted.`
+   - `Human gate: this issue needs approval or credentials before work can proceed.`
+5. Move the issue out of the active execution lane: use `Backlog` when the team has that state available; otherwise use `In Review` so the operator sees the handoff and Symphony stops retrying.
+6. Stop after the workpad update.
+
+Treat Linear `blocked by` / `blocks` relationships as the source of truth for hard sequencing. Labels and description text are secondary safety signals, but they are still binding when the Linear relationship is missing.
+
+Linear relation interpretation for the dependency gate:
+
+- `relations.nodes` with `type: "blocks"` means the current issue blocks the listed downstream issue; this does not block the current issue.
+- `inverseRelations.nodes` with `type: "blocks"` means the listed issue blocks the current issue; if that listed issue is not terminal, the current issue must not run.
+- `related` is context only and does not block work unless the description says otherwise.
+
 ## Status Flow
 
 - `Todo`: move the issue to `In Progress`, create or update the `## Codex Workpad`, then begin work.
@@ -187,8 +225,10 @@ mutation RubyWhisperUpdateIssueState($issueId: String!, $stateId: String!) {
 ## Queue Policy
 
 - Only issues with `agent-ready` and either `execute-now` or an explicitly active status should be worked.
-- Treat `needs-breakdown` and `split-later` as not ready for implementation unless the issue is specifically a planning/breakdown task.
+- Treat `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, and `split-later` as not ready for implementation unless the issue is specifically a planning/breakdown task.
 - Treat `needs-human`, `blocked`, `external-dependency`, and `high-risk` as reasons to look for explicit unblock instructions before coding.
+- Treat unresolved `blocked by` relations as hard stop signs even if the issue is in `Todo`.
+- If an issue says `Blocked by:` in the description but the Linear relation is missing, respect the textual blocker and tell the operator to add the Linear relation.
 - If a task discovers meaningful follow-up work, create or request a separate Backlog issue instead of widening scope.
 
 ## Execution Protocol
@@ -233,6 +273,9 @@ Use this structure for the persistent Linear issue comment:
 - ...
 
 ### Blockers
+- None
+
+### Operator Action
 - None
 
 ### Confusions

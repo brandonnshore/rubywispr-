@@ -106,7 +106,7 @@ Gate:
 
 ## Phase 3: Linear Board
 
-Use `linear-tickets`.
+Use the `linear-tickets` skill. It is the Ruby pipeline's default bridge from approved specs into Linear because it is designed to create dependency-aware, agent-ready tickets.
 
 Board policy:
 
@@ -115,10 +115,21 @@ Board policy:
 - Issues = one coherent outcome and one proof path.
 - `Todo` = only current dispatch wave.
 - `Backlog` = future work.
-- `needs-breakdown` = later split into leaves.
+- `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket` = later split into leaves.
 - `execute-now` = current safe wave.
 - `agent-ready` = sufficiently specified for a worker.
 - `symphony` = can be picked up by Symphony.
+- Linear `blocked by` / `blocks` relations = hard dependency order.
+- `blocked` = not dispatchable until the relation or human blocker is resolved.
+
+Dependency policy:
+
+- Create issues in dependency order.
+- Add Linear `blocked by` / `blocks` relations after issue IDs exist.
+- Keep text `## Dependencies` in the issue body for human readability, but do not rely on text alone for sequencing.
+- Use `related` only when there is context without a hard ordering rule.
+- If a ticket would run before a prerequisite is Done or explicitly accepted, it stays in `Backlog`.
+- If a ticket is a parent/epic or needs decomposition, label it `needs-breakdown` or `needs-leaf` and keep it out of `Todo`.
 
 Every issue must include:
 
@@ -165,6 +176,8 @@ Do not dispatch:
 
 - vague ideas
 - tickets missing validation
+- tickets with unresolved `blocked by` relations
+- tickets labeled `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, or `split-later`
 - live production changes without explicit approval
 - high-risk privacy/security/billing tasks without human gate
 - giant epics that need leaf splitting

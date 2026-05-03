@@ -13,7 +13,7 @@ Use a long-running goal/operator session to keep checking Linear, prepare the ne
 1. Read project state.
 2. Choose the next safe wave.
 3. Shape issues before dispatch.
-4. Add or remove `execute-now`, `agent-ready`, `symphony`, `needs-breakdown`, `needs-human`, and `blocked` labels.
+4. Add or remove `execute-now`, `agent-ready`, `symphony`, `needs-breakdown`, `needs-leaf`, `needs-human`, and `blocked` labels.
 5. Monitor Symphony dashboard, Linear state, workpads, branches, and PRs.
 6. Review validation evidence before moving work forward.
 7. Convert repeated failures into better docs, tickets, scripts, or tests.
@@ -61,8 +61,32 @@ A ticket is dispatchable only when:
 Current labels:
 
 - dispatch now: `execute-now`, `agent-ready`, `symphony`
-- split later: `needs-breakdown`
+- split later: `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`
 - do not dispatch without clarification: `needs-human`, `blocked`, `external-dependency`, `high-risk`
+
+#### Dependency Preflight
+
+Before moving anything into `Todo`, inspect the candidate issue's `## Dependencies`, labels, and Linear relations.
+
+Hard rules:
+
+- Linear `blocked by` / `blocks` relations are the source of truth for sequencing.
+- Description text such as `Blocked by: RUB-20` is binding even if the relation was not added yet; convert it to a Linear relation before dispatch.
+- `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, and `split-later` stay out of `Todo` unless the issue is explicitly a breakdown/planning ticket.
+- `blocked` and `needs-human` stay out of `Todo` until the blocker is resolved or Brandon explicitly accepts the risk.
+- `external-dependency` and `high-risk` require a named safe path before dispatch.
+
+If a queued issue would break dependency order, move it back to `Backlog`, add or preserve the blocker relation/label, and report:
+
+```text
+Dependency break: <issue> is blocked by <blocker>. It should not run until <blocker> is Done or explicitly accepted.
+```
+
+If a queued issue is too broad, move it back to `Backlog` and report:
+
+```text
+Needs breakdown: you need to break this down into leaf tickets before Symphony can work it.
+```
 
 ### 4. Monitor Workers
 
@@ -127,7 +151,7 @@ Only run the harness wave first:
 5. FreeFlow build reliability audit
 6. FreeFlow hotkey/insertion/island/privacy audit
 7. FreeFlow license/rebrand audit
-8. Groq latency/cost spike
+8. Groq latency/cost spike, only after the service/env checklist is accepted and the safe dev key path exists
 9. Apple signing/notarization/updater spike
 
 After those PRs are reviewed, break down the next backlog into leaf tickets.
@@ -141,7 +165,9 @@ Act as the Symphony operator for the RubyWhisper Paid Beta Launch Linear project
 
 Keep checking project state, select the next safe implementation or verification wave, shape issues before dispatch, dispatch only intentionally prepared Symphony-ready issues, monitor active workers, review workpads and PRs, recover failed or stalled runs, and move work forward only when validation is safe.
 
-Use Linear as the project tracker and Symphony as the worker runtime. Treat `execute-now` + `agent-ready` + `symphony` as the current dispatch signal. Treat `needs-breakdown`, `needs-human`, `blocked`, `external-dependency`, and `high-risk` as non-dispatchable unless the current task is explicitly to clarify or split that work.
+Use Linear as the project tracker and Symphony as the worker runtime. Treat `execute-now` + `agent-ready` + `symphony` as the current dispatch signal. Treat `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, `split-later`, `needs-human`, `blocked`, `external-dependency`, and `high-risk` as non-dispatchable unless the current task is explicitly to clarify or split that work.
+
+Before dispatching or continuing any issue, run a dependency preflight: check Linear `blocked by` / `blocks` relations, `## Dependencies` text, active labels, and workpad blockers. If a Todo issue would violate a dependency, move it back to Backlog with the blocker relation/label and tell Brandon `Dependency break: <issue> is blocked by <blocker>.` If a Todo issue is too broad or labeled `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, or `split-later`, move it back to Backlog and tell Brandon `Needs breakdown: you need to break this down into leaf tickets before Symphony can work it.`
 
 For every PR, verify the issue scope, inspect changed files, confirm validation evidence, check for secrets/runtime artifacts, and require privacy notes for any auth, billing, transcription, cleanup, logging, storage, or provider work.
 

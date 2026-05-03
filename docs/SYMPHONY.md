@@ -148,11 +148,19 @@ Current launch policy:
 - `execute-now`: safe to dispatch in the current wave.
 - `agent-ready`: sufficiently specified for an agent.
 - `symphony`: intended for Symphony.
-- `needs-breakdown`: useful backlog, but later split into smaller leaf issues.
+- `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`: useful backlog or parent scope, but must be split into smaller leaf issues before Symphony implementation.
 - `needs-human`: human decision needed before implementation.
 - `blocked`: blocked by dependency, auth, vendor, unclear product call, or missing repo harness.
 
-Symphony dispatch should require `Todo` plus `execute-now`, `agent-ready`, and `symphony`. Later-wave issues stay in `Backlog`; blocked work stays in `Backlog` with `blocked` and any more specific blocker label.
+Dependency policy:
+
+- Linear `blocked by` / `blocks` relations are the hard sequencing mechanism.
+- The issue body's `## Dependencies` section is still binding, but it should be converted to Linear relations before dispatch.
+- A Todo issue with an unresolved `blocked by` relation should be moved back to `Backlog` with a blocker note.
+- A Todo issue labeled `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, or `split-later` should be moved back to `Backlog` with the message: `Needs breakdown: you need to break this down into leaf tickets before Symphony can work it.`
+- A Todo issue that would run before its prerequisite should be moved back to `Backlog` with the message: `Dependency break: <issue> is blocked by <blocker>.`
+
+Symphony dispatch should require `Todo` plus `execute-now`, `agent-ready`, `symphony`, and no unresolved blocker relations. Later-wave issues stay in `Backlog`; blocked work stays in `Backlog` with `blocked` and any more specific blocker label.
 
 ## Concurrency Policy
 
@@ -199,7 +207,7 @@ Run only the harness/setup tickets first:
 - service/env checklist
 - Linear metadata/import policy
 - FreeFlow audits
-- Groq latency/cost spike
+- Groq latency/cost spike, only after the service/env checklist is accepted and the safe dev key path exists
 - Apple signing/notarization/updater spike
 
 After that wave, review the artifacts and split the next backlog into leaves before enabling more product work.

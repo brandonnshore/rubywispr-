@@ -61,7 +61,9 @@ Do not rely on chat memory for rules that should shape future PRs.
 - Linear has active states used by `WORKFLOW.md`: `Todo`, `In Progress`, and `Rework` if that state exists in the team workflow.
 - Current RubyWhisper Linear state mapping uses `Backlog` plus the `blocked` label for blocked work, and `In Review` for human/operator handoff.
 - Linear has a review handoff state such as `In Review` or `Human Review`.
-- Only unblocked, agent-ready tickets are in `Todo`.
+- Only unblocked, leaf-level, agent-ready tickets are in `Todo`.
+- Hard dependencies are represented with Linear `blocked by` / `blocks` relations, not only labels or description text.
+- Tickets labeled `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, `blocked`, or `needs-human` are outside the Symphony dispatch lane unless the ticket is explicitly a clarification/breakdown task.
 
 ## Verification Ladder
 

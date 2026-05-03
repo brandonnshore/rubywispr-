@@ -8,6 +8,7 @@ Use this guide with `AGENTS.md`, the current Linear issue, and the smallest rele
 - Keep Linear as the control plane and maintain one persistent `## Codex Workpad` comment with plan, acceptance criteria, validation, notes, blockers, and the current environment stamp.
 - Use `rg` or `rg --files` before opening broad docs, then read the smallest relevant sections.
 - Keep implementation changes scoped to the current issue and preserve the proposed ADR boundaries in `DECISION_LOG.md`.
+- Check Linear dependency posture before coding: labels, `## Dependencies`, blockers in the workpad, and Linear `blocked by` / `blocks` relations.
 - Route transcription and cleanup through the RubyWhisper backend so provider keys stay server-side.
 - Store product metadata only on the server.
 - Keep Recent Wisprs, personal dictionary content, and other transcript-like user content local-only unless an approved ADR changes that posture.
@@ -16,6 +17,8 @@ Use this guide with `AGENTS.md`, the current Linear issue, and the smallest rele
 
 ## Ask first
 
+- Working on an issue labeled `needs-breakdown`, `needs-leaf`, `needs-leaf-ticket`, `blocked`, or `needs-human`, unless the current issue is explicitly to clarify or split that work.
+- Working ahead of an unresolved `blocked by` dependency.
 - Importing FreeFlow permanently after audit.
 - Choosing a fallback app base.
 - Changing the provider, cleanup model, subscription model, auth provider, database provider, or auto-update provider from the proposed direction.
@@ -29,6 +32,8 @@ Use this guide with `AGENTS.md`, the current Linear issue, and the smallest rele
 
 - Never inspect, print, summarize, or commit `.env.local` or any private env source file.
 - Never commit secrets, local runtime artifacts, generated `.tools` content, or private environment files.
+- Never treat `Todo` alone as permission to break a declared dependency.
+- Never implement a broad parent issue when it should be split into leaf tickets first.
 - Never put Groq, Stripe, Supabase service-role, Clerk secret, Apple signing, Sentry auth, or equivalent private keys into desktop app code.
 - Never send clipboard contents to the backend.
 - Never persist audio, raw transcripts, cleaned transcripts, clipboard contents, surrounding app text, or Recent Wisprs on the server.
@@ -57,6 +62,20 @@ Every implementation PR should include:
 - Security/privacy notes that call out data flow, storage, credentials, logging, telemetry, and user-content handling.
 - File/module boundaries touched.
 - Known blockers or follow-up work that remains out of scope.
+
+## Dependency Rules
+
+Hard sequencing should live in Linear relationships:
+
+- Use `blocked by` for prerequisites that must finish first.
+- Use `blocks` for downstream work this issue unlocks.
+- Use `related` only for useful context that does not control order.
+
+If a worker sees a dependency violation, it should stop before coding, update the `## Codex Workpad`, and use the clearest operator message:
+
+- `Needs breakdown: you need to break this down into leaf tickets before Symphony can work it.`
+- `Dependency break: this issue is blocked by <issue>; keep it out of Todo until the blocker is Done or explicitly accepted.`
+- `Human gate: this issue needs approval or credentials before work can proceed.`
 
 ## Validation Expectations
 
