@@ -179,7 +179,8 @@ After that wave, review the artifacts and split the next backlog into leaves bef
 - Missing `codex`: install/authenticate Codex before running workers.
 - Workers cannot clone: verify `SYMPHONY_SOURCE_REPO_URL` and GitHub auth.
 - Workers fail instantly with zero tokens: verify `SYMPHONY_CODEX_COMMAND` points to a Codex CLI new enough for `gpt-5.5`; Homebrew `codex-cli 0.113.0` rejects `gpt-5.5`.
-- Workers stall on approvals: Symphony rejects interactive approval flows by design; move the issue to `Human Review` with the exact missing auth/tool/action.
+- Workers fail with `unknown variant reject`: use string-form `approval_policy: never`; newer Codex app-server schemas no longer accept Symphony's older object-form `reject` policy.
+- Workers stall on missing external authorization: move the issue to `Human Review` with the exact missing auth/tool/action.
 
 ## Sources
 
