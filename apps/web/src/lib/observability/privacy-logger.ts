@@ -37,6 +37,22 @@ export type RubyWhisperPrivacyLogEventOptions = {
   metadata?: Record<string, unknown>;
 };
 
+export const rubyWhisperBackendRequestLogEventNames = [
+  "backend.request.started",
+  "backend.request.succeeded",
+  "backend.request.failed",
+] as const;
+
+export type RubyWhisperBackendRequestLogEventName =
+  (typeof rubyWhisperBackendRequestLogEventNames)[number];
+
+export type RubyWhisperBackendRequestLogInput = Partial<
+  Record<RubyWhisperPrivacyLogMetadataKey, unknown>
+> & {
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
 const metadataKeySet = new Set<string>(rubyWhisperPrivacyLogMetadataKeys);
 const maxEventNameLength = 80;
 const maxMetadataStringLength = 128;
@@ -94,6 +110,50 @@ export function createRubyWhisperPrivacyLogEvent(
   };
 }
 
+export function createRubyWhisperBackendRequestStartedLogEvent(
+  input: RubyWhisperBackendRequestLogInput = {},
+) {
+  return createBackendRequestLogEvent("backend.request.started", input);
+}
+
+export function createRubyWhisperBackendRequestSucceededLogEvent(
+  input: RubyWhisperBackendRequestLogInput = {},
+) {
+  return createBackendRequestLogEvent("backend.request.succeeded", input);
+}
+
+export function createRubyWhisperBackendRequestFailedLogEvent(
+  input: RubyWhisperBackendRequestLogInput = {},
+) {
+  return createBackendRequestLogEvent("backend.request.failed", input);
+}
+
+function createBackendRequestLogEvent(
+  event: RubyWhisperBackendRequestLogEventName,
+  input: RubyWhisperBackendRequestLogInput,
+): RubyWhisperPrivacyLogEvent {
+  const logEvent = createRubyWhisperPrivacyLogEvent(event, {
+    metadata: collectBackendRequestMetadataInput(input),
+  });
+
+  return logEvent ?? { event };
+}
+
+function collectBackendRequestMetadataInput(
+  input: RubyWhisperBackendRequestLogInput,
+) {
+  const metadataInput: Record<string, unknown> =
+    isRecord(input.metadata) ? { ...input.metadata } : {};
+
+  for (const key of rubyWhisperPrivacyLogMetadataKeys) {
+    if (Object.hasOwn(input, key)) {
+      metadataInput[key] = input[key];
+    }
+  }
+
+  return metadataInput;
+}
+
 function normalizeLogEventName(event: string) {
   const trimmedEvent = event.trim();
 
@@ -132,4 +192,8 @@ function sanitizeMetadataValue(value: unknown): string | number | boolean | unde
   }
 
   return typeof value === "boolean" ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
