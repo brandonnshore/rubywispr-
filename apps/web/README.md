@@ -161,6 +161,16 @@ After `npm run build`, rerun `npm run test:auth-privacy` or the focused changed-
 
 Future mocked backend route tests should import from `test/support/backend-integration.mjs`. The helper exports synthetic Clerk/Supabase/provider fixtures plus `invokeRouteHandler`, `invokeServerFunction`, `createSyntheticBackendRequest`, and `createMockBackendProviders`.
 
+For provider-backed desktop transcription tests, use:
+
+- `createSyntheticProviderMockClient({ scenario: "success" })` for provider success.
+- `createSyntheticProviderMockClient({ scenario: "refusal" })` for provider authentication/refusal failures.
+- `createSyntheticProviderMockClient({ scenario: "timeout" })` for timeout normalization.
+- `createSyntheticProviderMockClient({ scenario: "invalid_response" })` for malformed provider output.
+- `createSyntheticProviderTranscriptionInput()` and `createSyntheticProviderCleanupInput()` for the only allowed provider operation inputs.
+
+Inject the mock through `createMockBackendProviders({ provider: createSyntheticProviderMockClient({ scenario }) })`, then pass that provider bundle into `invokeServerFunction` or future route-handler context setup. The helper rejects caller-provided raw audio, transcript or cleaned text content, context, dictionary terms, provider payload dumps, live hosts, credential-shaped strings, guarded private env names, and private env source paths.
+
 Keep these tests offline-only. Do not pass live Clerk, Stripe, Supabase, Groq, Sentry, auth, billing, or private env values into the helper; it rejects live-looking hosts, credential-like strings, private env source references, and guarded server secret names.
 
 ## Backend No-Body Logging Contract

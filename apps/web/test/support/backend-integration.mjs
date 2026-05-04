@@ -1,6 +1,22 @@
 import { syntheticBackendFixtures } from "./synthetic-backend-fixtures.mjs";
+import {
+  assertSyntheticProviderFixtureInput,
+  createSyntheticProviderCleanupInput,
+  createSyntheticProviderMockClient,
+  createSyntheticProviderTranscriptionInput,
+  syntheticProviderFixtures,
+  syntheticProviderMockScenarios,
+} from "./synthetic-provider-mocks.mjs";
 
 export { syntheticBackendFixtures };
+export {
+  assertSyntheticProviderFixtureInput,
+  createSyntheticProviderCleanupInput,
+  createSyntheticProviderMockClient,
+  createSyntheticProviderTranscriptionInput,
+  syntheticProviderFixtures,
+  syntheticProviderMockScenarios,
+};
 
 const defaultOrigin = "https://rubywhisper-backend.test";
 const liveNetworkHostPatterns = [
@@ -144,6 +160,9 @@ export function createMockBackendProviders(overrides = {}) {
       },
       ...overrides.groq,
     },
+    provider: overrides.provider ?? createSyntheticProviderMockClient({
+      scenario: "timeout",
+    }),
   });
 }
 
