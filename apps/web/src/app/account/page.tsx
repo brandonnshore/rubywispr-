@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { requireClerkUserIdForPage } from "@/lib/auth/clerk";
 
 import {
@@ -33,18 +35,30 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   ]);
 
   return (
-    <main className="surface-shell">
+    <main className="surface-shell account-shell">
       <section
         className="surface-panel account-panel"
         aria-labelledby="account-heading"
       >
-        <p className="surface-kicker">Account</p>
-        <h1 id="account-heading">Account</h1>
-        <p className="surface-copy">
-          Terms and Privacy acceptance is required before RubyWhisper can
-          transcribe trial dictation. This account view records only acceptance
-          metadata for the signed-in session.
-        </p>
+        <header className="account-heading">
+          <div>
+            <p className="surface-kicker">Account</p>
+            <h1 id="account-heading">Account</h1>
+          </div>
+          <Link className="route-text-link" href="/">
+            RubyWhisper home
+          </Link>
+        </header>
+        <section
+          className="status-panel account-summary"
+          aria-label="Account status summary"
+        >
+          <p>
+            Terms and Privacy acceptance is required before RubyWhisper can
+            transcribe trial dictation. This account view records only
+            acceptance metadata for the signed-in session.
+          </p>
+        </section>
         <TermsAcceptanceSection
           message={termsMessage}
           termsState={termsState}
@@ -61,7 +75,10 @@ function BillingActionsSection({
   message: string | null;
 }>) {
   return (
-    <section className="account-status" aria-labelledby="billing-heading">
+    <section
+      className="status-panel account-status"
+      aria-labelledby="billing-heading"
+    >
       <p className="account-status-label">Billing</p>
       <h2 id="billing-heading">Plan and billing</h2>
       <p>
@@ -97,7 +114,10 @@ function TermsAcceptanceSection({
 }>) {
   if (termsState.status === "accepted") {
     return (
-      <section className="account-status" aria-labelledby="terms-heading">
+      <section
+        className="status-panel account-status account-status-success"
+        aria-labelledby="terms-heading"
+      >
         <p className="account-status-label">Accepted</p>
         <h2 id="terms-heading">Terms and Privacy accepted</h2>
         <p>
@@ -114,7 +134,7 @@ function TermsAcceptanceSection({
 
   return (
     <section
-      className="account-status account-status-required"
+      className="status-panel account-status account-status-required"
       aria-labelledby="terms-heading"
     >
       <p className="account-status-label">Required</p>
