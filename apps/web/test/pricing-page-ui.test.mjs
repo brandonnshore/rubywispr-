@@ -64,8 +64,11 @@ test("public home links visitors to pricing", async () => {
   assert.match(source, /href:\s*["']\/download["']/);
   assert.match(source, /<Link href="\/download">Download<\/Link>/);
   assert.match(source, /<Link href="\/pricing">Pricing<\/Link>/);
-  assert.match(source, /Download beta/);
+  assert.match(source, /<Link href="\/sign-up">Sign up<\/Link>/);
+  assert.match(source, /Check beta download/);
   assert.match(source, /View pricing/);
+  assert.match(source, /Audio and transcript content are not stored/);
+  assert.match(source, /mailto:\$\{supportEmail\}/);
 });
 
 async function loadPricingPageModule() {
