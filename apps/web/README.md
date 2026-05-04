@@ -225,6 +225,10 @@ Current server-only helper surfaces:
   metadata for account and quota decisions.
 - `src/lib/account/desktop-account-snapshot.ts` composes the desktop-facing
   account state from profile, subscription, and usage metadata.
+- `src/lib/friend-of-ruby/batches.ts` owns server-only Friend of Ruby batch
+  metadata creation and lookup. It writes only creator Clerk user ID, batch
+  code, max redemptions, optional expiration, and optional Stripe promotion code
+  ID through the Supabase service-role helper.
 - `src/lib/rate-limit/transcription.ts` owns the local/mockable RW-031A
   transcription request-window decision primitive. It accepts Clerk user ID,
   timestamps, request counts, and plan-state policy metadata only, returns
