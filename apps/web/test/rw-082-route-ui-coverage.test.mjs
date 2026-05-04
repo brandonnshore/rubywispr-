@@ -46,8 +46,12 @@ test("RW-082 public routes keep pricing, download, and account navigation discov
   const downloadMarkup = renderToStaticMarkup(downloadModule.default());
 
   assertRouteLinks(homeMarkup, ["/download", "/pricing", "/account"]);
-  assert.match(homeMarkup, /Download beta/);
+  assertRouteLinks(homeMarkup, ["/sign-up", "/sign-in"]);
+  assert.match(homeMarkup, /Fast Mac dictation that works anywhere you can type/);
+  assert.match(homeMarkup, /Check beta download/);
   assert.match(homeMarkup, /View pricing/);
+  assert.match(homeMarkup, /Audio and transcript content are not stored on RubyWhisper servers/);
+  assert.match(homeMarkup, /mailto:brandon@rubyadvisory\.com/);
 
   assertRouteLinks(pricingMarkup, ["/download", "/sign-up", "/account"]);
   assert.match(pricingMarkup, /\$7\/month billed monthly/);
