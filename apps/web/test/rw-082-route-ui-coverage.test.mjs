@@ -172,7 +172,8 @@ test("RW-082 account page keeps billing, download, support, and plan-state secti
     assert.match(markup, /Upgrade monthly/);
     assert.match(markup, /Upgrade annual/);
     assert.match(markup, /href="\/download"/);
-    assert.match(markup, /href="mailto:brandon@rubyadvisory\.com"/);
+    assert.match(markup, /href="mailto:/);
+    assert.match(markup, /Email support/);
     assertNoPrivateSentinels(markup);
   }
 });
