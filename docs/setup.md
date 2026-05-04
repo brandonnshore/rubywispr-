@@ -52,7 +52,8 @@ Every variable named in `TECHNICAL_INFRASTRUCTURE.md` is accounted for here. Rec
 
 - Root `.env.example` and `apps/web/.env.example` are placeholder templates with blank values only. They are safe for scaffold validation and must not contain real service IDs, real URLs, sample tokens, or secret-looking strings.
 - Server-only and non-public runtime config belongs in `apps/web/src/config/server.ts`. This includes Clerk secrets and webhooks, Supabase service-role keys, Stripe secrets and webhook secrets, Groq API keys, Sentry auth tokens, and Apple/Sparkle signing or release credentials.
-- Client-facing config belongs in `apps/web/src/config/client.ts` and may read only `NEXT_PUBLIC_*` names. Never add secret, webhook, service-role, provider API, or signing key names to that file.
+- Client-facing config belongs in `apps/web/src/config/client.ts` and may read only `NEXT_PUBLIC_*` names. Clerk client config may expose only `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`; never add Clerk secret or webhook names to that file.
+- Keep blank placeholders buildable until a later auth leaf wires `<ClerkProvider>`, `clerkMiddleware()`/`proxy.ts`, protected routes, and server auth helpers with dedicated bundle guardrail updates.
 - Future integration tickets should add provider-specific env names in three places together: the relevant private secret store, the placeholder template with a blank value, and the appropriate server or client config module. Do not make validation commands require live services unless the issue explicitly includes a safe stub or mock.
 
 ## Local Development
