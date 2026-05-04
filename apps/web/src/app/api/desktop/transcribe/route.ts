@@ -20,6 +20,7 @@ import {
   requireClerkUserId,
   type ClerkRequiredAuthState,
 } from "@/lib/auth/clerk";
+import { runRubyWhisperConservativeCleanup } from "@/lib/cleanup/conservative-cleanup";
 import {
   parseDesktopTranscribeRequest,
   type DesktopTranscribeRequestInput,
@@ -205,14 +206,6 @@ export async function executeDesktopTranscribeProviderContinuation(
   > = defaultDesktopTranscribeRouteDependencies,
 ) {
   const requestId = dependencies.createRequestId();
-
-  if (input.requestInput.cleanupSettings.cleanupEnabled) {
-    return rubyWhisperApiErrorResponse("service_unavailable", {
-      metadata: createProviderRouteMetadata(input),
-      requestId,
-    });
-  }
-
   const transcriptionResult = await providerClient.transcribe(
     {
       ...input.requestInput.providerInput,
@@ -243,8 +236,19 @@ export async function executeDesktopTranscribeProviderContinuation(
     });
   }
 
+  const cleanupResult = await runRubyWhisperConservativeCleanup({
+    cleanupEnabled: input.requestInput.cleanupSettings.cleanupEnabled,
+    context: input.requestInput.cleanupSettings.context,
+    contextAwareCleanupEnabled:
+      input.requestInput.cleanupSettings.contextAwareCleanupEnabled,
+    dictionaryTerms: input.requestInput.cleanupSettings.dictionaryTerms,
+    providerClient,
+    requestId,
+    transcriptText: transcriptionResult.result.text,
+  });
+  const finalText = cleanupResult.cleanedText;
   const cleanedWordCount = countRubyWhisperBillableOutputWords(
-    transcriptionResult.result.text,
+    finalText,
   );
   const usageIncrement = dependencies.prepareUsageIncrement({
     billableWordCount: cleanedWordCount,
@@ -296,6 +300,7 @@ export async function executeDesktopTranscribeProviderContinuation(
 
   return Response.json(
     createProviderSuccessPayload(input, transcriptionResult.result, {
+      cleanedText: finalText,
       cleanedWordCount,
       requestId,
       usageCounters: usageWriteResult.counters,
@@ -374,6 +379,7 @@ function createProviderSuccessPayload(
   input: DesktopTranscribePreflightContinuationInput,
   result: RubyWhisperProviderTranscriptionResult,
   success: Readonly<{
+    cleanedText: string;
     cleanedWordCount: number;
     requestId: string;
     usageCounters: RubyWhisperUsageCounters;
@@ -386,7 +392,7 @@ function createProviderSuccessPayload(
       ? { appVersion: metadata.appVersion }
       : {}),
     audioDurationMs: input.requestInput.metadata.audioDurationMs,
-    cleanedText: result.text,
+    cleanedText: success.cleanedText,
     cleanedWordCount: success.cleanedWordCount,
     ok: true,
     ...(typeof metadata.osVersion === "string"

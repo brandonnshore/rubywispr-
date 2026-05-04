@@ -192,9 +192,13 @@ function createDesktopTranscribeRequestInput(options: {
     };
   }
 
-  const cleanupEnabled = normalizeBooleanEntry(options.fields.cleanupEnabled);
+  const cleanupEnabled = normalizeBooleanEntry(
+    options.fields.cleanupEnabled,
+    true,
+  );
   const contextAwareCleanupEnabled = normalizeBooleanEntry(
     options.fields.contextAwareCleanupEnabled,
+    true,
   );
   const appVersion = normalizeSafeMetadataString(options.fields.appVersion);
   const context = normalizeTransientString(options.fields.context);
@@ -256,9 +260,12 @@ function normalizeDurationMs(value: FormDataEntryValue | null | undefined) {
   return durationMs;
 }
 
-function normalizeBooleanEntry(value: FormDataEntryValue | null | undefined) {
+function normalizeBooleanEntry(
+  value: FormDataEntryValue | null | undefined,
+  defaultValue = false,
+) {
   if (typeof value !== "string") {
-    return false;
+    return defaultValue;
   }
 
   switch (value.trim().toLowerCase()) {
@@ -266,8 +273,12 @@ function normalizeBooleanEntry(value: FormDataEntryValue | null | undefined) {
     case "true":
     case "yes":
       return true;
-    default:
+    case "0":
+    case "false":
+    case "no":
       return false;
+    default:
+      return defaultValue;
   }
 }
 

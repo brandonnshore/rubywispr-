@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
@@ -20,6 +21,13 @@ const desktopTranscribeRoutePath = path.join(
   "desktop",
   "transcribe",
   "route.ts",
+);
+const conservativeCleanupPath = path.join(
+  webRoot,
+  "src",
+  "lib",
+  "cleanup",
+  "conservative-cleanup.ts",
 );
 const syntheticOrigin = "https://rubywhisper-desktop.test";
 const syntheticNow = new Date("2026-05-04T07:30:00.000Z");
@@ -421,13 +429,82 @@ test("desktop transcribe route maps provider failures to shared errors", async (
   }
 });
 
-test("desktop transcribe route fails closed for cleanup-enabled requests", async () => {
+test("desktop transcribe route returns cleanup-enabled cleaned provider success", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
+  const providerCalls = [];
+  const { calls, dependencies } = createRouteDependencies({
+    parseRequest: async () =>
+      parseSuccess({
+        cleanupSettings: {
+          cleanupEnabled: true,
+          context: "Synthetic route context.",
+          contextAwareCleanupEnabled: true,
+          dictionaryTerms: ["RubyWhisper", "Ruby Advisory"],
+        },
+        metadata: {
+          cleanupEnabled: true,
+          contextAwareCleanupEnabled: true,
+        },
+      }),
+    providerClient: providerClientReturningCleanupSuccess(providerCalls, {
+      cleanedText: "Schedule RubyWhisper follow-up for Monday.",
+      transcriptionText: "uh schedule ruby whisper follow up for monday",
+    }),
+  });
+  const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+  const response = await handler(syntheticAudioRequest());
+  const body = await response.json();
+  const requestMetadataInput = calls.find(
+    (call) => call.operation === "writeRequestMetadata",
+  ).input;
+  const usageIncrementInput = calls.find(
+    (call) => call.operation === "writeUsageCounterIncrement",
+  ).input;
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual(body, {
+    appVersion: "0.1.0-test",
+    audioDurationMs: 4200,
+    cleanedText: "Schedule RubyWhisper follow-up for Monday.",
+    cleanedWordCount: 5,
+    ok: true,
+    osVersion: "macOS synthetic",
+    planState: "trial_active",
+    provider: "mock_provider",
+    providerLatencyMs: 24,
+    requestId: "req_rw_synthetic_route_001",
+    trialWordsLimit: 5000,
+    trialWordsRemaining: 3895,
+    trialWordsUsed: 1105,
+  });
+  assert.deepEqual(
+    toPlainObject(providerCalls).map((call) => call.operation),
+    ["transcribe", "cleanup"],
+  );
+  assert.deepEqual(toPlainObject(providerCalls[1].input), {
+    cleanupEnabled: true,
+    context: "Synthetic route context.",
+    contextAwareCleanupEnabled: true,
+    dictionaryTerms: ["RubyWhisper", "Ruby Advisory"],
+    requestId: "req_rw_synthetic_route_001",
+    transcriptText: "uh schedule ruby whisper follow up for monday",
+  });
+  assert.equal(requestMetadataInput.cleanedWordCount, 5);
+  assert.equal(usageIncrementInput.billableWordCount, 5);
+  assertNoPrivateCleanupPayload(requestMetadataInput);
+  assertNoPrivateCleanupPayload(usageIncrementInput);
+});
+
+test("desktop transcribe route omits cleanup context and dictionary when disabled", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+  const providerCalls = [];
   const { dependencies } = createRouteDependencies({
     parseRequest: async () =>
       parseSuccess({
         cleanupSettings: {
           cleanupEnabled: true,
+          context: "Synthetic route context must not reach cleanup provider.",
           contextAwareCleanupEnabled: false,
           dictionaryTerms: [],
         },
@@ -436,24 +513,60 @@ test("desktop transcribe route fails closed for cleanup-enabled requests", async
           contextAwareCleanupEnabled: false,
         },
       }),
-    providerClient: providerClientThatMustNotRun("cleanup-enabled requests"),
+    providerClient: providerClientReturningCleanupSuccess(providerCalls),
   });
   const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
   const response = await handler(syntheticAudioRequest());
   const body = await response.json();
 
-  assert.equal(response.status, 503);
+  assert.equal(response.status, 200);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
-  assert.equal(body.error.code, "service_unavailable");
-  assert.equal(body.requestId, "req_rw_synthetic_route_001");
-  assert.deepEqual(body.metadata, {
-    appVersion: "0.1.0-test",
-    audioDurationMs: 4200,
-    osVersion: "macOS synthetic",
-    planState: "trial_active",
-    trialWordsLimit: 5000,
-    trialWordsRemaining: 3900,
+  assert.equal(body.cleanedText, "Synthetic cleanup output.");
+  assert.deepEqual(toPlainObject(providerCalls[1].input), {
+    cleanupEnabled: true,
+    contextAwareCleanupEnabled: false,
+    requestId: "req_rw_synthetic_route_001",
+    transcriptText: "Synthetic provider output.",
   });
+});
+
+test("desktop transcribe route falls back to raw text when cleanup fails", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+  const providerCalls = [];
+  const { calls, dependencies } = createRouteDependencies({
+    parseRequest: async () =>
+      parseSuccess({
+        cleanupSettings: {
+          cleanupEnabled: true,
+          context: "Synthetic route context.",
+          contextAwareCleanupEnabled: true,
+          dictionaryTerms: ["RubyWhisper"],
+        },
+        metadata: {
+          cleanupEnabled: true,
+          contextAwareCleanupEnabled: true,
+        },
+      }),
+    providerClient: providerClientReturningCleanupFailure(providerCalls),
+  });
+  const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+  const response = await handler(syntheticAudioRequest());
+  const body = await response.json();
+  const requestMetadataInput = calls.find(
+    (call) => call.operation === "writeRequestMetadata",
+  ).input;
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(body.cleanedText, "Synthetic provider output.");
+  assert.equal(body.cleanedWordCount, 3);
+  assert.equal(body.trialWordsRemaining, 3897);
+  assert.deepEqual(
+    toPlainObject(providerCalls).map((call) => call.operation),
+    ["transcribe", "cleanup"],
+  );
+  assert.equal(requestMetadataInput.cleanedWordCount, 3);
+  assertNoPrivateCleanupPayload(requestMetadataInput);
 });
 
 test("desktop transcribe provider continuation can be invoked directly", async () => {
@@ -478,6 +591,7 @@ test("desktop transcribe route stays server-only and provider-safe", async () =>
   assert.match(source, /export const dynamic = ["']force-dynamic["'];/);
   assert.match(source, /createDesktopTranscribeRouteHandler/);
   assert.match(source, /requireClerkUserId/);
+  assert.match(source, /runRubyWhisperConservativeCleanup/);
   assert.match(source, /parseDesktopTranscribeRequest/);
   assert.match(source, /evaluateRubyWhisperQuotaEntitlement/);
   assert.match(source, /createRubyWhisperGroqProviderClient/);
@@ -521,6 +635,40 @@ async function loadDesktopTranscribeRouteModule() {
   return commonJsModule.exports;
 }
 
+let conservativeCleanupModule;
+
+function loadConservativeCleanupModuleSync() {
+  if (conservativeCleanupModule) {
+    return conservativeCleanupModule;
+  }
+
+  const source = readFileSync(conservativeCleanupPath, "utf8");
+  const executableSource = source.replace(/^import\s+["']server-only["'];\n?/, "");
+  const compiled = ts.transpileModule(executableSource, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: conservativeCleanupPath,
+  });
+  const commonJsModule = { exports: {} };
+
+  vm.runInNewContext(
+    compiled.outputText,
+    {
+      exports: commonJsModule.exports,
+      module: commonJsModule,
+    },
+    {
+      filename: conservativeCleanupPath,
+    },
+  );
+
+  conservativeCleanupModule = commonJsModule.exports;
+
+  return conservativeCleanupModule;
+}
+
 function createRouteModuleRequire() {
   return function requireRouteModule(specifier) {
     switch (specifier) {
@@ -554,6 +702,8 @@ function createRouteModuleRequire() {
             ok: false,
           }),
         };
+      case "@/lib/cleanup/conservative-cleanup":
+        return loadConservativeCleanupModuleSync();
       case "@/lib/desktop-transcribe/request":
         return {
           parseDesktopTranscribeRequest: async () => {
@@ -952,6 +1102,68 @@ function providerClientReturningSuccess(calls = []) {
   };
 }
 
+function providerClientReturningCleanupSuccess(calls = [], options = {}) {
+  return {
+    cleanup: async (input) => {
+      calls.push({ input, operation: "cleanup" });
+
+      return {
+        ok: true,
+        result: {
+          cleanedText: options.cleanedText ?? "Synthetic cleanup output.",
+          provider: "mock_provider",
+          providerLatencyMs: 18,
+        },
+      };
+    },
+    transcribe: async (input) => {
+      calls.push({ input, operation: "transcribe" });
+
+      return {
+        ok: true,
+        result: {
+          audioDurationMs: input.audioDurationMs,
+          provider: "mock_provider",
+          providerLatencyMs: 24,
+          text: options.transcriptionText ?? "Synthetic provider output.",
+        },
+      };
+    },
+  };
+}
+
+function providerClientReturningCleanupFailure(calls = []) {
+  return {
+    cleanup: async (input) => {
+      calls.push({ input, operation: "cleanup" });
+
+      return {
+        error: {
+          apiErrorCode: "provider_error",
+          code: "provider_unavailable",
+          message: "Synthetic cleanup unavailable.",
+          retryable: true,
+        },
+        metadata: { provider: "mock_provider" },
+        ok: false,
+      };
+    },
+    transcribe: async (input) => {
+      calls.push({ input, operation: "transcribe" });
+
+      return {
+        ok: true,
+        result: {
+          audioDurationMs: input.audioDurationMs,
+          provider: "mock_provider",
+          providerLatencyMs: 24,
+          text: "Synthetic provider output.",
+        },
+      };
+    },
+  };
+}
+
 function providerClientReturningFailure(scenario) {
   return {
     cleanup: async () => {
@@ -1140,4 +1352,11 @@ function sanitizeApiErrorMetadata(metadata) {
 
 function toPlainObject(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function assertNoPrivateCleanupPayload(value) {
+  assert.doesNotMatch(
+    JSON.stringify(value),
+    /uh schedule ruby whisper|Schedule RubyWhisper|Synthetic route context|Ruby Advisory/,
+  );
 }
