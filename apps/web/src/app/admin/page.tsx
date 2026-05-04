@@ -1,4 +1,8 @@
-export default function AdminPage() {
+import { requireClerkUserIdForPage } from "@/lib/auth/clerk";
+
+export default async function AdminPage() {
+  await requireClerkUserIdForPage();
+
   return (
     <main className="surface-shell">
       <section className="surface-panel" aria-labelledby="admin-heading">

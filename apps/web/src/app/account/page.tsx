@@ -1,4 +1,8 @@
-export default function AccountPage() {
+import { requireClerkUserIdForPage } from "@/lib/auth/clerk";
+
+export default async function AccountPage() {
+  await requireClerkUserIdForPage();
+
   return (
     <main className="surface-shell">
       <section className="surface-panel" aria-labelledby="account-heading">
