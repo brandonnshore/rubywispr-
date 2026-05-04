@@ -2,6 +2,7 @@ import "server-only";
 
 export const rubyWhisperApiErrorCodes = [
   "signed_out",
+  "admin_forbidden",
   "terms_required",
   "trial_exhausted",
   "subscription_required",
@@ -109,6 +110,14 @@ export const rubyWhisperApiErrorDescriptors = {
     httpStatus: 403,
     message: "Accept Terms and Privacy to start dictating.",
     recovery: "open_terms_acceptance",
+    retryable: false,
+  },
+  admin_forbidden: {
+    code: "admin_forbidden",
+    desktopState: "blocked",
+    httpStatus: 403,
+    message: "This account is not a RubyWhisper admin.",
+    recovery: "open_account",
     retryable: false,
   },
   trial_exhausted: {

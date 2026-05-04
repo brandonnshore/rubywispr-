@@ -28,6 +28,7 @@ const acceptTermsRoutePath = path.join(
 
 const expectedBackendErrorCodes = [
   "signed_out",
+  "admin_forbidden",
   "terms_required",
   "trial_exhausted",
   "subscription_required",
@@ -44,6 +45,7 @@ const expectedBackendErrorCodes = [
 
 const expectedHttpStatuses = {
   signed_out: 401,
+  admin_forbidden: 403,
   terms_required: 403,
   trial_exhausted: 402,
   subscription_required: 402,
@@ -59,6 +61,7 @@ const expectedHttpStatuses = {
 };
 const expectedRetryability = {
   signed_out: false,
+  admin_forbidden: false,
   terms_required: false,
   trial_exhausted: false,
   subscription_required: false,
