@@ -77,7 +77,11 @@ const expectedMetadataKeys = [
   "trialWordsRemaining",
   "trialWordsLimit",
   "monthlyWordsRemaining",
+  "requestCount",
   "retryAfterSeconds",
+  "windowStart",
+  "windowEnd",
+  "limit",
   "durationLimitMs",
   "audioDurationMs",
   "appVersion",
@@ -211,9 +215,13 @@ test("API error response helper emits no-store JSON with retry metadata", async 
 
   const response = apiErrors.rubyWhisperApiErrorResponse("rate_limited", {
     metadata: {
+      limit: 20,
       providerLatencyMs: Number.NaN,
+      requestCount: 20,
       retryAfterSeconds: 2.2,
       totalLatencyMs: 320,
+      windowEnd: "2026-05-04T12:01:00.000Z",
+      windowStart: "2026-05-04T12:00:00.000Z",
     },
     requestId: "req_rw_synthetic_429",
   });
@@ -232,8 +240,12 @@ test("API error response helper emits no-store JSON with retry metadata", async 
       retryable: true,
     },
     metadata: {
+      limit: 20,
+      requestCount: 20,
       retryAfterSeconds: 2.2,
       totalLatencyMs: 320,
+      windowEnd: "2026-05-04T12:01:00.000Z",
+      windowStart: "2026-05-04T12:00:00.000Z",
     },
   });
 });
