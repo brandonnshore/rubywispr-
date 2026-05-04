@@ -96,6 +96,58 @@ test("desktop transcription parser accepts synthetic binary audio requests", asy
   });
 });
 
+test("desktop transcription parser defaults cleanup settings on unless explicitly disabled", async () => {
+  const parser = await loadDesktopTranscribeRequestModule();
+  const audioBytes = new Uint8Array([9, 8, 7]);
+  const defaultResult = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: audioBytes,
+      headers: {
+        "content-type": "audio/wav",
+        "x-rubywhisper-audio-duration-ms": "4200",
+      },
+      method: "POST",
+    }),
+  );
+  const disabledResult = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: audioBytes,
+      headers: {
+        "content-type": "audio/wav",
+        "x-rubywhisper-audio-duration-ms": "4200",
+        "x-rubywhisper-cleanup-enabled": "false",
+        "x-rubywhisper-context-aware-cleanup-enabled": "false",
+      },
+      method: "POST",
+    }),
+  );
+  const unknownBooleanResult = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: audioBytes,
+      headers: {
+        "content-type": "audio/wav",
+        "x-rubywhisper-audio-duration-ms": "4200",
+        "x-rubywhisper-cleanup-enabled": "maybe",
+        "x-rubywhisper-context-aware-cleanup-enabled": "later",
+      },
+      method: "POST",
+    }),
+  );
+
+  assert.equal(defaultResult.ok, true);
+  assert.equal(defaultResult.input.cleanupSettings.cleanupEnabled, true);
+  assert.equal(defaultResult.input.cleanupSettings.contextAwareCleanupEnabled, true);
+  assert.equal(disabledResult.ok, true);
+  assert.equal(disabledResult.input.cleanupSettings.cleanupEnabled, false);
+  assert.equal(disabledResult.input.cleanupSettings.contextAwareCleanupEnabled, false);
+  assert.equal(unknownBooleanResult.ok, true);
+  assert.equal(unknownBooleanResult.input.cleanupSettings.cleanupEnabled, true);
+  assert.equal(
+    unknownBooleanResult.input.cleanupSettings.contextAwareCleanupEnabled,
+    true,
+  );
+});
+
 test("desktop transcription parser rejects missing or unreadable audio before provider work", async () => {
   const parser = await loadDesktopTranscribeRequestModule();
   const noAudioForm = new FormData();
