@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 import * as ts from "typescript";
 
+import { invokeRouteHandler } from "./support/backend-integration.mjs";
+
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../..",
@@ -55,6 +57,72 @@ const expectedHttpStatuses = {
   service_unavailable: 503,
   internal_error: 500,
 };
+const expectedRetryability = {
+  signed_out: false,
+  terms_required: false,
+  trial_exhausted: false,
+  subscription_required: false,
+  payment_failed: false,
+  account_blocked: false,
+  rate_limited: true,
+  duration_limit_reached: false,
+  invalid_audio: false,
+  provider_error: true,
+  network_error: true,
+  service_unavailable: true,
+  internal_error: true,
+};
+const expectedMetadataKeys = [
+  "planState",
+  "trialWordsRemaining",
+  "trialWordsLimit",
+  "monthlyWordsRemaining",
+  "retryAfterSeconds",
+  "durationLimitMs",
+  "audioDurationMs",
+  "appVersion",
+  "osVersion",
+  "provider",
+  "providerLatencyMs",
+  "totalLatencyMs",
+];
+const expectedPayloadKeys = ["error", "metadata", "ok", "requestId"];
+const expectedErrorKeys = ["code", "desktopState", "message", "recovery", "retryable"];
+const maxDesktopErrorPayloadBytes = 512;
+const representativeRouteScenarios = [
+  {
+    code: "signed_out",
+    metadata: { appVersion: "0.1.0-test", osVersion: "macOS test" },
+    status: 401,
+  },
+  {
+    code: "terms_required",
+    metadata: { planState: "trial_active" },
+    status: 403,
+  },
+  {
+    code: "trial_exhausted",
+    metadata: { planState: "trial_exhausted", trialWordsRemaining: 0 },
+    status: 402,
+  },
+  {
+    code: "duration_limit_reached",
+    metadata: { audioDurationMs: 601_000, durationLimitMs: 600_000 },
+    status: 413,
+  },
+  {
+    code: "provider_error",
+    metadata: { provider: "mock_provider", providerLatencyMs: 210 },
+    status: 503,
+  },
+  {
+    code: "network_error",
+    metadata: { totalLatencyMs: 2_000 },
+    status: 503,
+  },
+];
+const privateSerializationPattern =
+  /payload must not echo|Bearer rw_synthetic_placeholder|private prompt|private context|private transcript|private clipboard/i;
 
 test("API error contract exposes the backend-originated RW-044A matrix", async () => {
   const apiErrors = await loadApiErrorsModule();
@@ -66,11 +134,31 @@ test("API error contract exposes the backend-originated RW-044A matrix", async (
 
     assert.equal(descriptor.code, code);
     assert.equal(descriptor.httpStatus, expectedHttpStatuses[code]);
+    assert.equal(descriptor.retryable, expectedRetryability[code]);
     assert.equal(typeof descriptor.message, "string");
     assert.ok(descriptor.message.length > 0 && descriptor.message.length <= 80);
-    assert.equal(typeof descriptor.retryable, "boolean");
     assert.equal(typeof descriptor.recovery, "string");
     assert.equal(typeof descriptor.desktopState, "string");
+  }
+});
+
+test("API error metadata stays on the explicit metadata-only allowlist", async () => {
+  const apiErrors = await loadApiErrorsModule();
+
+  assert.deepEqual(apiErrors.rubyWhisperApiErrorMetadataKeys, expectedMetadataKeys);
+
+  for (const privateKey of [
+    "audio",
+    "cleanedText",
+    "clipboard",
+    "context",
+    "localHistory",
+    "providerRequestBody",
+    "providerResponseBody",
+    "rawTranscript",
+    "transcript",
+  ]) {
+    assert.ok(!apiErrors.rubyWhisperApiErrorMetadataKeys.includes(privateKey));
   }
 });
 
@@ -148,6 +236,97 @@ test("API error response helper emits no-store JSON with retry metadata", async 
       totalLatencyMs: 320,
     },
   });
+});
+
+test("synthetic route handlers serialize representative desktop API errors", async () => {
+  const apiErrors = await loadApiErrorsModule();
+
+  for (const scenario of representativeRouteScenarios) {
+    const response = await invokeRouteHandler(
+      {
+        POST(request) {
+          assert.equal(request.headers.get("x-rubywhisper-test-fixture"), "synthetic");
+
+          return apiErrors.rubyWhisperApiErrorResponse(scenario.code, {
+            metadata: {
+              ...scenario.metadata,
+              Authorization: "Bearer rw_synthetic_placeholder",
+              cleanedText: "payload must not echo",
+              clipboard: "private clipboard",
+              context: "private context",
+              provider_request_body: "private prompt",
+              rawTranscript: "private transcript",
+            },
+            requestId: `req_rw_synthetic_${scenario.code}`,
+          });
+        },
+      },
+      {
+        body: {
+          scenario: scenario.code,
+        },
+        method: "POST",
+        path: "/api/desktop/transcribe",
+      },
+    );
+    const payload = await response.json();
+    const serializedPayload = JSON.stringify(payload);
+
+    assert.equal(response.status, scenario.status);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(payload.ok, false);
+    assert.deepEqual(Object.keys(payload).sort(), expectedPayloadKeys);
+    assert.deepEqual(Object.keys(payload.error).sort(), expectedErrorKeys);
+    assert.equal(payload.requestId, `req_rw_synthetic_${scenario.code}`);
+    assert.equal(payload.error.code, scenario.code);
+    assert.equal(typeof payload.error.message, "string");
+    assert.ok(payload.error.message.length > 0 && payload.error.message.length <= 80);
+    assert.equal(typeof payload.error.retryable, "boolean");
+    assert.ok(
+      Buffer.byteLength(serializedPayload, "utf8") <= maxDesktopErrorPayloadBytes,
+      `${scenario.code} payload should stay short for desktop mapping`,
+    );
+    assert.doesNotMatch(serializedPayload, privateSerializationPattern);
+  }
+});
+
+test("synthetic preflight error routes do not invoke provider mocks", async () => {
+  const apiErrors = await loadApiErrorsModule();
+  let providerCalls = 0;
+
+  for (const code of [
+    "signed_out",
+    "terms_required",
+    "trial_exhausted",
+    "duration_limit_reached",
+  ]) {
+    const response = await invokeRouteHandler(
+      {
+        POST() {
+          return apiErrors.rubyWhisperApiErrorResponse(code, {
+            requestId: `req_rw_preflight_${code}`,
+          });
+        },
+      },
+      {
+        context: {
+          providers: {
+            groq: {
+              createCompletion() {
+                providerCalls += 1;
+              },
+            },
+          },
+        },
+        method: "POST",
+        path: "/api/desktop/transcribe",
+      },
+    );
+
+    assert.equal(response.status, expectedHttpStatuses[code]);
+  }
+
+  assert.equal(providerCalls, 0);
 });
 
 test("API error helper is server-only and framework-neutral", async () => {
