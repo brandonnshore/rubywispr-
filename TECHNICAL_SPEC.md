@@ -49,6 +49,7 @@ FR-004 Trial: The system must grant 5,000 trial words per account.
 - Validate by running: quota unit tests and manual exhaustion test.
 - Required tests: word counting and threshold tests.
 - Security/privacy: counters only; no transcript storage.
+- Implementation contract: `docs/USAGE_QUOTA_CONTRACT.md`.
 
 FR-005 Paid plan: The system must support one paid plan with monthly and annual billing.
 
@@ -239,6 +240,7 @@ NFR-003 Privacy:
 
 - Server must not store audio, raw transcript, cleaned text, context, clipboard text, or local history.
 - Logs must be redacted.
+- Usage counters must remain aggregate metadata only; see `docs/USAGE_QUOTA_CONTRACT.md`.
 
 NFR-004 Security:
 
