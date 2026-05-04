@@ -353,14 +353,14 @@ The operator can mark RW-020 (`RUB-31`) complete only when all of these are true
 
 Web/backend:
 
-- Pull request checks: lint, typecheck, tests, build.
+- Pull request checks: `.github/workflows/web-ci.yml` runs `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build` from the root npm workspace.
 - Preview deployments for branches.
 - Production deploy only from approved branch/tag.
 - Stripe webhook tests should run with mocked signatures.
 
 Mac app:
 
-- PR/build checks if CI runner supports Xcode.
+- PR/build checks remain a separate blocked leaf until the macOS app import, repo-local Xcode path, and runner/build-command decision are available.
 - Release builds gated by manual approval.
 - Signing/notarization gated by Apple credential availability.
 - Release artifacts published only through approved release workflow.
