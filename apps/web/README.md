@@ -60,11 +60,12 @@ Backend validation uses the same root commands because RubyWhisper backend route
   and metadata for downstream route work, enforces the 600,000ms duration cap,
   and returns route-safe `invalid_audio` / `duration_limit_reached` failures
   before provider work.
-- `src/app/api/desktop/transcribe/route.ts` owns the RW-041B preflight shell for
-  desktop transcription. It authenticates Clerk users, checks Terms/Privacy,
+- `src/app/api/desktop/transcribe/route.ts` owns the RW-041B/RW-041C desktop
+  transcription route shell. It authenticates Clerk users, checks Terms/Privacy,
   reads subscription and usage metadata, enforces quota entitlement, maps parser
   failures to shared desktop API errors, and stops at an injectable continuation
-  point until provider execution lands in a later ticket.
+  point that executes mocked provider transcription for cleanup-disabled
+  requests while cleanup-enabled requests fail closed until RW-042 lands.
 
 ## Usage And Trial Quota Contract
 
@@ -168,9 +169,10 @@ The command is also covered by `npm run test` because it uses Node's test runner
   provider payloads.
 - The desktop transcription route shell is covered by
   `test/desktop-transcribe-route.test.mjs` and `test:auth-privacy`. Preflight
-  failures must return `rubyWhisperApiErrorResponse` payloads with `no-store`,
-  skip the continuation hook, and keep live provider calls out of scope until
-  the provider execution ticket.
+  and provider failures must return `rubyWhisperApiErrorResponse` payloads with
+  `no-store`, cleanup-disabled provider success uses synthetic/mocked
+  transcription output in tests, cleanup-enabled requests fail closed pending
+  RW-042, and live provider calls remain out of autonomous validation.
 - Authorization decisions stay server-side. Browser-bound files may render Clerk sign-in/sign-up UI, but must not use `useAuth`, `useUser`, `SignedIn`, `SignedOut`, `Protect`, or redirect helpers to gate protected product/admin access.
 - Auth-sensitive source avoids console/logger output and obvious storage of magic links, session tickets, JWTs, or tokens.
 - Auth test fixtures use only synthetic IDs and placeholder email domains such as `example.com` or `.test`; do not add real magic links, session tokens, JWTs, private env values, or customer email addresses.
