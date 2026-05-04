@@ -22,6 +22,7 @@ const sensitiveSourceRoots = [
   path.join(srcRoot, "lib", "api"),
   path.join(srcRoot, "lib", "auth"),
   path.join(srcRoot, "lib", "cleanup"),
+  path.join(srcRoot, "lib", "desktop-transcribe"),
   path.join(srcRoot, "lib", "observability"),
   path.join(srcRoot, "lib", "providers"),
   path.join(srcRoot, "lib", "supabase"),

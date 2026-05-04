@@ -54,9 +54,16 @@ const serverProviderHelpers = [
     path: path.join(srcRoot, "lib", "providers", "groq.ts"),
   },
 ];
+const serverDesktopTranscribeHelpers = [
+  {
+    moduleSpecifier: "@/lib/desktop-transcribe/request",
+    path: path.join(srcRoot, "lib", "desktop-transcribe", "request.ts"),
+  },
+];
 const serverOnlyHelpers = [
   ...serverAuthHelpers,
   ...serverAccountHelpers,
+  ...serverDesktopTranscribeHelpers,
   ...serverProviderHelpers,
 ];
 const authSensitivePaths = [
@@ -66,6 +73,7 @@ const authSensitivePaths = [
   path.join(srcRoot, "config"),
   path.join(srcRoot, "lib", "account"),
   path.join(srcRoot, "lib", "auth"),
+  path.join(srcRoot, "lib", "desktop-transcribe"),
   path.join(srcRoot, "lib", "providers"),
   path.join(srcRoot, "proxy.ts"),
 ];
@@ -122,7 +130,7 @@ const nonSyntheticFixturePatterns = [
   },
 ];
 
-test("server auth, account, and provider helpers remain server-only", async () => {
+test("server auth, account, desktop, and provider helpers remain server-only", async () => {
   for (const helper of serverOnlyHelpers) {
     const source = await readFile(helper.path, "utf8");
     const relativePath = normalizePath(path.relative(webRoot, helper.path));
