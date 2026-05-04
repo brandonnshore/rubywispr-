@@ -40,6 +40,11 @@ const expectedMetadataKeys = [
   "osVersion",
   "errorCode",
 ];
+const expectedRequestEventNames = [
+  "backend.request.started",
+  "backend.request.succeeded",
+  "backend.request.failed",
+];
 const forbiddenPayloadPattern =
   /payload must not echo|private audio|private transcript|private cleaned text|private context|private clipboard|private prompt|provider request body|provider response body|Bearer rw_synthetic_placeholder|rubywhisper\.env|\.env\.local/i;
 
@@ -186,6 +191,110 @@ test("privacy log event factory is side-effect free and short", async () => {
     privacyLogger.createRubyWhisperPrivacyLogEvent("Desktop Transcribe Failed"),
     undefined,
   );
+});
+
+test("backend request event builders emit metadata-only lifecycle events", async () => {
+  const privacyLogger = await loadPrivacyLoggerModule();
+
+  assert.deepEqual(
+    privacyLogger.rubyWhisperBackendRequestLogEventNames,
+    expectedRequestEventNames,
+  );
+
+  const startedEvent =
+    privacyLogger.createRubyWhisperBackendRequestStartedLogEvent({
+      audio: "payload must not echo",
+      body: { rawTranscript: "private transcript" },
+      headers: { authorization: "Bearer rw_synthetic_placeholder" },
+      method: "POST",
+      metadata: {
+        appVersion: "0.1.0-test",
+        context: "private context",
+        osVersion: "macOS test",
+        providerRequestBody: "provider request body",
+        requestId: "req_rw_synthetic_start",
+      },
+      route: "/api/desktop/transcribe",
+    });
+
+  assert.deepEqual(startedEvent, {
+    event: "backend.request.started",
+    metadata: {
+      requestId: "req_rw_synthetic_start",
+      route: "/api/desktop/transcribe",
+      method: "POST",
+      appVersion: "0.1.0-test",
+      osVersion: "macOS test",
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(startedEvent), forbiddenPayloadPattern);
+
+  const succeededEvent =
+    privacyLogger.createRubyWhisperBackendRequestSucceededLogEvent({
+      cleanedText: "private cleaned text",
+      cleanedWordCount: 7,
+      latencyMs: 320,
+      metadata: {
+        planState: "trial_active",
+        totalLatencyMs: 420,
+      },
+      requestId: "req_rw_synthetic_success",
+      status: 200,
+      wordCount: 7,
+    });
+
+  assert.deepEqual(succeededEvent, {
+    event: "backend.request.succeeded",
+    metadata: {
+      requestId: "req_rw_synthetic_success",
+      status: 200,
+      planState: "trial_active",
+      wordCount: 7,
+      cleanedWordCount: 7,
+      latencyMs: 320,
+      totalLatencyMs: 420,
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(succeededEvent), forbiddenPayloadPattern);
+});
+
+test("backend request failed event keeps error code without private error payload", async () => {
+  const privacyLogger = await loadPrivacyLoggerModule();
+
+  const failedEvent = privacyLogger.createRubyWhisperBackendRequestFailedLogEvent({
+    cookie: "session=payload must not echo",
+    error: {
+      code: "provider_error",
+      providerResponseBody: "provider response body",
+      stack: "payload must not echo",
+    },
+    errorCode: "provider_error",
+    metadata: {
+      Authorization: "Bearer rw_synthetic_placeholder",
+      provider: "mock_provider",
+      providerLatencyMs: 210,
+      provider_response_body: "provider response body",
+      totalLatencyMs: 430,
+    },
+    providerRequestBody: "provider request body",
+    requestId: "req_rw_synthetic_failed",
+    route: "/api/desktop/transcribe",
+    status: 503,
+  });
+
+  assert.deepEqual(failedEvent, {
+    event: "backend.request.failed",
+    metadata: {
+      requestId: "req_rw_synthetic_failed",
+      route: "/api/desktop/transcribe",
+      status: 503,
+      provider: "mock_provider",
+      providerLatencyMs: 210,
+      totalLatencyMs: 430,
+      errorCode: "provider_error",
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(failedEvent), forbiddenPayloadPattern);
 });
 
 test("privacy log primitive remains server-only and has no log sink", async () => {
