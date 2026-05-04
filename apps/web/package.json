@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --project tsconfig.typecheck.json --noEmit",
-    "test": "node --test"
+    "test": "node --test",
+    "test:schema-privacy": "node --test test/supabase-migration-privacy.test.mjs"
   },
   "dependencies": {
     "next": "16.2.4",
