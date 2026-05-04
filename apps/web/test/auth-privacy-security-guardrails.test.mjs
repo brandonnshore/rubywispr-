@@ -71,6 +71,16 @@ const serverBillingHelpers = [
     path: path.join(srcRoot, "lib", "billing", "stripe.ts"),
   },
 ];
+const serverBillingRoutes = [
+  {
+    moduleSpecifier: "@/app/api/stripe/checkout/route",
+    path: path.join(srcRoot, "app", "api", "stripe", "checkout", "route.ts"),
+  },
+  {
+    moduleSpecifier: "@/app/api/stripe/portal/route",
+    path: path.join(srcRoot, "app", "api", "stripe", "portal", "route.ts"),
+  },
+];
 const serverDesktopTranscribeHelpers = [
   {
     moduleSpecifier: "@/lib/desktop-transcribe/request",
@@ -106,11 +116,13 @@ const serverOnlyHelpers = [
   ...serverUsageHelpers,
   ...serverProviderHelpers,
   ...serverBillingHelpers,
+  ...serverBillingRoutes,
 ];
 const authSensitivePaths = [
   path.join(srcRoot, "app", "(auth)"),
   path.join(srcRoot, "app", "api", "account"),
   path.join(srcRoot, "app", "api", "desktop"),
+  path.join(srcRoot, "app", "api", "stripe"),
   path.join(srcRoot, "config"),
   path.join(srcRoot, "lib", "account"),
   path.join(srcRoot, "lib", "auth"),
@@ -174,7 +186,7 @@ const nonSyntheticFixturePatterns = [
   },
 ];
 
-test("server auth, account, desktop, and provider helpers remain server-only", async () => {
+test("server auth, account, desktop, provider, and Stripe billing surfaces remain server-only", async () => {
   for (const helper of serverOnlyHelpers) {
     const source = await readFile(helper.path, "utf8");
     const relativePath = normalizePath(path.relative(webRoot, helper.path));
