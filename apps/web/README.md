@@ -47,9 +47,11 @@ Backend validation uses the same root commands because RubyWhisper backend route
 - `src/app/api/status/route.ts` is the current smoke API. Future API routes stay under `src/app/api/*` and must keep provider, billing, Supabase service-role, webhook, and signing logic server-only.
 - `src/lib/api/errors.ts` exposes the server-only RW-044 backend error contract helper. Future desktop API route handlers should use `rubyWhisperApiErrorResponse` so non-2xx responses keep stable codes, `Cache-Control: no-store`, and metadata-only payloads.
 - `src/lib/providers/client.ts` exposes the server-only RW-040A provider
-  contract and mockable provider surface. Live Groq adapters belong to later
-  RW-040 leaves, transcription/cleanup gateway behavior belongs to Wave 4
-  backend tickets, desktop-facing backend routes must follow
+  contract and mockable provider surface. `src/lib/providers/groq.ts` exposes
+  the server-only RW-040B Groq transcription adapter shell using the
+  OpenAI-compatible audio transcription endpoint. Live Groq smoke validation
+  remains blocked by RUB-140, transcription/cleanup gateway behavior belongs to
+  Wave 4 backend tickets, desktop-facing backend routes must follow
   `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md` for RW-044, and mocked
   provider integration coverage belongs to RW-046.
 
@@ -144,9 +146,10 @@ The command is also covered by `npm run test` because it uses Node's test runner
   `src/lib/account/profile-metadata.ts`, and
   `src/lib/account/subscription-cache.ts` remain server-only, and
   `/api/desktop` source stays covered by the same privacy scans.
-- Provider helpers such as `src/lib/providers/client.ts` remain server-only,
-  mockable, and free of live credentials, network calls, and persisted provider
-  payloads until their owning integration tickets add those surfaces.
+- Provider helpers such as `src/lib/providers/client.ts` and
+  `src/lib/providers/groq.ts` remain server-only, mockable, and free of
+  persisted provider payloads. Tests must inject fake fetch implementations and
+  synthetic endpoints; live Groq calls stay in blocked/manual QA tickets.
 - Authorization decisions stay server-side. Browser-bound files may render Clerk sign-in/sign-up UI, but must not use `useAuth`, `useUser`, `SignedIn`, `SignedOut`, `Protect`, or redirect helpers to gate protected product/admin access.
 - Auth-sensitive source avoids console/logger output and obvious storage of magic links, session tickets, JWTs, or tokens.
 - Auth test fixtures use only synthetic IDs and placeholder email domains such as `example.com` or `.test`; do not add real magic links, session tokens, JWTs, private env values, or customer email addresses.
