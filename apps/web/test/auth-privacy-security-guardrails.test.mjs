@@ -59,6 +59,10 @@ const serverDesktopTranscribeHelpers = [
     moduleSpecifier: "@/lib/desktop-transcribe/request",
     path: path.join(srcRoot, "lib", "desktop-transcribe", "request.ts"),
   },
+  {
+    moduleSpecifier: "@/app/api/desktop/transcribe/route",
+    path: path.join(srcRoot, "app", "api", "desktop", "transcribe", "route.ts"),
+  },
 ];
 const serverOnlyHelpers = [
   ...serverAuthHelpers,
