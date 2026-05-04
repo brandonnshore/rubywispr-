@@ -51,7 +51,8 @@ test("signed-in account page renders account metadata, usage, download, and bill
   assert.match(markup, /Monthly words used/);
   assert.match(markup, /Lifetime words used/);
   assert.match(markup, /Account support/);
-  assert.match(markup, /mailto:brandon@rubyadvisory.com/);
+  assert.match(markup, /href="mailto:/);
+  assert.match(markup, /Email support/);
   assert.match(markup, /Beta artifact pending/);
   assert.match(markup, /aria-label="Billing actions"/);
   assert.match(markup, /role="status"/);
