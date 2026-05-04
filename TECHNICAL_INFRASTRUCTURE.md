@@ -34,22 +34,22 @@ Next.js app
 
 ## Repositories
 
-Current repo:
+Current repo contents:
 
-```text
-/Users/brandonshore/.codex/worktrees/a2e3/rubywispr-
-```
-
-Target repo contents:
-
-- Root npm workspace once product code is scaffolded. Use npm, not pnpm/yarn/bun, unless a future ADR changes the repo contract.
-- `apps/web` for the Next.js app. This app also owns backend API routes, auth/account/admin routes, Stripe webhooks, and provider gateway endpoints.
+- Root npm workspace with `apps/web`. Use npm, not pnpm/yarn/bun, unless a future ADR changes the repo contract.
+- `apps/web` for the Next.js App Router app. This app also owns backend API routes, auth/account/admin routes, Stripe webhooks, and provider gateway endpoints.
 - `apps/macos` for the imported macOS app after the FreeFlow audit/import decision. The exact Xcode project/workspace path is unknown until that import lands.
 - `packages/*` only when shared code is justified by real duplication.
 - `docs` or root-level planning/spec files.
 - `scripts` for setup and release support.
 
-The current repo is docs/scripts only. Product app directories and package manifests are created by follow-up scaffold/import tickets, not by this command-contract decision.
+`apps/web` layout and ownership:
+
+- `src/app/(public)/page.tsx`: public shell from RUB-82. RW-080 owns visual tokens, RW-081 owns the marketing home/product proof, RW-082 owns pricing/download surfaces, and RW-083 owns legal/support pages.
+- `src/app/account/page.tsx`: account shell from RUB-82. RW-022 owns Clerk auth, RW-024/RW-025/RW-026 own billing/subscription/account data, and RW-082 owns the customer-facing account page.
+- `src/app/admin/page.tsx`: admin shell from RUB-82. RW-028 owns server-side admin roles, RW-084 owns the beta health dashboard, RW-085 owns Friend of Ruby admin code workflows, and RW-101 owns later auth/admin/API security audit.
+- `src/app/api/status/route.ts`: smoke API from RUB-82. Future `src/app/api/*` routes must keep billing, webhooks, service-role database access, signing, and provider calls server-only.
+- Future provider gateway routes/clients are owned by Wave 4 backend work: RW-040 for the Groq provider client, RW-044 for backend-to-desktop error contracts, and RW-046 for mocked provider integration coverage.
 
 ## Runtime Environments
 
@@ -292,7 +292,7 @@ set +a
 
 Do not print or inspect `.env.local`.
 
-Expected web/backend setup after RW-020 scaffolds `apps/web` and the root npm workspace:
+Current web/backend setup:
 
 ```bash
 npm install
@@ -321,8 +321,8 @@ Repo command contract:
 
 - Package manager: npm.
 - Workspace shape: root npm workspace with `apps/web`, future `apps/macos`, and optional `packages/*`.
-- Current runnable app commands: none. This repo currently has no `package.json`, Next.js app, or Xcode project.
-- Web/backend commands after RW-020 (`RUB-31`) creates `apps/web`:
+- Current runnable app commands: root npm scripts delegate to the `@rubywhisper/web` workspace.
+- Exact web/backend command contract:
 
 ```bash
 npm install
@@ -337,6 +337,17 @@ npm run build
 - CI command selection is blocked on RW-005 after the web scaffold and macOS import decisions exist.
 
 If a package manager other than npm is chosen, update this doc and all future issues before implementation work cites the new command.
+
+## RW-020 Completion Gate
+
+The operator can mark RW-020 (`RUB-31`) complete only when all of these are true:
+
+- RUB-81, RUB-82, RUB-83, and RUB-84 are Done or explicitly accepted in Linear.
+- The root `package.json` defines the `dev`, `lint`, `typecheck`, `test`, and `build` scripts and each script delegates to `@rubywhisper/web`.
+- `apps/web` contains the App Router shell for public, account, admin, and API areas, with no real auth, billing, provider, or production deploy implementation hidden inside the scaffold.
+- `apps/web/.env.example` contains placeholder names only, and the app can lint, typecheck, test, and build without live service credentials.
+- Latest RW-020 validation evidence records passing `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, and `git diff --check`.
+- Workpads, PRs, docs, and comments contain no secrets, private env values, logs, audio, transcript text, or customer content.
 
 ## CI/CD
 

@@ -72,7 +72,7 @@ Use the lowest validation level that genuinely proves the change:
 - Docs only: link/check references and inspect rendered Markdown if needed.
 - Shell scripts: `bash -n` plus a dry-run or help path when available.
 - Repo setup: run bootstrap scripts and verify expected files/directories are present without printing secrets.
-- Web app: install/build/lint/typecheck/test, then browser validation for affected routes.
+- Web app: run root npm workspace commands `npm install`, `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`; use `npm run dev` for local browser validation of affected routes.
 - macOS app: build/test with Xcode or Swift commands and validate the affected user path.
 - UI polish: include screenshot or video proof when possible.
 - Release/package work: verify signing/notarization assumptions separately from app behavior.
