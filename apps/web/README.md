@@ -62,6 +62,12 @@ Current server-only helper surfaces:
   `usage_counters` reads and prepared increments.
 - `src/lib/usage/quota-service.ts` owns entitlement decisions and post-success
   usage increments.
+- `src/lib/account/profile-metadata.ts` reads metadata-only profile state for a
+  server-verified Clerk user.
+- `src/lib/account/subscription-cache.ts` reads normalized subscription cache
+  metadata for account and quota decisions.
+- `src/lib/account/desktop-account-snapshot.ts` composes the desktop-facing
+  account state from profile, subscription, and usage metadata.
 
 Trial words are spent from the final cleaned output word count by default. The
 preflight policy is `allow_if_started_under_limit`: a trial user who starts with
@@ -74,6 +80,22 @@ Do not store audio, raw transcripts, cleaned text, prompts, context,
 screenshots, clipboard contents, local Recent Wisprs, dictionary terms, provider
 payloads, auth material, private env values, or secrets in usage counters,
 request metadata, logs, tests, PR bodies, or Linear comments.
+
+### Desktop Account Route
+
+`src/app/api/desktop/account/route.ts` returns the metadata-only account
+snapshot for the signed-in desktop user. The success payload is `{ ok: true,
+...snapshot }` with `email`, `termsAccepted`, `accountStatus`,
+`canTranscribe`, `planState`, `preflightPolicy`, trial/monthly/lifetime usage
+counters, and billing portal fields. `failureCode` is present only for
+non-active account states.
+
+The route uses the shared `rubyWhisperApiErrorResponse` helper for non-2xx
+responses, keeps all responses `Cache-Control: no-store`, and must not return
+or log private dictation content, auth material, provider payloads, or private
+env values. Stripe billing portal URL generation belongs to a later portal
+route, so the account snapshot currently returns `billingPortalAvailable: false`
+and `billingPortalUrl: null`.
 
 ## Environment Placeholders
 
@@ -113,6 +135,10 @@ The command is also covered by `npm run test` because it uses Node's test runner
 
 - Clerk server secret names stay out of `src/config/client.ts`, browser-bound source, and `.next/static` public bundle artifacts when a build exists.
 - `src/lib/auth/clerk.ts`, `src/lib/auth/profile-sync.ts`, and `src/lib/auth/terms-acceptance.ts` remain `server-only`; Client Components and Clerk browser-bound files cannot import those helpers.
+- Account helpers such as `src/lib/account/desktop-account-snapshot.ts`,
+  `src/lib/account/profile-metadata.ts`, and
+  `src/lib/account/subscription-cache.ts` remain server-only, and
+  `/api/desktop` source stays covered by the same privacy scans.
 - Authorization decisions stay server-side. Browser-bound files may render Clerk sign-in/sign-up UI, but must not use `useAuth`, `useUser`, `SignedIn`, `SignedOut`, `Protect`, or redirect helpers to gate protected product/admin access.
 - Auth-sensitive source avoids console/logger output and obvious storage of magic links, session tickets, JWTs, or tokens.
 - Auth test fixtures use only synthetic IDs and placeholder email domains such as `example.com` or `.test`; do not add real magic links, session tokens, JWTs, private env values, or customer email addresses.

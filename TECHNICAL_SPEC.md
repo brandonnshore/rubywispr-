@@ -454,14 +454,35 @@ Returns:
 
 ```json
 {
+  "ok": true,
   "email": "user@example.com",
+  "termsAccepted": true,
+  "accountStatus": "active",
+  "canTranscribe": true,
   "planState": "trial_active",
+  "preflightPolicy": "allow_if_started_under_limit",
   "trialWordsUsed": 1000,
+  "trialWordsRemaining": 4000,
   "trialWordsLimit": 5000,
+  "isTrialLow": false,
+  "isTrialExhausted": false,
   "monthlyWordsUsed": 1000,
-  "billingPortalUrl": "https://..."
+  "monthlyPeriodStart": "2026-05-01",
+  "lifetimeWordsUsed": 1000,
+  "billingPortalAvailable": false,
+  "billingPortalUrl": null
 }
 ```
+
+`failureCode` may be present when `accountStatus` is not `active`, including
+`terms_required`, `trial_exhausted`, `payment_failed`,
+`subscription_required`, and `account_blocked`. Billing portal generation is
+owned by a later Stripe portal route, so the desktop account snapshot currently
+returns `billingPortalAvailable: false` and `billingPortalUrl: null`.
+
+Errors use the shared desktop backend error contract with stable machine codes
+such as `signed_out`, `service_unavailable`, and `internal_error`. Success and
+error responses must set `Cache-Control: no-store`.
 
 ### `POST /api/account/accept-terms`
 
