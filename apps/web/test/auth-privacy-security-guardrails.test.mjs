@@ -45,6 +45,15 @@ const serverAccountHelpers = [
     moduleSpecifier: "@/lib/account/subscription-cache",
     path: path.join(srcRoot, "lib", "account", "subscription-cache.ts"),
   },
+  {
+    moduleSpecifier: "@/lib/account/subscription-customer-metadata",
+    path: path.join(
+      srcRoot,
+      "lib",
+      "account",
+      "subscription-customer-metadata.ts",
+    ),
+  },
 ];
 const serverProviderHelpers = [
   {
