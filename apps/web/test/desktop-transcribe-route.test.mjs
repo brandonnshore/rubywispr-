@@ -27,9 +27,6 @@ const syntheticNow = new Date("2026-05-04T07:30:00.000Z");
 test("desktop transcribe route returns signed_out before request parsing", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
   const { calls, dependencies } = createRouteDependencies({
-    continuePreflight: () => {
-      throw new Error("Continuation must not run for signed-out users.");
-    },
     parseRequest: () => {
       throw new Error("Request parsing must not run for signed-out users.");
     },
@@ -57,9 +54,6 @@ test("desktop transcribe route returns signed_out before request parsing", async
 test("desktop transcribe route returns terms_required before quota or parser work", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
   const { calls, dependencies } = createRouteDependencies({
-    continuePreflight: () => {
-      throw new Error("Continuation must not run when Terms are missing.");
-    },
     parseRequest: () => {
       throw new Error("Parser must not run when Terms are missing.");
     },
@@ -126,9 +120,6 @@ test("desktop transcribe route maps quota failures to shared metadata-only error
     "trial_exhausted",
   ]) {
     const { calls, dependencies } = createRouteDependencies({
-      continuePreflight: () => {
-        throw new Error(`Continuation must not run for ${code}.`);
-      },
       evaluateEntitlement: () => entitlementRejected(code),
       parseRequest: () => {
         throw new Error(`Parser must not run for ${code}.`);
@@ -174,9 +165,6 @@ test("desktop transcribe route maps parser failures to shared no-store responses
     },
   ]) {
     const { calls, dependencies } = createRouteDependencies({
-      continuePreflight: () => {
-        throw new Error(`${parseResult.code} must not reach continuation.`);
-      },
       parseRequest: async () => parseResult,
     });
     const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
@@ -200,40 +188,152 @@ test("desktop transcribe route maps parser failures to shared no-store responses
   }
 });
 
-test("desktop transcribe route reaches typed continuation after successful preflight", async () => {
+test("desktop transcribe route returns cleanup-disabled provider output with metadata only", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
-  const { calls, dependencies } = createRouteDependencies();
+  const { calls, dependencies } = createRouteDependencies({
+    parseRequest: async () => parseSuccess({ cleanupEnabled: false }),
+  });
   const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
   const response = await handler(syntheticAudioRequest());
   const body = await response.json();
-  const continuationCall = calls.find(
-    (call) => call.operation === "continuePreflight",
+  const providerCall = calls.find(
+    (call) => call.operation === "providerTranscribe",
   );
 
-  assert.equal(response.status, 202);
+  assert.equal(response.status, 200);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   assert.deepEqual(body, {
+    account: {
+      planState: "trial_active",
+      preflightPolicy: "allow_if_started_under_limit",
+    },
+    finalText: "synthetic provider output",
     ok: true,
-    preflightStatus: "ready_for_provider",
+    quota: {
+      isTrialLow: false,
+      planState: "trial_active",
+      trialWordsLimit: 5000,
+      trialWordsRemaining: 3900,
+      trialWordsUsed: 1100,
+    },
+    request: {
+      appVersion: "0.1.0-test",
+      audioDurationMs: 4200,
+      audioMimeType: "audio/wav",
+      cleanupEnabled: false,
+      contextAwareCleanupEnabled: false,
+      osVersion: "macOS synthetic",
+    },
   });
-  assert.equal(continuationCall.input.clerkUserId, "user_rw_synthetic_member_001");
-  assert.equal(continuationCall.input.profile.email, "member@example.com");
-  assert.equal(continuationCall.input.entitlement.status, "allowed");
-  assert.deepEqual(continuationCall.input.requestInput.metadata, {
-    appVersion: "0.1.0-test",
-    audioDurationMs: 4200,
-    audioMimeType: "audio/wav",
-    cleanupEnabled: true,
-    contextAwareCleanupEnabled: false,
-    osVersion: "macOS synthetic",
-  });
-  assert.equal(
-    continuationCall.input.requestInput.providerInput.audioMimeType,
-    "audio/wav",
+  assert.ok(providerCall);
+  assert.equal(providerCall.input.audioMimeType, "audio/wav");
+  assert.equal(providerCall.input.audioDurationMs, 4200);
+  assert.ok(providerCall.input.audio instanceof Blob);
+  assert.deepEqual(Object.keys(providerCall.input).sort(), [
+    "audio",
+    "audioDurationMs",
+    "audioMimeType",
+  ]);
+  assert.doesNotMatch(
+    JSON.stringify(body.account),
+    /member@example.com|user_rw_synthetic_member_001/,
+  );
+  assert.doesNotMatch(
+    JSON.stringify(body),
+    /"context":|"dictionaryTerms":|providerRequest|providerResponse/i,
   );
 });
 
-test("desktop transcribe route stays server-only and provider-neutral", async () => {
+test("desktop transcribe route fails closed while cleanup is unimplemented", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+  const { calls, dependencies } = createRouteDependencies({
+    parseRequest: async () => parseSuccess({ cleanupEnabled: true }),
+  });
+  const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+  const response = await handler(syntheticAudioRequest());
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(body.error.code, "service_unavailable");
+  assert.equal(
+    calls.some((call) => call.operation === "providerTranscribe"),
+    false,
+  );
+});
+
+test("desktop transcribe route maps provider failures to shared desktop errors", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+
+  for (const scenario of [
+    {
+      apiErrorCode: "rate_limited",
+      code: "provider_rate_limited",
+      expectedStatus: 429,
+      metadata: {
+        provider: "mock_provider",
+        retryAfterSeconds: 3.2,
+      },
+    },
+    {
+      apiErrorCode: "network_error",
+      code: "provider_timeout",
+      expectedStatus: 503,
+      metadata: {
+        provider: "mock_provider",
+        providerLatencyMs: 5000,
+        totalLatencyMs: 5000,
+      },
+    },
+    {
+      apiErrorCode: "provider_error",
+      code: "provider_invalid_response",
+      expectedStatus: 503,
+      metadata: {
+        provider: "mock_provider",
+      },
+    },
+    {
+      apiErrorCode: "provider_error",
+      code: "provider_unavailable",
+      expectedStatus: 503,
+      metadata: {
+        provider: "mock_provider",
+      },
+    },
+    {
+      apiErrorCode: "network_error",
+      code: "network_error",
+      expectedStatus: 503,
+      metadata: {
+        provider: "mock_provider",
+        totalLatencyMs: 900,
+      },
+    },
+  ]) {
+    const { dependencies } = createRouteDependencies({
+      parseRequest: async () => parseSuccess({ cleanupEnabled: false }),
+      providerClient: {
+        cleanup: async () => providerFailure("provider_unavailable"),
+        transcribe: async () => providerFailure(scenario.code, scenario.metadata),
+      },
+    });
+    const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+    const response = await handler(syntheticAudioRequest());
+    const body = await response.json();
+
+    assert.equal(response.status, scenario.expectedStatus);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(body.error.code, scenario.apiErrorCode);
+    assert.deepEqual(body.metadata, scenario.metadata);
+    assert.doesNotMatch(
+      JSON.stringify(body),
+      /raw|providerRequest|providerResponse|payload|context|dictionary|Bearer/i,
+    );
+  }
+});
+
+test("desktop transcribe route stays server-only and provider-contract only", async () => {
   const source = await readFile(desktopTranscribeRoutePath, "utf8");
 
   assert.match(source, /export const runtime = ["']nodejs["'];/);
@@ -242,9 +342,11 @@ test("desktop transcribe route stays server-only and provider-neutral", async ()
   assert.match(source, /requireClerkUserId/);
   assert.match(source, /parseDesktopTranscribeRequest/);
   assert.match(source, /evaluateRubyWhisperQuotaEntitlement/);
+  assert.match(source, /createRubyWhisperMockProviderClient/);
+  assert.match(source, /providerClient\.transcribe\(/);
   assert.match(source, /rubyWhisperApiErrorResponse\(["']signed_out["']\)/);
   assert.match(source, /rubyWhisperApiErrorResponse\(["']terms_required["']\)/);
-  assert.doesNotMatch(source, /from\s+["']@\/lib\/providers\//);
+  assert.doesNotMatch(source, /from\s+["']@\/lib\/providers\/groq["']/);
   assert.doesNotMatch(source, /\bGROQ_API_KEY\b|\bCLERK_SECRET_KEY\b|\bSUPABASE_SERVICE_ROLE_KEY\b/);
   assert.doesNotMatch(source, /\bprocess\.env\b|\bserverEnv\b/);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
@@ -321,6 +423,13 @@ function createRouteModuleRequire() {
             throw new Error("Default parser dependency is outside this route test.");
           },
         };
+      case "@/lib/providers/client":
+        return {
+          createRubyWhisperMockProviderClient: () => ({
+            cleanup: async () => providerFailure("provider_unavailable"),
+            transcribe: async () => providerFailure("provider_unavailable"),
+          }),
+        };
       case "@/lib/usage/quota-service":
         return {
           evaluateRubyWhisperQuotaEntitlement: () => {
@@ -342,22 +451,6 @@ function createRouteModuleRequire() {
 function createRouteDependencies(overrides = {}) {
   const calls = [];
   const dependencies = {
-    continuePreflight(input) {
-      calls.push({ input, operation: "continuePreflight" });
-
-      return Response.json(
-        {
-          ok: true,
-          preflightStatus: "ready_for_provider",
-        },
-        {
-          headers: {
-            "Cache-Control": "no-store",
-          },
-          status: 202,
-        },
-      );
-    },
     evaluateEntitlement(input) {
       calls.push({ input, operation: "evaluateEntitlement" });
 
@@ -370,6 +463,18 @@ function createRouteDependencies(overrides = {}) {
       calls.push({ operation: "parseRequest" });
 
       return parseSuccess();
+    },
+    providerClient: {
+      cleanup() {
+        calls.push({ operation: "providerCleanup" });
+
+        return providerFailure("provider_unavailable");
+      },
+      transcribe(input) {
+        calls.push({ input, operation: "providerTranscribe" });
+
+        return providerSuccess(input);
+      },
     },
     async readProfile(clerkUserId) {
       calls.push({ clerkUserId, operation: "readProfile" });
@@ -450,19 +555,21 @@ function syntheticAudioRequest() {
   });
 }
 
-function parseSuccess() {
+function parseSuccess(options = {}) {
+  const cleanupEnabled = options.cleanupEnabled ?? false;
+
   return {
     input: {
       cleanupSettings: {
-        cleanupEnabled: true,
+        cleanupEnabled,
         contextAwareCleanupEnabled: false,
-        dictionaryTerms: ["RubyWhisper"],
+        dictionaryTerms: cleanupEnabled ? ["RubyWhisper"] : [],
       },
       metadata: {
         appVersion: "0.1.0-test",
         audioDurationMs: 4200,
         audioMimeType: "audio/wav",
-        cleanupEnabled: true,
+        cleanupEnabled,
         contextAwareCleanupEnabled: false,
         osVersion: "macOS synthetic",
       },
@@ -475,6 +582,33 @@ function parseSuccess() {
       },
     },
     ok: true,
+  };
+}
+
+function providerSuccess(input) {
+  return {
+    ok: true,
+    result: {
+      audioDurationMs: input.audioDurationMs,
+      provider: "mock_provider",
+      providerLatencyMs: 24,
+      text: "synthetic provider output",
+    },
+  };
+}
+
+function providerFailure(code, metadata = { provider: "mock_provider" }) {
+  const descriptor = providerErrorDescriptors[code];
+
+  return {
+    error: {
+      apiErrorCode: descriptor.apiErrorCode,
+      code,
+      message: descriptor.message,
+      retryable: descriptor.retryable,
+    },
+    metadata,
+    ok: false,
   };
 }
 
@@ -572,6 +706,16 @@ function quotaMetadata(planState, usageCounters) {
 
 function createApiErrorResponse(code, options = {}) {
   const descriptor = apiErrorDescriptors[code];
+  const headers = new Headers({
+    "Cache-Control": "no-store",
+  });
+  const metadata = options.metadata
+    ? sanitizeApiErrorMetadata(options.metadata)
+    : undefined;
+
+  if (typeof metadata?.retryAfterSeconds === "number") {
+    headers.set("Retry-After", String(Math.ceil(metadata.retryAfterSeconds)));
+  }
 
   return Response.json(
     {
@@ -582,15 +726,11 @@ function createApiErrorResponse(code, options = {}) {
         recovery: descriptor.recovery,
         retryable: descriptor.retryable,
       },
-      ...(options.metadata
-        ? { metadata: sanitizeApiErrorMetadata(options.metadata) }
-        : {}),
+      ...(metadata ? { metadata } : {}),
       ok: false,
     },
     {
-      headers: {
-        "Cache-Control": "no-store",
-      },
+      headers,
       status: descriptor.httpStatus,
     },
   );
@@ -618,12 +758,33 @@ const apiErrorDescriptors = {
     recovery: "record_again",
     retryable: false,
   },
+  network_error: {
+    desktopState: "network_error",
+    httpStatus: 503,
+    message: "Check your internet connection and try again.",
+    recovery: "retry",
+    retryable: true,
+  },
   payment_failed: {
     desktopState: "payment_failed",
     httpStatus: 402,
     message: "Update billing to continue.",
     recovery: "open_billing",
     retryable: false,
+  },
+  provider_error: {
+    desktopState: "provider_error",
+    httpStatus: 503,
+    message: "RubyWhisper could not transcribe right now.",
+    recovery: "retry",
+    retryable: true,
+  },
+  rate_limited: {
+    desktopState: "error",
+    httpStatus: 429,
+    message: "Too many requests. Try again soon.",
+    recovery: "retry_after",
+    retryable: true,
   },
   service_unavailable: {
     desktopState: "error",
@@ -668,9 +829,41 @@ const allowedMetadataKeys = new Set([
   "durationLimitMs",
   "osVersion",
   "planState",
+  "provider",
+  "providerLatencyMs",
+  "retryAfterSeconds",
+  "totalLatencyMs",
   "trialWordsLimit",
   "trialWordsRemaining",
 ]);
+
+const providerErrorDescriptors = {
+  network_error: {
+    apiErrorCode: "network_error",
+    message: "Synthetic provider network request failed.",
+    retryable: true,
+  },
+  provider_invalid_response: {
+    apiErrorCode: "provider_error",
+    message: "Synthetic provider response was invalid.",
+    retryable: true,
+  },
+  provider_rate_limited: {
+    apiErrorCode: "rate_limited",
+    message: "Synthetic provider rate limit was reached.",
+    retryable: true,
+  },
+  provider_timeout: {
+    apiErrorCode: "network_error",
+    message: "Synthetic provider request timed out.",
+    retryable: true,
+  },
+  provider_unavailable: {
+    apiErrorCode: "provider_error",
+    message: "Synthetic provider is unavailable.",
+    retryable: true,
+  },
+};
 
 function sanitizeApiErrorMetadata(metadata) {
   const sanitized = {};

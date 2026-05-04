@@ -20,8 +20,15 @@ import {
 import {
   parseDesktopTranscribeRequest,
   type DesktopTranscribeRequestInput,
+  type DesktopTranscribeRequestMetadata,
   type DesktopTranscribeRequestParseResult,
 } from "@/lib/desktop-transcribe/request";
+import {
+  createRubyWhisperMockProviderClient,
+  type RubyWhisperProviderClient,
+  type RubyWhisperProviderErrorMetadata,
+  type RubyWhisperProviderTranscriptionResult,
+} from "@/lib/providers/client";
 import type { SupabaseServiceRoleRuntimeConfig } from "@/lib/supabase/server";
 import {
   evaluateRubyWhisperQuotaEntitlement,
@@ -48,15 +55,24 @@ export type DesktopTranscribePreflightContinuationInput = Readonly<{
   usageCounters: RubyWhisperUsageCounters;
 }>;
 
+export type DesktopTranscribeSuccessPayload = Readonly<{
+  account: {
+    planState: RubyWhisperQuotaAllowedResult["planState"];
+    preflightPolicy: RubyWhisperQuotaAllowedResult["preflightPolicy"];
+  };
+  finalText: string;
+  ok: true;
+  quota: RubyWhisperQuotaAllowedResult["metadata"];
+  request: DesktopTranscribeRequestMetadata;
+}>;
+
 export type DesktopTranscribeRouteDependencies = Readonly<{
-  continuePreflight: (
-    input: DesktopTranscribePreflightContinuationInput,
-  ) => Promise<Response> | Response;
   evaluateEntitlement: (
     input: RubyWhisperQuotaEntitlementInput,
   ) => RubyWhisperQuotaEntitlementResult;
   now: () => Date;
   parseRequest: (request: Request) => Promise<DesktopTranscribeRequestParseResult>;
+  providerClient: RubyWhisperProviderClient;
   readProfile: (
     clerkUserId: string,
   ) => Promise<RubyWhisperAccountProfileMetadataReadResult>;
@@ -128,8 +144,9 @@ export function createDesktopTranscribeRouteHandler(
         });
       }
 
-      return dependencies.continuePreflight({
+      return await executeDesktopTranscription({
         clerkUserId: authState.userId,
+        dependencies,
         entitlement,
         profile: profileResult.profile,
         requestInput: parseResult.input,
@@ -142,11 +159,58 @@ export function createDesktopTranscribeRouteHandler(
   };
 }
 
+async function executeDesktopTranscription(
+  input: DesktopTranscribePreflightContinuationInput & {
+    dependencies: Pick<DesktopTranscribeRouteDependencies, "providerClient">;
+  },
+) {
+  if (input.requestInput.cleanupSettings.cleanupEnabled) {
+    return rubyWhisperApiErrorResponse("service_unavailable");
+  }
+
+  const transcriptionResult = await input.dependencies.providerClient.transcribe(
+    input.requestInput.providerInput,
+  );
+
+  if (!transcriptionResult.ok) {
+    return rubyWhisperApiErrorResponse(transcriptionResult.error.apiErrorCode, {
+      metadata: transcriptionResult.metadata,
+    });
+  }
+
+  const finalText = normalizeProviderTranscriptionText(transcriptionResult.result);
+
+  if (!finalText) {
+    return rubyWhisperApiErrorResponse("provider_error", {
+      metadata: providerSuccessMetadata(transcriptionResult.result),
+    });
+  }
+
+  return Response.json(
+    {
+      account: {
+        planState: input.entitlement.planState,
+        preflightPolicy: input.entitlement.preflightPolicy,
+      },
+      finalText,
+      ok: true,
+      quota: input.entitlement.metadata,
+      request: input.requestInput.metadata,
+    } satisfies DesktopTranscribeSuccessPayload,
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+      status: 200,
+    },
+  );
+}
+
 const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependencies = {
-  continuePreflight: () => rubyWhisperApiErrorResponse("service_unavailable"),
   evaluateEntitlement: evaluateRubyWhisperQuotaEntitlement,
   now: () => new Date(),
   parseRequest: parseDesktopTranscribeRequest,
+  providerClient: createRubyWhisperMockProviderClient(),
   readProfile: (clerkUserId) =>
     readRubyWhisperAccountProfileMetadata(
       { clerkUserId },
@@ -183,4 +247,24 @@ function createDesktopTranscribeSupabaseClient(
 
 function hasAcceptedTerms(value: string | undefined) {
   return Boolean(value?.trim());
+}
+
+function normalizeProviderTranscriptionText(
+  result: RubyWhisperProviderTranscriptionResult,
+) {
+  const text = result.text.trim();
+
+  return text || undefined;
+}
+
+function providerSuccessMetadata(
+  result: RubyWhisperProviderTranscriptionResult,
+): RubyWhisperProviderErrorMetadata {
+  return {
+    ...(result.audioDurationMs ? { audioDurationMs: result.audioDurationMs } : {}),
+    provider: result.provider,
+    ...(result.providerLatencyMs
+      ? { providerLatencyMs: result.providerLatencyMs }
+      : {}),
+  };
 }
