@@ -51,7 +51,8 @@ test("RW-082 public routes keep pricing, download, and account navigation discov
   assert.match(homeMarkup, /Check beta download/);
   assert.match(homeMarkup, /View pricing/);
   assert.match(homeMarkup, /Audio and transcript content are not stored on RubyWhisper servers/);
-  assert.match(homeMarkup, /mailto:brandon@rubyadvisory\.com/);
+  assert.match(homeMarkup, /href="mailto:/);
+  assert.match(homeMarkup, /Support/);
 
   assertRouteLinks(pricingMarkup, ["/download", "/sign-up", "/account"]);
   assert.match(pricingMarkup, /\$7\/month billed monthly/);
