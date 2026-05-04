@@ -274,6 +274,15 @@ Auth mode:
 
 Used as product database only. Do not use Supabase storage for audio or transcripts.
 
+Local migration harness:
+
+- Use the repo-local `supabase/` scaffold for Supabase CLI migration files.
+- Start from `supabase --help` and `supabase migration --help` before choosing flags.
+- Create migration files with `supabase migration new <descriptive_name>`.
+- After the local Supabase stack is running with `supabase start`, list and apply migrations locally with `supabase migration list --local` and `supabase migration up --local`.
+- Production or staging linking, config pushes, database pushes, and migration applies require explicit human approval. This harness does not create or apply live migrations.
+- Keep project refs, access tokens, service-role keys, live database URLs, audio, raw transcript text, cleaned transcript text, context, clipboard text, Recent Wisprs, and dictionary terms out of Supabase migrations and docs.
+
 ## Local Development Setup
 
 Required startup in this repo:
