@@ -10,6 +10,16 @@ test("RubyWhisper web workspace exposes scaffold commands", async () => {
   assert.equal(typeof packageJson.scripts.build, "string");
 });
 
+test("typecheck ignores stale Next dev server metadata", async () => {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  const typecheckConfig = JSON.parse(
+    await readFile("tsconfig.typecheck.json", "utf8"),
+  );
+
+  assert.match(packageJson.scripts.typecheck, /tsconfig\.typecheck\.json/);
+  assert.deepEqual(typecheckConfig.exclude, ["node_modules", ".next/dev"]);
+});
+
 test("RubyWhisper route skeleton exposes public, account, admin, and API areas", async () => {
   await Promise.all([
     access("src/app/(public)/page.tsx"),
