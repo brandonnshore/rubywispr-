@@ -24,7 +24,7 @@ const accountActionsPath = path.join(
   "actions.ts",
 );
 
-test("signed-in account page renders compact billing actions without provider internals", async () => {
+test("signed-in account page renders account metadata, usage, download, and billing actions without provider internals", async () => {
   const pageModule = await loadAccountPageModule();
   const markup = renderToStaticMarkup(
     await pageModule.default({
@@ -40,6 +40,19 @@ test("signed-in account page renders compact billing actions without provider in
   assert.match(markup, /Manage billing/);
   assert.match(markup, /Open download page/);
   assert.match(markup, /href="\/download"/);
+  assert.match(markup, /Signed-in account/);
+  assert.match(markup, /member@example.com/);
+  assert.match(markup, /Plan status/);
+  assert.match(markup, /Trial Active/);
+  assert.match(markup, /Trial words used/);
+  assert.match(markup, /1,000/);
+  assert.match(markup, /Trial words remaining/);
+  assert.match(markup, /4,000/);
+  assert.match(markup, /Monthly words used/);
+  assert.match(markup, /Lifetime words used/);
+  assert.match(markup, /Account support/);
+  assert.match(markup, /mailto:brandon@rubyadvisory.com/);
+  assert.match(markup, /Beta artifact pending/);
   assert.match(markup, /aria-label="Billing actions"/);
   assert.match(markup, /role="status"/);
   assert.match(markup, /aria-live="polite"/);
@@ -58,6 +71,10 @@ test("signed-in account page renders compact billing actions without provider in
   assert.match(source, /Upgrade monthly/);
   assert.match(source, /Upgrade annual/);
   assert.match(source, /Manage billing/);
+  assert.match(source, /readAccountPageMetadata/);
+  assert.match(source, /PlanStatusSection/);
+  assert.match(source, /UsageMetadataSection/);
+  assert.match(source, /SupportSection/);
   assert.match(source, /DownloadSection/);
   assert.match(source, /href=["']\/download["']/);
   assert.match(source, /aria-label=["']Billing actions["']/);
@@ -70,6 +87,33 @@ test("signed-in account page renders compact billing actions without provider in
   assert.doesNotMatch(source, /\bSTRIPE_[A-Z0-9_]+\b/);
   assert.doesNotMatch(source, /\bcus_[A-Za-z0-9_]+\b/);
   assert.doesNotMatch(source, /\bpayment_method\b|\bcard\b|\binvoice\b/);
+});
+
+test("account page shows sanitized unavailable metadata states and configured direct download", async () => {
+  const pageModule = await loadAccountPageModule({
+    accountMetadata: unavailableAccountMetadata(),
+    latestAppDownloadUrl: "https://downloads.rubywhisper.test/RubyWhisper.zip",
+  });
+  const markup = renderToStaticMarkup(
+    await pageModule.default({
+      searchParams: Promise.resolve({}),
+    }),
+  );
+
+  assert.match(markup, /Profile metadata is unavailable/);
+  assert.match(markup, /Plan metadata is unavailable/);
+  assert.match(markup, /Usage metadata is unavailable/);
+  assert.match(markup, /server-only account services are not configured/);
+  assert.match(markup, /Download RubyWhisper Mac beta/);
+  assert.match(
+    markup,
+    /href="https:\/\/downloads\.rubywhisper\.test\/RubyWhisper\.zip"/,
+  );
+  assert.match(markup, /rel="noopener noreferrer"/);
+  assert.doesNotMatch(markup, /\buser_rw_synthetic\b/);
+  assert.doesNotMatch(markup, /\bcus_[A-Za-z0-9_]+\b/);
+  assert.doesNotMatch(markup, /\bsub_[A-Za-z0-9_]+\b/);
+  assert.doesNotMatch(markup, /\bprice_[A-Za-z0-9_]+\b/);
 });
 
 test("account billing actions submit server-owned plans and redirect to returned checkout URLs", async () => {
@@ -247,7 +291,7 @@ async function loadAccountActionsModule(overrides = {}) {
   };
 }
 
-async function loadAccountPageModule() {
+async function loadAccountPageModule(overrides = {}) {
   const source = await readFile(accountPagePath, "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: {
@@ -261,7 +305,7 @@ async function loadAccountPageModule() {
   const sandbox = {
     exports: commonJsModule.exports,
     module: commonJsModule,
-    require: createAccountPageRequire(),
+    require: createAccountPageRequire(overrides),
   };
 
   vm.runInNewContext(outputText, sandbox, { filename: accountPagePath });
@@ -269,11 +313,17 @@ async function loadAccountPageModule() {
   return commonJsModule.exports;
 }
 
-function createAccountPageRequire() {
+function createAccountPageRequire(overrides) {
   return function requireAccountPageModule(specifier) {
     switch (specifier) {
       case "react/jsx-runtime":
         return requireCommonJs("react/jsx-runtime");
+      case "@/config/client":
+        return {
+          clientEnv: {
+            latestAppDownloadUrl: overrides.latestAppDownloadUrl,
+          },
+        };
       case "next/link":
         return {
           default: ({ href, children, ...props }) =>
@@ -287,6 +337,11 @@ function createAccountPageRequire() {
         return {
           requireClerkUserIdForPage: async () => "user_rw_synthetic_member_001",
         };
+      case "./metadata":
+        return {
+          readAccountPageMetadata: async () =>
+            overrides.accountMetadata ?? activeTrialAccountMetadata(),
+        };
       case "./actions":
         return {
           acceptAccountTermsPrivacy: async () => {},
@@ -297,12 +352,94 @@ function createAccountPageRequire() {
       case "./terms-acceptance":
         return {
           readAccountTermsAcceptanceState: async () => ({
-            status: "missing",
+            status: "required",
           }),
         };
       default:
         throw new Error(`Unexpected account page dependency ${specifier}`);
     }
+  };
+}
+
+function activeTrialAccountMetadata() {
+  return {
+    profile: {
+      ok: true,
+      value: {
+        clerkUserId: "user_rw_synthetic_member_001",
+        email: "member@example.com",
+        isBlocked: false,
+        termsAcceptedAt: "2026-05-04T05:00:00.000Z",
+      },
+    },
+    snapshot: {
+      ok: true,
+      value: {
+        accountStatus: "active",
+        billingPortalAvailable: false,
+        billingPortalUrl: null,
+        canTranscribe: true,
+        email: "member@example.com",
+        isTrialExhausted: false,
+        isTrialLow: false,
+        lifetimeWordsUsed: 1_250,
+        monthlyPeriodStart: "2026-05-01",
+        monthlyWordsUsed: 1_000,
+        planState: "trial_active",
+        preflightPolicy: "allow_if_started_under_limit",
+        termsAccepted: true,
+        trialWordsLimit: 5_000,
+        trialWordsRemaining: 4_000,
+        trialWordsUsed: 1_000,
+      },
+    },
+    subscription: {
+      ok: true,
+      value: {
+        clerkUserId: "user_rw_synthetic_member_001",
+        hasActiveSubscription: false,
+        isFriendOfRubyActive: false,
+        paymentFailed: false,
+        plan: "trial",
+        planState: "trial_active",
+        requiresSubscription: false,
+      },
+    },
+    usageCounters: {
+      ok: true,
+      value: {
+        clerkUserId: "user_rw_synthetic_member_001",
+        isTrialExhausted: false,
+        isTrialLow: false,
+        lifetimeWordsUsed: 1_250,
+        monthlyPeriodStart: "2026-05-01",
+        monthlyWordsUsed: 1_000,
+        trialWordsLimit: 5_000,
+        trialWordsRemaining: 4_000,
+        trialWordsUsed: 1_000,
+      },
+    },
+  };
+}
+
+function unavailableAccountMetadata() {
+  return {
+    profile: {
+      ok: false,
+      reason: "service_unavailable",
+    },
+    snapshot: {
+      ok: false,
+      reason: "missing_metadata",
+    },
+    subscription: {
+      ok: false,
+      reason: "service_unavailable",
+    },
+    usageCounters: {
+      ok: false,
+      reason: "service_unavailable",
+    },
   };
 }
 

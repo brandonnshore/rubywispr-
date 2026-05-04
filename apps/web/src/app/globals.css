@@ -834,6 +834,47 @@ h1 {
   font-weight: 700;
 }
 
+.account-metadata-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--rw-space-3);
+  margin: var(--rw-space-1) 0 0;
+}
+
+.account-metadata-list div {
+  display: grid;
+  gap: var(--rw-space-1);
+  min-width: 0;
+  border: 1px solid var(--rw-color-border);
+  border-radius: var(--rw-radius-small);
+  background: var(--rw-color-surface-subtle);
+  padding: var(--rw-space-3);
+}
+
+.account-metadata-list dt {
+  color: var(--rw-color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.account-metadata-list dd {
+  margin: 0;
+  color: var(--rw-color-text-primary);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.account-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rw-space-3);
+  margin-top: var(--rw-space-1);
+}
+
 .account-acceptance-form {
   display: grid;
   gap: 18px;
@@ -958,9 +999,15 @@ h1 {
 
   .rw-button,
   .account-acceptance-form button,
+  .account-action-row,
+  .account-action-row .rw-button,
   .account-billing-actions,
   .account-billing-actions form,
   .account-billing-actions button {
     width: 100%;
+  }
+
+  .account-metadata-list {
+    grid-template-columns: 1fr;
   }
 }
