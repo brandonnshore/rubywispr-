@@ -34,17 +34,26 @@ Every variable named in `TECHNICAL_INFRASTRUCTURE.md` is accounted for here. Rec
 | `CLERK_SECRET_KEY` | Clerk | dev, staging, production | Server-only secret. Production requires human approval. |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk | dev, staging, production | Public client identifier. Keep environment-specific. |
 | `CLERK_WEBHOOK_SECRET` | Clerk | dev, staging, production | Server-only webhook secret. Production requires human approval. |
-| `SUPABASE_URL` | Supabase | dev, staging, production | Environment-specific project URL. |
+| `SUPABASE_URL` | Supabase | dev, staging, production | Non-public server runtime URL in the current scaffold. Add a separate `NEXT_PUBLIC_*` client name only when a future integration explicitly needs browser access. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase | dev, staging, production | Server-only admin key. Production requires human approval. |
-| `SUPABASE_ANON_KEY` | Supabase | dev, staging, production | Client-safe anon key. Keep environment-specific. |
+| `SUPABASE_ANON_KEY` | Supabase | dev, staging, production | Client-safe anon key, but kept out of client config until an integration adds a `NEXT_PUBLIC_*` alias and confirms row-level security. |
 | `STRIPE_SECRET_KEY` | Stripe | dev, staging, production | Use test keys outside production. Live key requires human approval. |
 | `STRIPE_WEBHOOK_SECRET` | Stripe | dev, staging, production | Use Stripe CLI forwarding locally and test webhook secrets for non-production. Live webhook secret requires human approval. |
-| `STRIPE_MONTHLY_PRICE_ID` | Stripe | dev, staging, production | Use test price IDs outside production. Live price IDs require human approval. |
-| `STRIPE_ANNUAL_PRICE_ID` | Stripe | dev, staging, production | Use test price IDs outside production. Live price IDs require human approval. |
+| `STRIPE_MONTHLY_PRICE_ID` | Stripe | dev, staging, production | Non-public server runtime config. Use test price IDs outside production. Live price IDs require human approval. |
+| `STRIPE_ANNUAL_PRICE_ID` | Stripe | dev, staging, production | Non-public server runtime config. Use test price IDs outside production. Live price IDs require human approval. |
 | `GROQ_API_KEY` | Groq | dev, staging, production | Server-only provider key. Production requires human approval. |
-| `SENTRY_DSN` | Sentry or equivalent | dev, staging, production | Environment-specific crash reporting DSN; configure privacy scrubbing. |
+| `SENTRY_DSN` | Sentry or equivalent | dev, staging, production | Non-public server runtime DSN in the current scaffold. Add a separate `NEXT_PUBLIC_*` client DSN only after privacy scrubbing is configured. |
 | `SENTRY_AUTH_TOKEN` | Sentry or equivalent | dev, staging, production | Build/release token if needed. Production requires human approval. |
 | `APP_DOWNLOAD_SIGNING_KEY_OR_TOKEN` | Apple Developer/Sparkle release pipeline | staging, production | Release-signing or appcast publication secret. Production signing and public appcast publication require human approval. |
+| `NEXT_PUBLIC_RUBYWHISPER_APP_ENV` | Web scaffold | dev, staging, production | Optional client-safe environment label. Do not store secrets in this value. |
+| `NEXT_PUBLIC_RUBYWHISPER_APP_URL` | Web scaffold | dev, staging, production | Optional client-safe canonical app URL. Keep environment-specific. |
+
+## Web Scaffold Guardrails
+
+- Root `.env.example` and `apps/web/.env.example` are placeholder templates with blank values only. They are safe for scaffold validation and must not contain real service IDs, real URLs, sample tokens, or secret-looking strings.
+- Server-only and non-public runtime config belongs in `apps/web/src/config/server.ts`. This includes Clerk secrets and webhooks, Supabase service-role keys, Stripe secrets and webhook secrets, Groq API keys, Sentry auth tokens, and Apple/Sparkle signing or release credentials.
+- Client-facing config belongs in `apps/web/src/config/client.ts` and may read only `NEXT_PUBLIC_*` names. Never add secret, webhook, service-role, provider API, or signing key names to that file.
+- Future integration tickets should add provider-specific env names in three places together: the relevant private secret store, the placeholder template with a blank value, and the appropriate server or client config module. Do not make validation commands require live services unless the issue explicitly includes a safe stub or mock.
 
 ## Local Development
 
