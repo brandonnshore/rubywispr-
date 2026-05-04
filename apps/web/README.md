@@ -54,6 +54,11 @@ Backend validation uses the same root commands because RubyWhisper backend route
   Wave 4 backend tickets, desktop-facing backend routes must follow
   `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md` for RW-044, and mocked
   provider integration coverage belongs to RW-046.
+- `src/lib/cleanup/conservative-cleanup.ts` owns the server-only RW-042
+  conservative cleanup prompt and transient cleanup runner. It returns the raw
+  transcript when cleanup is disabled or the cleanup provider fails, and it must
+  never persist or log transcript, context, dictionary, prompt, or provider
+  payload content.
 - `src/lib/desktop-transcribe/request.ts` exposes the server-only RW-041A
   parser for desktop transcription request bodies. It validates synthetic
   multipart or binary audio inputs, returns provider input, cleanup settings,
