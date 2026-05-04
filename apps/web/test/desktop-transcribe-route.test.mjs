@@ -191,6 +191,47 @@ test("desktop transcribe route maps quota failures to shared metadata-only error
   }
 });
 
+test("desktop transcribe route returns rate_limited before parser or provider work", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+  const { calls, dependencies } = createRouteDependencies({
+    evaluateRateLimit: () => rateLimitRejected(),
+    parseRequest: () => {
+      throw new Error("Parser must not run for rate-limited requests.");
+    },
+    providerClient: providerClientThatMustNotRun("route rate limit"),
+  });
+  const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+  const response = await handler(syntheticAudioRequest());
+  const body = await response.json();
+
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(response.headers.get("Retry-After"), "30");
+  assert.equal(body.error.code, "rate_limited");
+  assert.deepEqual(body.metadata, {
+    limit: 20,
+    requestCount: 20,
+    retryAfterSeconds: 30,
+    windowEnd: "2026-05-04T07:31:00.000Z",
+    windowStart: "2026-05-04T07:30:00.000Z",
+  });
+  assert.deepEqual(
+    toPlainObject(calls).map((call) => call.operation),
+    [
+      "requireAuth",
+      "readProfile",
+      "readSubscription",
+      "readUsageCounters",
+      "evaluateEntitlement",
+      "evaluateRateLimit",
+    ],
+  );
+  assert.doesNotMatch(
+    JSON.stringify(body),
+    /audio|transcript|cleaned|context|dictionary|provider payload|user_rw_synthetic/i,
+  );
+});
+
 test("desktop transcribe route maps parser failures to shared no-store responses", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
 
@@ -224,6 +265,7 @@ test("desktop transcribe route maps parser failures to shared no-store responses
         "readSubscription",
         "readUsageCounters",
         "evaluateEntitlement",
+        "evaluateRateLimit",
         "parseRequest",
       ],
     );
@@ -238,6 +280,9 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
   const body = await response.json();
   const providerCall = calls.find(
     (call) => call.operation === "providerClient.transcribe",
+  );
+  const rateLimitCall = calls.find(
+    (call) => call.operation === "evaluateRateLimit",
   );
 
   assert.equal(response.status, 200);
@@ -257,6 +302,14 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
     trialWordsRemaining: 3897,
     trialWordsUsed: 1103,
   });
+  assert.deepEqual(
+    toPlainObject(rateLimitCall.input),
+    {
+      clerkUserId: "user_rw_synthetic_member_001",
+      now: "2026-05-04T07:30:00.000Z",
+      planState: "trial_active",
+    },
+  );
   assert.deepEqual(
     {
       audioDurationMs: providerCall.input.audioDurationMs,
@@ -278,6 +331,7 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
       "readSubscription",
       "readUsageCounters",
       "evaluateEntitlement",
+      "evaluateRateLimit",
       "parseRequest",
       "createRequestId",
       "providerClient.transcribe",
@@ -647,10 +701,12 @@ test("desktop transcribe route stays server-only and provider-safe", async () =>
   assert.match(source, /runRubyWhisperConservativeCleanup/);
   assert.match(source, /parseDesktopTranscribeRequest/);
   assert.match(source, /evaluateRubyWhisperQuotaEntitlement/);
+  assert.match(source, /evaluateRubyWhisperTranscriptionRateLimit/);
   assert.match(source, /createRubyWhisperGroqProviderClient/);
   assert.match(source, /executeDesktopTranscribeProviderContinuation/);
   assert.match(source, /rubyWhisperApiErrorResponse\(["']signed_out["']\)/);
   assert.match(source, /rubyWhisperApiErrorResponse\(["']terms_required["']\)/);
+  assert.match(source, /rubyWhisperApiErrorResponse\(["']rate_limited["']/);
   assert.doesNotMatch(source, /\bGROQ_API_KEY\b|\bCLERK_SECRET_KEY\b|\bSUPABASE_SERVICE_ROLE_KEY\b/);
   assert.doesNotMatch(source, /\bprocess\.env\b|\bserverEnv\b/);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
@@ -768,6 +824,12 @@ function createRouteModuleRequire() {
           createRubyWhisperGroqProviderClient: () =>
             providerClientThatMustNotRun("default Groq provider"),
         };
+      case "@/lib/rate-limit/transcription":
+        return {
+          evaluateRubyWhisperTranscriptionRateLimit: () => {
+            throw new Error("Default rate-limit dependency is outside this route test.");
+          },
+        };
       case "@/lib/usage/quota":
         return {
           countRubyWhisperBillableOutputWords,
@@ -814,6 +876,11 @@ function createRouteDependencies(overrides = {}) {
       calls.push({ input, operation: "evaluateEntitlement" });
 
       return entitlementAllowed(input.usageCounters);
+    },
+    evaluateRateLimit(input) {
+      calls.push({ input, operation: "evaluateRateLimit" });
+
+      return rateLimitAllowed(input);
     },
     now() {
       return syntheticNow;
@@ -1026,6 +1093,47 @@ function entitlementAllowedForPlan(usageCounters, planState) {
     planState,
     preflightPolicy: "allow_if_started_under_limit",
     status: "allowed",
+  };
+}
+
+function rateLimitAllowed(input = {}) {
+  return {
+    metadata: {
+      limit: 20,
+      requestCount: 4,
+      windowEnd: "2026-05-04T07:31:00.000Z",
+      windowStart: "2026-05-04T07:30:00.000Z",
+    },
+    ok: true,
+    state: {
+      clerkUserId: input.clerkUserId ?? "user_rw_synthetic_member_001",
+      requestCount: 4,
+      windowStart: "2026-05-04T07:30:00.000Z",
+    },
+    status: "allowed",
+  };
+}
+
+function rateLimitRejected() {
+  const metadata = {
+    limit: 20,
+    requestCount: 20,
+    retryAfterSeconds: 30,
+    windowEnd: "2026-05-04T07:31:00.000Z",
+    windowStart: "2026-05-04T07:30:00.000Z",
+  };
+
+  return {
+    apiErrorMetadata: metadata,
+    errorCode: "rate_limited",
+    metadata,
+    ok: false,
+    state: {
+      clerkUserId: "user_rw_synthetic_member_001",
+      requestCount: 20,
+      windowStart: "2026-05-04T07:30:00.000Z",
+    },
+    status: "rate_limited",
   };
 }
 
@@ -1381,14 +1489,18 @@ const allowedMetadataKeys = new Set([
   "appVersion",
   "audioDurationMs",
   "durationLimitMs",
+  "limit",
   "osVersion",
   "planState",
   "provider",
   "providerLatencyMs",
+  "requestCount",
   "retryAfterSeconds",
   "totalLatencyMs",
   "trialWordsLimit",
   "trialWordsRemaining",
+  "windowEnd",
+  "windowStart",
 ]);
 
 function sanitizeApiErrorMetadata(metadata) {

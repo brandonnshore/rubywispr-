@@ -57,7 +57,11 @@ Backend error responses may include only metadata needed for recovery or support
 - `trialWordsRemaining`
 - `trialWordsLimit`
 - `monthlyWordsRemaining`
+- `requestCount`
 - `retryAfterSeconds`
+- `windowStart`
+- `windowEnd`
+- `limit`
 - `durationLimitMs`
 - `audioDurationMs`
 - `appVersion`
@@ -83,7 +87,7 @@ secrets.
 | `subscription_required` | 402 | No | `trial_exhausted` | `open_checkout` | Choose a plan to keep dictating. | `planState` |
 | `payment_failed` | 402 | No | `payment_failed` | `open_billing` | Update billing to continue. | `planState` |
 | `account_blocked` | 403 | No | `blocked` | `open_account` | This account cannot dictate right now. | `planState` |
-| `rate_limited` | 429 | Yes, after delay | `error` | `retry_after` | Too many requests. Try again soon. | `retryAfterSeconds` |
+| `rate_limited` | 429 | Yes, after delay | `error` | `retry_after` | Too many requests. Try again soon. | `retryAfterSeconds`, `requestCount`, `windowStart`, `windowEnd`, `limit` |
 | `duration_limit_reached` | 413 | No | `duration_limit_reached` | `start_new_whisper` | Recordings are limited to 10 minutes. | `durationLimitMs`, `audioDurationMs` |
 | `invalid_audio` | 422 | No | `error` | `record_again` | RubyWhisper could not read that audio. | `audioDurationMs` |
 | `provider_error` | 503 | Yes, if no duplicate risk | `provider_error` | `retry` | RubyWhisper could not transcribe right now. | `provider`, `providerLatencyMs`, `totalLatencyMs` |
@@ -173,6 +177,12 @@ canonical here: `subscription_required`, `account_blocked`, `rate_limited`,
 Provider and cleanup failures should map to `provider_error`,
 `network_error`, `service_unavailable`, or `internal_error` without returning or
 logging provider payloads.
+
+The desktop transcription route runs the rate-limit hook after auth, Terms, and
+quota entitlement but before parsing audio or calling providers. The current
+hook is metadata-only and storage-free; production hardening still needs a
+persistent per-user counter store wired into the RW-031 primitive without
+storing dictation content or provider payloads.
 
 `GET /api/desktop/account` should use `signed_out`, `service_unavailable`, or
 `internal_error` for account retrieval failures. It should not return private

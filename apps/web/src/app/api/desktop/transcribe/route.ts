@@ -32,6 +32,11 @@ import {
   type RubyWhisperProviderTranscriptionResult,
 } from "@/lib/providers/client";
 import { createRubyWhisperGroqProviderClient } from "@/lib/providers/groq";
+import {
+  evaluateRubyWhisperTranscriptionRateLimit,
+  type RubyWhisperTranscriptionRateLimitInput,
+  type RubyWhisperTranscriptionRateLimitResult,
+} from "@/lib/rate-limit/transcription";
 import type { SupabaseServiceRoleRuntimeConfig } from "@/lib/supabase/server";
 import { countRubyWhisperBillableOutputWords } from "@/lib/usage/quota";
 import {
@@ -90,6 +95,9 @@ export type DesktopTranscribeRouteDependencies = Readonly<{
   evaluateEntitlement: (
     input: RubyWhisperQuotaEntitlementInput,
   ) => RubyWhisperQuotaEntitlementResult;
+  evaluateRateLimit: (
+    input: RubyWhisperTranscriptionRateLimitInput,
+  ) => RubyWhisperTranscriptionRateLimitResult;
   createRequestId: () => string;
   now: () => Date;
   parseRequest: (request: Request) => Promise<DesktopTranscribeRequestParseResult>;
@@ -165,6 +173,22 @@ export function createDesktopTranscribeRouteHandler(
         return rubyWhisperApiErrorResponse(entitlement.errorCode, {
           metadata: entitlement.metadata,
         });
+      }
+
+      const rateLimitResult = dependencies.evaluateRateLimit({
+        clerkUserId: authState.userId,
+        now: dependencies.now(),
+        planState: entitlement.planState,
+      });
+
+      if (!rateLimitResult.ok) {
+        if (rateLimitResult.status === "rate_limited") {
+          return rubyWhisperApiErrorResponse("rate_limited", {
+            metadata: rateLimitResult.apiErrorMetadata,
+          });
+        }
+
+        return rubyWhisperApiErrorResponse(rateLimitResult.errorCode);
       }
 
       const parseResult = await dependencies.parseRequest(request);
@@ -317,6 +341,7 @@ export async function executeDesktopTranscribeProviderContinuation(
 const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependencies = {
   createRequestId: () => globalThis.crypto.randomUUID(),
   evaluateEntitlement: evaluateRubyWhisperQuotaEntitlement,
+  evaluateRateLimit: evaluateRubyWhisperTranscriptionRateLimit,
   now: () => new Date(),
   parseRequest: parseDesktopTranscribeRequest,
   prepareUsageIncrement: prepareRubyWhisperQuotaUsageIncrement,
