@@ -43,7 +43,13 @@ Backend validation uses the same root commands because RubyWhisper backend route
 - `src/app/(public)/page.tsx` is the public entry route scaffolded by RUB-82. Marketing and product-proof work belongs to RW-081; pricing, download, and customer-facing account flows belong to RW-082; legal/support pages belong to RW-083.
 - `src/app/(auth)/sign-in/[[...sign-in]]/page.tsx` and `src/app/(auth)/sign-up/[[...sign-up]]/page.tsx` are the email-link Clerk route shell. They render email-only launch copy with blank env placeholders and enable Clerk components only when `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is configured.
 - `src/app/account/page.tsx` is the authenticated customer account placeholder scaffolded by RUB-82. Clerk auth belongs to RW-022, subscription/account data belongs to RW-024/RW-025/RW-026, and the production account UI belongs to RW-082.
-- `src/app/admin/page.tsx` is the admin placeholder scaffolded by RUB-82. Server-side admin roles belong to RW-028, the beta health dashboard belongs to RW-084, Friend of Ruby code workflows belong to RW-085, and later auth/admin security audit belongs to RW-101.
+- `src/app/admin/page.tsx` is the admin placeholder scaffolded by RUB-82.
+  Server-side admin roles belong to RW-028, the beta health dashboard belongs
+  to RW-084, Friend of Ruby code workflows belong to RW-085, and later
+  auth/admin security audit belongs to RW-101. Admin authorization must be
+  verified on the server for every admin page render and every admin API
+  request; browser code may never decide admin access from Clerk client hooks,
+  public metadata, local state, or client-bundled allowlists.
 - `src/app/api/status/route.ts` is the current smoke API. Future API routes stay under `src/app/api/*` and must keep provider, billing, Supabase service-role, webhook, and signing logic server-only.
 - `src/lib/api/errors.ts` exposes the server-only RW-044 backend error contract helper. Future desktop API route handlers should use `rubyWhisperApiErrorResponse` so non-2xx responses keep stable codes, `Cache-Control: no-store`, and metadata-only payloads.
 - `src/lib/providers/client.ts` exposes the server-only RW-040A provider
@@ -209,6 +215,14 @@ The command is also covered by `npm run test` because it uses Node's test runner
   `src/lib/admin/api.ts` on every request before returning protected data.
   Denials return shared `rubyWhisperApiErrorResponse` payloads, and backend
   role lookup failures fail closed with privacy-safe metadata only.
+- Admin page handlers must call `requireRubyWhisperAdminForPage` from
+  `src/lib/admin/auth.ts` during server rendering. Client Components and
+  browser-bound files must not import `src/lib/admin/*`,
+  `src/config/server.ts`, or `src/lib/supabase/server.ts`, and must not read
+  `RUBYWHISPER_ADMIN_BOOTSTRAP_EMAILS` or Supabase service-role env names.
+  Admin payloads stay metadata-only; do not expose transcript, audio,
+  clipboard, context, dictionary, prompt, provider payload, or private user
+  content fields from admin pages or APIs.
 - Authorization decisions stay server-side. Browser-bound files may render Clerk sign-in/sign-up UI, but must not use `useAuth`, `useUser`, `SignedIn`, `SignedOut`, `Protect`, or redirect helpers to gate protected product/admin access.
 - Auth-sensitive source avoids console/logger output and obvious storage of magic links, session tickets, JWTs, or tokens.
 - Auth test fixtures use only synthetic IDs and placeholder email domains such as `example.com` or `.test`; do not add real magic links, session tokens, JWTs, private env values, or customer email addresses.
