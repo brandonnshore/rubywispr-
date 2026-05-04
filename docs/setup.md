@@ -61,6 +61,9 @@ Every variable named in `TECHNICAL_INFRASTRUCTURE.md` is accounted for here. Rec
 - [ ] Keep private local values in the approved private env source; do not paste values into repository files.
 - [ ] Use a Clerk development application.
 - [ ] Use a Supabase local instance or hosted development project.
+- [ ] For Supabase migrations, use the repo-local `supabase/` scaffold and start by reading CLI help: `supabase --help` and `supabase migration --help`.
+- [ ] Create local migration files with `supabase migration new <descriptive_name>` so filenames follow the CLI convention.
+- [ ] After the local Supabase stack is running with `supabase start`, list and apply migrations against the local database with `supabase migration list --local` and `supabase migration up --local`.
 - [ ] Use Stripe test mode and Stripe CLI webhook forwarding.
 - [ ] Use a Groq development or restricted API key.
 - [ ] Use a development Sentry/crash-reporting project only if needed.
@@ -73,6 +76,7 @@ Every variable named in `TECHNICAL_INFRASTRUCTURE.md` is accounted for here. Rec
 - [ ] Configure staging env vars in Vercel or the approved staging secret store.
 - [ ] Use a Clerk staging application and staging webhook secret.
 - [ ] Use a Supabase staging project with no audio/transcript storage.
+- [ ] human approval required: link or apply Supabase migrations to staging. Agents must not run `supabase link`, `supabase db push`, `supabase config push`, `supabase migration up --linked`, or commands with live staging `--db-url` values without approval.
 - [ ] Use Stripe test mode products, prices, checkout, portal, and webhook endpoint.
 - [ ] Use a Groq staging or restricted key if available.
 - [ ] Configure staging crash reporting with privacy scrubbing enabled.
@@ -84,6 +88,7 @@ Every variable named in `TECHNICAL_INFRASTRUCTURE.md` is accounted for here. Rec
 - [ ] human approval required: create or confirm the Vercel production environment before adding production secrets.
 - [ ] human approval required: create or confirm the Clerk production application and production webhook endpoint.
 - [ ] human approval required: create or confirm the Supabase production project and service-role handling.
+- [ ] human approval required: link, push, or apply Supabase production migrations. This scaffold does not create or apply production migrations.
 - [ ] human approval required: enable Stripe live mode, live products, live prices, checkout, customer portal, and webhook endpoint.
 - [ ] human approval required: provision the production Groq key.
 - [ ] human approval required: configure production Sentry/crash-reporting release token or DSN.
