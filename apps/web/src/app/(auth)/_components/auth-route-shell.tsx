@@ -36,10 +36,10 @@ const clerkAppearance = {
     cardBox: "clerk-card",
   },
   variables: {
-    colorPrimary: "#2f6f6a",
-    colorText: "#172033",
-    colorBackground: "#ffffff",
-    borderRadius: "8px",
+    colorPrimary: "var(--rw-color-accent)",
+    colorText: "var(--rw-color-text-primary)",
+    colorBackground: "var(--rw-color-surface)",
+    borderRadius: "var(--rw-radius-medium)",
   },
 };
 
