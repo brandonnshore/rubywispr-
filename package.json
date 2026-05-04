@@ -10,6 +10,7 @@
     "lint": "npm run lint --workspace @rubywhisper/web",
     "typecheck": "npm run typecheck --workspace @rubywhisper/web",
     "test": "npm run test --workspace @rubywhisper/web",
+    "test:schema-privacy": "npm run test:schema-privacy --workspace @rubywhisper/web",
     "build": "npm run build --workspace @rubywhisper/web"
   },
   "overrides": {
