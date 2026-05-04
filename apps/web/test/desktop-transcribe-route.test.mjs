@@ -31,6 +31,36 @@ const conservativeCleanupPath = path.join(
 );
 const syntheticOrigin = "https://rubywhisper-desktop.test";
 const syntheticNow = new Date("2026-05-04T07:30:00.000Z");
+const allowedTranscriptionRequestMetadataKeys = new Set([
+  "appVersion",
+  "audioDurationMs",
+  "cleanedWordCount",
+  "clerkUserId",
+  "errorCode",
+  "latencyMs",
+  "now",
+  "osVersion",
+  "planState",
+  "provider",
+  "requestId",
+  "status",
+]);
+const forbiddenTranscriptionRequestPayloadKeys = [
+  "authorization",
+  "audio",
+  "cleanedText",
+  "clipboard",
+  "context",
+  "dictionaryTerms",
+  "prompt",
+  "providerRequestBody",
+  "providerResponseBody",
+  "rawTranscript",
+  "transcript",
+  "transcriptText",
+];
+const forbiddenTranscriptionRequestPayloadContent =
+  /uh schedule ruby whisper|Schedule RubyWhisper|Synthetic cleanup output|Synthetic provider output|Synthetic route context|Ruby Advisory|payload must not echo|Bearer /i;
 
 test("desktop transcribe route returns signed_out before request parsing", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
@@ -272,6 +302,9 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
       status: "success",
     },
   );
+  assertTranscriptionRequestMetadataOnly(
+    calls.find((call) => call.operation === "writeRequestMetadata").input,
+  );
   assert.doesNotMatch(JSON.stringify(body), /rawTranscript|providerRequestBody|context|dictionary/i);
 });
 
@@ -397,12 +430,15 @@ test("desktop transcribe route maps provider failures to shared errors", async (
   ];
 
   for (const scenario of scenarios) {
-    const { dependencies } = createRouteDependencies({
+    const { calls, dependencies } = createRouteDependencies({
       providerClient: providerClientReturningFailure(scenario),
     });
     const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
     const response = await handler(syntheticAudioRequest());
     const body = await response.json();
+    const requestMetadataInput = calls.find(
+      (call) => call.operation === "writeRequestMetadata",
+    ).input;
 
     assert.equal(response.status, scenario.status);
     assert.equal(response.headers.get("Cache-Control"), "no-store");
@@ -426,6 +462,21 @@ test("desktop transcribe route maps provider failures to shared errors", async (
     if (scenario.retryAfterSeconds) {
       assert.equal(response.headers.get("Retry-After"), "3");
     }
+
+    assert.deepEqual(toPlainObject(requestMetadataInput), {
+      appVersion: "0.1.0-test",
+      audioDurationMs: 4200,
+      clerkUserId: "user_rw_synthetic_member_001",
+      errorCode: scenario.apiErrorCode,
+      latencyMs: 32,
+      now: "2026-05-04T07:30:00.000Z",
+      osVersion: "macOS synthetic",
+      planState: "trial_active",
+      provider: "mock_provider",
+      requestId: "req_rw_synthetic_route_001",
+      status: "failure",
+    });
+    assertTranscriptionRequestMetadataOnly(requestMetadataInput);
   }
 });
 
@@ -492,6 +543,7 @@ test("desktop transcribe route returns cleanup-enabled cleaned provider success"
   });
   assert.equal(requestMetadataInput.cleanedWordCount, 5);
   assert.equal(usageIncrementInput.billableWordCount, 5);
+  assertTranscriptionRequestMetadataOnly(requestMetadataInput);
   assertNoPrivateCleanupPayload(requestMetadataInput);
   assertNoPrivateCleanupPayload(usageIncrementInput);
 });
@@ -566,6 +618,7 @@ test("desktop transcribe route falls back to raw text when cleanup fails", async
     ["transcribe", "cleanup"],
   );
   assert.equal(requestMetadataInput.cleanedWordCount, 3);
+  assertTranscriptionRequestMetadataOnly(requestMetadataInput);
   assertNoPrivateCleanupPayload(requestMetadataInput);
 });
 
@@ -1358,5 +1411,30 @@ function assertNoPrivateCleanupPayload(value) {
   assert.doesNotMatch(
     JSON.stringify(value),
     /uh schedule ruby whisper|Schedule RubyWhisper|Synthetic route context|Ruby Advisory/,
+  );
+}
+
+function assertTranscriptionRequestMetadataOnly(input) {
+  const keys = Object.keys(input);
+
+  for (const key of keys) {
+    assert.equal(
+      allowedTranscriptionRequestMetadataKeys.has(key),
+      true,
+      `${key} is not an allowed transcription request metadata key`,
+    );
+  }
+
+  for (const privateKey of forbiddenTranscriptionRequestPayloadKeys) {
+    assert.equal(
+      Object.hasOwn(input, privateKey),
+      false,
+      `${privateKey} must not be persisted in request metadata`,
+    );
+  }
+
+  assert.doesNotMatch(
+    JSON.stringify(input),
+    forbiddenTranscriptionRequestPayloadContent,
   );
 }
