@@ -218,6 +218,8 @@ Future mocked backend route tests should import from `test/support/backend-integ
 
 Keep these tests offline-only. Do not pass live Clerk, Stripe, Supabase, Groq, Sentry, auth, billing, or private env values into the helper; it rejects live-looking hosts, credential-like strings, private env source references, and guarded server secret names. Provider fixture helpers also reject private payload fields such as raw audio, transcripts, cleaned text, app context, dictionary terms, prompts, headers, cookies, and provider request/response bodies; use fixed synthetic provider output and metadata-only overrides instead.
 
+Stripe checkout and customer portal integration coverage is synthetic-only. `test/stripe-account-billing-integration.test.mjs` composes account billing server actions with mocked checkout and portal route handlers, but the remaining manual Stripe test-mode smoke is tracked by RUB-161 and stays blocked until Brandon provides or approves the test-mode setup. Do not add live Stripe credentials, dashboard configuration, webhook forwarding, or real billing payloads to this suite.
+
 ## Backend No-Body Logging Contract
 
 `src/lib/observability/privacy-logger.ts` is the server-only RW-030 helper for privacy-safe backend log metadata. Future backend, account, provider, cleanup, transcription, support, and admin code should use `sanitizeRubyWhisperPrivacyLogMetadata`, `createRubyWhisperPrivacyLogEvent`, or the `createRubyWhisperBackendRequest*LogEvent` helpers before handing data to any future log sink.
