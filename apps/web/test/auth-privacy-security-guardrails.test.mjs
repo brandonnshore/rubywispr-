@@ -108,6 +108,14 @@ const serverBillingHelpers = [
     moduleSpecifier: "@/lib/billing/stripe",
     path: path.join(srcRoot, "lib", "billing", "stripe.ts"),
   },
+  {
+    moduleSpecifier: "@/lib/billing/stripe-subscription-cache",
+    path: path.join(srcRoot, "lib", "billing", "stripe-subscription-cache.ts"),
+  },
+  {
+    moduleSpecifier: "@/lib/billing/stripe-webhook-idempotency",
+    path: path.join(srcRoot, "lib", "billing", "stripe-webhook-idempotency.ts"),
+  },
 ];
 const serverSupabaseHelpers = [
   {
@@ -123,6 +131,10 @@ const serverBillingRoutes = [
   {
     moduleSpecifier: "@/app/api/stripe/portal/route",
     path: path.join(srcRoot, "app", "api", "stripe", "portal", "route.ts"),
+  },
+  {
+    moduleSpecifier: "@/app/api/stripe/webhook/route",
+    path: path.join(srcRoot, "app", "api", "stripe", "webhook", "route.ts"),
   },
 ];
 const serverDesktopTranscribeHelpers = [
