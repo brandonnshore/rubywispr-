@@ -89,6 +89,12 @@ The command is also covered by `npm run test` because it uses Node's test runner
 
 After `npm run build`, rerun `npm run test:auth-privacy` or the focused changed-file scan so the public bundle artifact check covers the latest `.next/static` output.
 
+## Backend Integration Test Harness
+
+Future mocked backend route tests should import from `test/support/backend-integration.mjs`. The helper exports synthetic Clerk/Supabase/provider fixtures plus `invokeRouteHandler`, `invokeServerFunction`, `createSyntheticBackendRequest`, and `createMockBackendProviders`.
+
+Keep these tests offline-only. Do not pass live Clerk, Stripe, Supabase, Groq, Sentry, auth, billing, or private env values into the helper; it rejects live-looking hosts, credential-like strings, private env source references, and guarded server secret names.
+
 ## Validation
 
 ```bash
