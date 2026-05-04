@@ -66,7 +66,7 @@ function BillingActionsSection({
       <h2 id="billing-heading">Plan and billing</h2>
       <p>
         Choose a paid RubyWhisper plan or open billing management for an
-        existing subscription. Billing setup is handled by the server.
+        existing subscription from this account.
       </p>
       {message ? (
         <p className="account-feedback" role="status" aria-live="polite">
