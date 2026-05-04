@@ -71,6 +71,8 @@ Future workers must follow these rules:
 
 `src/lib/auth/profile-sync.ts` prepares and upserts the metadata-only `profiles` row for Clerk users. Future auth routes should call `syncClerkUserSupabaseProfile` only after server-side Clerk session verification and primary-email lookup, passing `{ clerkUserId, primaryEmail }`; the helper writes only `clerk_user_id` and `email` through the server-only Supabase service-role factory.
 
+`src/lib/auth/terms-acceptance.ts` reads and records only the metadata timestamp in `profiles.terms_accepted_at` for an existing Clerk-backed profile. It requires a server-verified Clerk user ID and must not store policy copy, audio, transcripts, cleaned text, clipboard contents, local history, app context, or other private dictation content.
+
 ## Auth Privacy Validation Contract
 
 Run the focused guardrails from the repository root when changing Clerk auth, route protection, profile sync, auth config, or auth tests:
@@ -82,7 +84,7 @@ npm run test:auth-privacy
 The command is also covered by `npm run test` because it uses Node's test runner. It verifies:
 
 - Clerk server secret names stay out of `src/config/client.ts`, browser-bound source, and `.next/static` public bundle artifacts when a build exists.
-- `src/lib/auth/clerk.ts` and `src/lib/auth/profile-sync.ts` remain `server-only`; Client Components and Clerk browser-bound files cannot import those helpers.
+- `src/lib/auth/clerk.ts`, `src/lib/auth/profile-sync.ts`, and `src/lib/auth/terms-acceptance.ts` remain `server-only`; Client Components and Clerk browser-bound files cannot import those helpers.
 - Authorization decisions stay server-side. Browser-bound files may render Clerk sign-in/sign-up UI, but must not use `useAuth`, `useUser`, `SignedIn`, `SignedOut`, `Protect`, or redirect helpers to gate protected product/admin access.
 - Auth-sensitive source avoids console/logger output and obvious storage of magic links, session tickets, JWTs, or tokens.
 - Auth test fixtures use only synthetic IDs and placeholder email domains such as `example.com` or `.test`; do not add real magic links, session tokens, JWTs, private env values, or customer email addresses.

@@ -25,6 +25,10 @@ const serverAuthHelpers = [
     moduleSpecifier: "@/lib/auth/profile-sync",
     path: path.join(srcRoot, "lib", "auth", "profile-sync.ts"),
   },
+  {
+    moduleSpecifier: "@/lib/auth/terms-acceptance",
+    path: path.join(srcRoot, "lib", "auth", "terms-acceptance.ts"),
+  },
 ];
 const authSensitivePaths = [
   path.join(srcRoot, "app", "(auth)"),
