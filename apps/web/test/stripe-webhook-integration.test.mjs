@@ -46,6 +46,8 @@ const webhookRoutePath = path.join(
 
 const created = 1777896000;
 const now = "2026-05-04T12:00:00.000Z";
+const activeFriendOfRubyUntil = "2027-05-04T12:00:00.000Z";
+const expiredFriendOfRubyUntil = "2026-04-04T12:00:00.000Z";
 const syntheticSecretKey = ["sk", "test", "rw_synthetic_secret"].join("_");
 const syntheticWebhookSecret = ["whsec", "rw_synthetic_webhook_secret"].join("_");
 const privateEnvFixture = "rw_private_env_fixture_value";
@@ -130,6 +132,78 @@ test("signed subscription webhooks update cache and account reads across plan st
   }
 
   assert.equal(harness.state.subscriptionUpserts, 3);
+  assertNoPrivateWebhookLeak(harness.state);
+});
+
+test("signed Friend of Ruby webhooks update account state and expire safely", async () => {
+  const harness = await createWebhookIntegrationHarness();
+  const activeResponse = await harness.postSignedEvent(
+    stripeEvent({
+      id: "evt_rw_synthetic_friend_active",
+      object: stripeSubscription({
+        friendOfRubyUntil: activeFriendOfRubyUntil,
+        plan: "friend_of_ruby",
+        privateMetadata: privateWebhookMetadata(),
+        priceId: "price_friend_unknown",
+        status: "active",
+        subscriptionId: "sub_rw_synthetic_friend_active",
+      }),
+      type: "customer.subscription.updated",
+    }),
+  );
+  const activeSubscription = await harness.readSubscription();
+
+  assert.equal(activeResponse.status, 200);
+  assert.deepEqual(await activeResponse.json(), {
+    action: "processed",
+    ok: true,
+    received: true,
+  });
+  assert.equal(activeSubscription.ok, true);
+  assert.equal(activeSubscription.subscription.plan, "friend_of_ruby");
+  assert.equal(activeSubscription.subscription.planState, "friend_of_ruby_active");
+  assert.equal(activeSubscription.subscription.isFriendOfRubyActive, true);
+  assert.equal(activeSubscription.subscription.requiresSubscription, false);
+  assert.equal(
+    activeSubscription.subscription.friendOfRubyUntil,
+    activeFriendOfRubyUntil,
+  );
+
+  const expiredResponse = await harness.postSignedEvent(
+    stripeEvent({
+      id: "evt_rw_synthetic_friend_expired",
+      object: stripeSubscription({
+        clerkUserId: "user_rw_synthetic_friend_expired_001",
+        customerId: "cus_rw_synthetic_friend_expired_001",
+        friendOfRubyUntil: expiredFriendOfRubyUntil,
+        plan: "friend_of_ruby",
+        privateMetadata: privateWebhookMetadata(),
+        priceId: "price_friend_unknown",
+        status: "active",
+        subscriptionId: "sub_rw_synthetic_friend_expired",
+      }),
+      type: "customer.subscription.updated",
+    }),
+  );
+  const expiredSubscription = await harness.readSubscription(
+    "user_rw_synthetic_friend_expired_001",
+  );
+
+  assert.equal(expiredResponse.status, 200);
+  assert.deepEqual(await expiredResponse.json(), {
+    action: "processed",
+    ok: true,
+    received: true,
+  });
+  assert.equal(expiredSubscription.ok, true);
+  assert.equal(expiredSubscription.subscription.planState, "subscription_required");
+  assert.equal(expiredSubscription.subscription.isFriendOfRubyActive, false);
+  assert.equal(expiredSubscription.subscription.requiresSubscription, true);
+  assert.equal(
+    expiredSubscription.subscription.friendOfRubyUntil,
+    expiredFriendOfRubyUntil,
+  );
+  assert.equal(harness.state.subscriptionUpserts, 2);
   assertNoPrivateWebhookLeak(harness.state);
 });
 
@@ -640,11 +714,21 @@ function stripeEvent({ id, object, type }) {
 function stripeSubscription({
   customerId = "cus_rw_synthetic_member_001",
   clerkUserId = "user_rw_synthetic_member_001",
+  friendOfRubyUntil,
   plan = "monthly",
   privateMetadata = {},
+  priceId,
   status = "active",
   subscriptionId = "sub_rw_synthetic_member_001",
 } = {}) {
+  const resolvedPriceId =
+    priceId ??
+    (plan === "annual"
+      ? validStripeEnv.annualPriceId
+      : plan === "monthly"
+        ? validStripeEnv.monthlyPriceId
+        : "price_unknown_synthetic");
+
   return {
     customer: {
       id: customerId,
@@ -660,16 +744,14 @@ function stripeSubscription({
         {
           current_period_end: created + 30 * 24 * 60 * 60,
           price: {
-            id:
-              plan === "annual"
-                ? validStripeEnv.annualPriceId
-                : validStripeEnv.monthlyPriceId,
+            id: resolvedPriceId,
           },
         },
       ],
     },
     metadata: {
       clerkUserId,
+      ...(friendOfRubyUntil ? { friend_of_ruby_until: friendOfRubyUntil } : {}),
       rubyWhisperPlan: plan,
       ...privateMetadata,
     },

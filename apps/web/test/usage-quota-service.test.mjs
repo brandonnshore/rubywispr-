@@ -150,6 +150,9 @@ test("paid and Friend users are allowed without spending trial words", async () 
   const friendEntitlement = service.evaluateRubyWhisperQuotaEntitlement({
     friendOfRubyUntil: "2026-06-01T00:00:00.000Z",
     now: "2026-05-04T05:45:00.000Z",
+    planState: "friend_of_ruby_active",
+    requiresSubscription: true,
+    subscriptionStatus: "canceled",
     usageCounters: usageCounters({ trialWordsUsed: 5_000 }),
   });
 
@@ -166,6 +169,30 @@ test("paid and Friend users are allowed without spending trial words", async () 
     planState: "friend_of_ruby_active",
     preflightPolicy: "allow_if_started_under_limit",
     status: "allowed",
+  });
+
+  const expiredFriendEntitlement = service.evaluateRubyWhisperQuotaEntitlement({
+    friendOfRubyUntil: "2026-04-01T00:00:00.000Z",
+    now: "2026-05-04T05:45:00.000Z",
+    requiresSubscription: true,
+    subscriptionStatus: "canceled",
+    usageCounters: usageCounters({ trialWordsUsed: 5_000 }),
+  });
+
+  assert.deepEqual(toPlainObject(expiredFriendEntitlement), {
+    canTranscribe: false,
+    errorCode: "subscription_required",
+    metadata: {
+      isTrialLow: false,
+      planState: "subscription_required",
+      trialWordsLimit: 5_000,
+      trialWordsRemaining: 0,
+      trialWordsUsed: 5_000,
+    },
+    ok: false,
+    planState: "subscription_required",
+    preflightPolicy: "allow_if_started_under_limit",
+    status: "subscription_required",
   });
 });
 

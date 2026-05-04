@@ -25,6 +25,7 @@ const periodEndIso = "2026-05-04T12:00:00.000Z";
 const nextPeriodEnd = 1780574400;
 const nextPeriodEndIso = "2026-06-04T12:00:00.000Z";
 const friendUntil = "2027-05-04T12:00:00.000Z";
+const expiredFriendUntil = "2026-04-04T12:00:00.000Z";
 const priceIds = {
   annual: "price_annual_synthetic",
   monthly: "price_monthly_synthetic",
@@ -226,6 +227,81 @@ test("Stripe subscription cache mapper keeps Friend of Ruby metadata only", asyn
     },
     status: "mapped",
   });
+});
+
+test("Stripe subscription cache mapper accepts active Friend of Ruby customer metadata", async () => {
+  const helper = await loadStripeSubscriptionCacheHelper();
+  const result = helper.mapStripeSubscriptionEventToCacheRow({
+    event: stripeEvent(
+      "customer.subscription.updated",
+      stripeSubscription({
+        customer: stripeCustomer({
+          metadata: {
+            clerkUserId: "user_rw_synthetic_friend_customer_001",
+            friend_of_ruby_until: `${Math.floor(Date.parse(friendUntil) / 1000)}`,
+          },
+        }),
+        metadata: {},
+        priceId: "price_friend_unknown",
+        status: "active",
+      }),
+    ),
+    now,
+    priceIds,
+  });
+
+  assert.deepEqual(toPlainObject(result), {
+    action: "mapped",
+    ok: true,
+    row: {
+      clerk_user_id: "user_rw_synthetic_friend_customer_001",
+      current_period_end: periodEndIso,
+      friend_of_ruby_until: friendUntil,
+      plan: "friend_of_ruby",
+      status: "active",
+      stripe_customer_id: "cus_rw_synthetic_member_001",
+      stripe_subscription_id: "sub_rw_synthetic_member_001",
+      updated_at: now,
+    },
+    status: "mapped",
+  });
+});
+
+test("Stripe subscription cache mapper does not grant expired Friend of Ruby metadata", async () => {
+  const helper = await loadStripeSubscriptionCacheHelper();
+  const result = helper.mapStripeSubscriptionEventToCacheRow({
+    event: stripeEvent(
+      "customer.subscription.updated",
+      stripeSubscription({
+        metadata: {
+          clerkUserId: "user_rw_synthetic_friend_expired_001",
+          rubyWhisperPlan: "friend_of_ruby",
+          ruby_whisper_friend_of_ruby_until: expiredFriendUntil,
+        },
+        priceId: "price_friend_unknown",
+        status: "active",
+      }),
+    ),
+    now,
+    priceIds,
+  });
+
+  assert.deepEqual(toPlainObject(result), {
+    action: "mapped",
+    ok: true,
+    row: {
+      clerk_user_id: "user_rw_synthetic_friend_expired_001",
+      current_period_end: periodEndIso,
+      friend_of_ruby_until: expiredFriendUntil,
+      plan: "unknown",
+      status: "canceled",
+      stripe_customer_id: "cus_rw_synthetic_member_001",
+      stripe_subscription_id: "sub_rw_synthetic_member_001",
+      updated_at: now,
+    },
+    status: "mapped",
+  });
+  assert.doesNotMatch(JSON.stringify(result), forbiddenPrivateFixturePattern);
 });
 
 test("Stripe subscription cache mapper fails safely for missing metadata and unknown active plans", async () => {

@@ -155,6 +155,45 @@ test("subscription cache helper preserves active Friend of Ruby entitlement date
   });
 });
 
+test("subscription cache helper preserves expired Friend metadata without entitlement", async () => {
+  const helper = await loadSubscriptionCacheHelper();
+  const row = {
+    clerk_user_id: "user_rw_synthetic_friend_expired_001",
+    current_period_end: null,
+    friend_of_ruby_until: "2026-04-04T05:00:00.000Z",
+    plan: "friend_of_ruby",
+    status: "canceled",
+    updated_at: "2026-05-04T05:10:00.000Z",
+  };
+  const { client } = createSubscriptionCacheClient({ row });
+
+  const result = await helper.readRubyWhisperSubscriptionCache(
+    {
+      clerkUserId: "user_rw_synthetic_friend_expired_001",
+      now: "2026-05-04T05:00:00.000Z",
+    },
+    () => client,
+  );
+
+  assert.deepEqual(toPlainObject(result), {
+    action: "found",
+    ok: true,
+    subscription: {
+      clerkUserId: "user_rw_synthetic_friend_expired_001",
+      friendOfRubyUntil: "2026-04-04T05:00:00.000Z",
+      hasActiveSubscription: false,
+      isFriendOfRubyActive: false,
+      paymentFailed: false,
+      plan: "friend_of_ruby",
+      planState: "subscription_required",
+      requiresSubscription: true,
+      subscriptionStatus: "canceled",
+      updatedAt: "2026-05-04T05:10:00.000Z",
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(result), forbiddenPrivateFixturePattern);
+});
+
 test("subscription cache helper maps billing attention statuses to payment_failed", async () => {
   const helper = await loadSubscriptionCacheHelper();
 
