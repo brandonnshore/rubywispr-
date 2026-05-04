@@ -25,6 +25,7 @@ const sensitiveSourceRoots = [
   path.join(srcRoot, "lib", "observability"),
   path.join(srcRoot, "lib", "providers"),
   path.join(srcRoot, "lib", "supabase"),
+  path.join(srcRoot, "lib", "usage"),
   path.join(srcRoot, "proxy.ts"),
 ];
 const approvedPrivacyLoggerPath = path.join(
