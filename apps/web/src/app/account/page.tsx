@@ -63,9 +63,30 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           message={termsMessage}
           termsState={termsState}
         />
+        <DownloadSection />
         <BillingActionsSection message={billingMessage} />
       </section>
     </main>
+  );
+}
+
+function DownloadSection() {
+  return (
+    <section
+      className="status-panel account-status"
+      aria-labelledby="account-download-heading"
+    >
+      <p className="account-status-label">Download</p>
+      <h2 id="account-download-heading">Mac beta app</h2>
+      <p>
+        Download status lives on the public download page so release hosting
+        can be updated without putting local paths or private URLs in account
+        copy.
+      </p>
+      <Link className="rw-button rw-button-secondary" href="/download">
+        Open download page
+      </Link>
+    </section>
   );
 }
 

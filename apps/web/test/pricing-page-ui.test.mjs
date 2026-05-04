@@ -61,7 +61,10 @@ test("public home links visitors to pricing", async () => {
   const source = await readFile(publicPagePath, "utf8");
 
   assert.match(source, /href:\s*["']\/pricing["']/);
+  assert.match(source, /href:\s*["']\/download["']/);
+  assert.match(source, /<Link href="\/download">Download<\/Link>/);
   assert.match(source, /<Link href="\/pricing">Pricing<\/Link>/);
+  assert.match(source, /Download beta/);
   assert.match(source, /View pricing/);
 });
 

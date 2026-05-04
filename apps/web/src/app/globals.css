@@ -146,7 +146,10 @@ button {
 h1,
 h2,
 h3,
-p {
+p,
+li,
+small {
+  min-width: 0;
   overflow-wrap: break-word;
 }
 
@@ -162,6 +165,7 @@ h1 {
 .rw-page-shell,
 .surface-shell {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 100vh;
   place-items: start center;
   padding: clamp(var(--rw-space-8), 7vw, 56px) var(--rw-space-6);
@@ -169,6 +173,7 @@ h1 {
 
 .rw-container,
 .surface-panel {
+  justify-self: center;
   width: min(100%, 720px);
   padding: clamp(28px, 5vw, 56px);
 }
@@ -314,6 +319,12 @@ h1 {
   margin-bottom: clamp(var(--rw-space-8), 7vw, 64px);
 }
 
+.route-header > *,
+.account-heading > *,
+.admin-heading > * {
+  min-width: 0;
+}
+
 .route-brand {
   color: var(--rw-color-text-primary);
   font-weight: 800;
@@ -390,7 +401,7 @@ h1 {
 }
 
 .public-route-list {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
 }
 
 @media (max-width: 900px) {
@@ -431,18 +442,29 @@ h1 {
   width: min(100%, 1040px);
 }
 
-.pricing-hero {
+.pricing-hero,
+.download-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
   gap: clamp(var(--rw-space-6), 6vw, 64px);
   align-items: end;
 }
 
-.pricing-hero h1 {
+.pricing-hero > *,
+.download-hero > *,
+.pricing-included > *,
+.download-details > *,
+.download-status > * {
+  min-width: 0;
+}
+
+.pricing-hero h1,
+.download-hero h1 {
   max-width: 12ch;
 }
 
-.pricing-hero-copy {
+.pricing-hero-copy,
+.download-hero-copy {
   margin-top: 0;
 }
 
@@ -573,13 +595,101 @@ h1 {
   padding-left: var(--rw-space-3);
 }
 
+.download-panel {
+  width: min(100%, 1040px);
+}
+
+.download-status {
+  display: grid;
+  gap: var(--rw-space-4);
+  margin-top: clamp(var(--rw-space-8), 7vw, 64px);
+}
+
+.download-status h2,
+.download-details h2 {
+  margin: 0;
+  color: var(--rw-color-text-primary);
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.download-status p {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--rw-color-text-secondary);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.download-status-ready {
+  border-color: var(--rw-color-success-border);
+  background: var(--rw-color-success-soft);
+}
+
+.download-status-ready .account-status-label {
+  color: var(--rw-color-success);
+}
+
+.download-status-placeholder {
+  border-color: var(--rw-color-warning-border);
+  background: var(--rw-color-warning-soft);
+}
+
+.download-status-placeholder .account-status-label {
+  color: var(--rw-color-warning);
+}
+
+.download-details {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.58fr) minmax(0, 1fr);
+  gap: clamp(var(--rw-space-6), 5vw, 48px);
+  margin-top: clamp(var(--rw-space-8), 7vw, 64px);
+  border-top: 1px solid var(--rw-color-border);
+  padding-top: var(--rw-space-8);
+}
+
+.download-details ul {
+  display: grid;
+  gap: var(--rw-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.download-details li {
+  position: relative;
+  color: var(--rw-color-text-secondary);
+  font-size: 1rem;
+  line-height: 1.55;
+  padding-left: 22px;
+}
+
+.download-details li::before {
+  position: absolute;
+  top: 0.68em;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rw-color-accent);
+  content: "";
+}
+
+.download-route-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 @media (max-width: 900px) {
   .pricing-hero,
-  .pricing-included {
+  .download-hero,
+  .pricing-included,
+  .download-details {
     grid-template-columns: 1fr;
   }
 
-  .pricing-hero-copy {
+  .pricing-hero-copy,
+  .download-hero-copy {
     margin-top: var(--rw-space-2);
   }
 }
@@ -596,6 +706,10 @@ h1 {
   .pricing-card form,
   .pricing-card button {
     width: 100%;
+  }
+
+  .download-route-list {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -818,6 +932,9 @@ h1 {
 
   .rw-container,
   .surface-panel {
+    justify-self: stretch;
+    width: 100%;
+    max-width: 100%;
     padding: var(--rw-space-4) 0;
   }
 
