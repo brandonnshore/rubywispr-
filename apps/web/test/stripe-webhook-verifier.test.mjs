@@ -219,6 +219,30 @@ test("Stripe webhook verifier maps verifier exceptions to sanitized signature er
   assert.doesNotMatch(JSON.stringify(result), /whsec_private_fixture|bad_signature/);
 });
 
+test("Stripe webhook verifier fails closed when client creation throws", async () => {
+  const billing = await loadStripeBillingModule();
+  const result = billing.verifyStripeWebhookEvent({
+    createClient() {
+      throw new Error("Stripe client creation failed with sk_test_private_fixture");
+    },
+    env: validWebhookEnv,
+    rawBody: "{}",
+    signatureHeader: "t=1700000000,v1=rw_signature",
+  });
+
+  assert.deepEqual(toPlainValue(result), {
+    error: {
+      code: "stripe_webhook_config_invalid",
+      httpStatus: 503,
+      invalidFields: ["secretKey"],
+      message: "Stripe webhook could not be verified.",
+      missingFields: [],
+    },
+    ok: false,
+  });
+  assert.doesNotMatch(JSON.stringify(result), /sk_test_private_fixture|whsec_/);
+});
+
 async function loadStripeBillingModule(serverStripeEnv = validWebhookEnv) {
   const source = await readFile(helperPath, "utf8");
   const executableSource = source

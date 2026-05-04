@@ -349,9 +349,24 @@ export const verifyStripeWebhookEvent = <
   const createClient =
     input.createClient ??
     (createStripeClient as unknown as StripeBillingClientFactory<Client>);
-  const client = createClient(configResult.secretKey, {
-    apiVersion: configResult.config.apiVersion,
-  });
+  let client: Client;
+
+  try {
+    client = createClient(configResult.secretKey, {
+      apiVersion: configResult.config.apiVersion,
+    });
+  } catch {
+    return {
+      ok: false,
+      error: createStripeWebhookVerificationError({
+        code: "stripe_webhook_config_invalid",
+        httpStatus: 503,
+        invalidFields: ["secretKey"],
+        missingFields: [],
+      }),
+    };
+  }
+
   const constructEvent =
     input.constructEvent ?? defaultConstructStripeWebhookEvent;
 
