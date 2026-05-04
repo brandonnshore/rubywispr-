@@ -49,6 +49,10 @@ const serverProviderHelpers = [
     moduleSpecifier: "@/lib/providers/client",
     path: path.join(srcRoot, "lib", "providers", "client.ts"),
   },
+  {
+    moduleSpecifier: "@/lib/providers/groq",
+    path: path.join(srcRoot, "lib", "providers", "groq.ts"),
+  },
 ];
 const serverOnlyHelpers = [
   ...serverAuthHelpers,
