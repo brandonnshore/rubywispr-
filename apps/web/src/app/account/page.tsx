@@ -1,6 +1,11 @@
 import { requireClerkUserIdForPage } from "@/lib/auth/clerk";
 
-import { acceptAccountTermsPrivacy } from "./actions";
+import {
+  acceptAccountTermsPrivacy,
+  openBillingPortal,
+  startAnnualCheckout,
+  startMonthlyCheckout,
+} from "./actions";
 import {
   readAccountTermsAcceptanceState,
   type AccountTermsAcceptanceState,
@@ -11,6 +16,8 @@ export const dynamic = "force-dynamic";
 type AccountPageProps = Readonly<{
   searchParams?: Promise<
     Readonly<{
+      billing?: string | string[];
+      checkout?: string | string[];
       terms?: string | string[];
     }>
   >;
@@ -19,9 +26,10 @@ type AccountPageProps = Readonly<{
 export default async function AccountPage({ searchParams }: AccountPageProps) {
   await requireClerkUserIdForPage();
 
-  const [termsState, termsMessage] = await Promise.all([
+  const [termsState, termsMessage, billingMessage] = await Promise.all([
     readAccountTermsAcceptanceState(),
     resolveTermsMessage(searchParams),
+    resolveBillingMessage(searchParams),
   ]);
 
   return (
@@ -41,8 +49,42 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           message={termsMessage}
           termsState={termsState}
         />
+        <BillingActionsSection message={billingMessage} />
       </section>
     </main>
+  );
+}
+
+function BillingActionsSection({
+  message,
+}: Readonly<{
+  message: string | null;
+}>) {
+  return (
+    <section className="account-status" aria-labelledby="billing-heading">
+      <p className="account-status-label">Billing</p>
+      <h2 id="billing-heading">Plan and billing</h2>
+      <p>
+        Choose a paid RubyWhisper plan or open billing management for an
+        existing subscription. Billing setup is handled by the server.
+      </p>
+      {message ? (
+        <p className="account-feedback" role="status" aria-live="polite">
+          {message}
+        </p>
+      ) : null}
+      <div className="account-billing-actions" aria-label="Billing actions">
+        <form action={startMonthlyCheckout}>
+          <button type="submit">Upgrade monthly</button>
+        </form>
+        <form action={startAnnualCheckout}>
+          <button type="submit">Upgrade annual</button>
+        </form>
+        <form action={openBillingPortal}>
+          <button type="submit">Manage billing</button>
+        </form>
+      </div>
+    </section>
   );
 }
 
@@ -154,6 +196,42 @@ async function resolveTermsMessage(
     default:
       return null;
   }
+}
+
+async function resolveBillingMessage(
+  searchParams: AccountPageProps["searchParams"],
+) {
+  const params = await searchParams;
+  const billingValue = normalizeSearchParam(params?.billing);
+  const checkoutValue = normalizeSearchParam(params?.checkout);
+
+  switch (billingValue) {
+    case "checkout_unavailable":
+      return "Checkout is temporarily unavailable. Try again later.";
+    case "customer_missing":
+      return "Billing management is available after a subscription has been created for this account.";
+    case "portal_return":
+      return "Billing management was closed.";
+    case "portal_unavailable":
+      return "Billing management is temporarily unavailable. Try again later.";
+    case "signed_out":
+      return "Sign in before managing billing.";
+    default:
+      break;
+  }
+
+  switch (checkoutValue) {
+    case "cancelled":
+      return "Checkout was cancelled. No billing changes were made.";
+    case "success":
+      return "Checkout was completed. Your account may take a moment to update.";
+    default:
+      return null;
+  }
+}
+
+function normalizeSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function formatAcceptedAt(value: string) {
