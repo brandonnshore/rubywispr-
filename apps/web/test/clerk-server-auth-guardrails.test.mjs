@@ -70,14 +70,17 @@ test("server auth helper returns structured unauthenticated JSON for API routes"
 });
 
 test("public marketing and status routes remain outside protected decisions", async () => {
-  const [publicPage, statusRoute, proxy] = await Promise.all([
+  const [publicPage, pricingPage, statusRoute, proxy] = await Promise.all([
     readFile(path.join("src", "app", "(public)", "page.tsx"), "utf8"),
+    readFile(path.join("src", "app", "(public)", "pricing", "page.tsx"), "utf8"),
     readFile(path.join("src", "app", "api", "status", "route.ts"), "utf8"),
     readFile(path.join("src", "proxy.ts"), "utf8"),
   ]);
 
   assert.match(publicPage, /href:\s*["']\/api\/status["']/);
+  assert.match(publicPage, /href:\s*["']\/pricing["']/);
   assert.doesNotMatch(publicPage, /requireClerkUserId|auth\(|useAuth/);
+  assert.doesNotMatch(pricingPage, /requireClerkUserId|auth\(|useAuth/);
   assert.doesNotMatch(statusRoute, /requireClerkUserId|auth\(|useAuth/);
   assert.doesNotMatch(proxy, /createRouteMatcher\(\[[^\]]*\/api\/status/s);
 });

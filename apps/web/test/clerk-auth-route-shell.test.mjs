@@ -29,6 +29,7 @@ test("Clerk email auth route shell uses App Router catch-all pages", async () =>
   assert.match(signUpPage, /<AuthRouteShell mode="sign-up" \/>/);
   assert.match(publicPage, /href: "\/sign-in"/);
   assert.match(publicPage, /href: "\/sign-up"/);
+  assert.match(publicPage, /href: "\/pricing"/);
 });
 
 test("launch auth copy stays email-only", async () => {
