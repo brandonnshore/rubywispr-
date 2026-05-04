@@ -1,5 +1,15 @@
 const routeAreas = [
   {
+    href: "/sign-in",
+    label: "Sign in",
+    owner: "Email link entry point for returning RubyWhisper users.",
+  },
+  {
+    href: "/sign-up",
+    label: "Sign up",
+    owner: "Email link account creation for new RubyWhisper users.",
+  },
+  {
     href: "/account",
     label: "Account",
     owner: "Future Clerk-protected customer account surface.",

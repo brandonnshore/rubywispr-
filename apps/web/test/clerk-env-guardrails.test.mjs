@@ -14,7 +14,7 @@ const sourceFileExtensions = new Set([".ts", ".tsx"]);
 const clerkServerSecretNames = ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SECRET"];
 const clerkPublicName = "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY";
 
-test("Clerk SDK foundation is installed without activating client bundle wiring", async () => {
+test("Clerk SDK foundation is installed without activating global client bundle wiring", async () => {
   const packageJson = JSON.parse(
     await readFile(path.join(webRoot, "package.json"), "utf8"),
   );
@@ -70,11 +70,12 @@ test("Clerk placeholders expose only the publishable key as NEXT_PUBLIC", async 
   }
 });
 
-test("client-facing source does not reference Clerk server secrets or provider SDK", async () => {
+test("client-facing source references Clerk provider SDK only from auth route shell", async () => {
   const violations = [];
 
   for (const filePath of await listSourceFiles(srcRoot)) {
     const source = await readFile(filePath, "utf8");
+    const relativePath = normalizePath(path.relative(webRoot, filePath));
 
     if (!isClientFacingSource(filePath, source)) {
       continue;
@@ -87,7 +88,10 @@ test("client-facing source does not reference Clerk server secrets or provider S
     }
 
     for (const moduleSpecifier of extractModuleSpecifiers(source)) {
-      if (moduleSpecifier === "@clerk/nextjs") {
+      if (
+        moduleSpecifier === "@clerk/nextjs" &&
+        !relativePath.startsWith("src/app/(auth)/")
+      ) {
         violations.push(
           `${path.relative(webRoot, filePath)} imports ${moduleSpecifier}`,
         );

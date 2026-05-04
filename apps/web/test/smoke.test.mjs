@@ -20,9 +20,11 @@ test("typecheck ignores stale Next dev server metadata", async () => {
   assert.deepEqual(typecheckConfig.exclude, ["node_modules", ".next/dev"]);
 });
 
-test("RubyWhisper route skeleton exposes public, account, admin, and API areas", async () => {
+test("RubyWhisper route skeleton exposes public, auth, account, admin, and API areas", async () => {
   await Promise.all([
     access("src/app/(public)/page.tsx"),
+    access("src/app/(auth)/sign-in/[[...sign-in]]/page.tsx"),
+    access("src/app/(auth)/sign-up/[[...sign-up]]/page.tsx"),
     access("src/app/account/page.tsx"),
     access("src/app/admin/page.tsx"),
     access("src/app/api/status/route.ts"),
