@@ -21,6 +21,8 @@ export const supabaseTranscriptionRateLimitsColumns =
   "clerk_user_id,request_count,window_start,updated_at" as const;
 export const supabaseTranscriptionRateLimitsUpsertConflictTarget =
   "clerk_user_id" as const;
+export const supabaseClaimTranscriptionRateLimitRpcName =
+  "claim_transcription_rate_limit" as const;
 
 export type SupabaseTranscriptionRateLimitRow = Readonly<{
   clerk_user_id: string;
@@ -40,14 +42,15 @@ export type RubyWhisperPersistentTranscriptionRateLimitError = Readonly<{
   code:
     | "missing_clerk_user_id"
     | "supabase_transcription_rate_limit_read_failed"
-    | "supabase_transcription_rate_limit_write_failed";
+    | "supabase_transcription_rate_limit_write_failed"
+    | "supabase_transcription_rate_limit_claim_failed";
   message: string;
 }>;
 
 export type RubyWhisperPersistentTranscriptionRateLimitFailure = Readonly<{
   error: RubyWhisperPersistentTranscriptionRateLimitError;
   ok: false;
-  status: "missing_user" | "read_failed" | "write_failed";
+  status: "claim_failed" | "missing_user" | "read_failed" | "write_failed";
 }>;
 
 export type RubyWhisperPersistentTranscriptionRateLimitAllowedResult =
@@ -76,6 +79,27 @@ export type RubyWhisperPersistentTranscriptionRateLimitDeniedResult =
 export type RubyWhisperPersistentTranscriptionRateLimitResult =
   | RubyWhisperPersistentTranscriptionRateLimitAllowedResult
   | RubyWhisperPersistentTranscriptionRateLimitDeniedResult
+  | RubyWhisperPersistentTranscriptionRateLimitFailure;
+
+export type RubyWhisperAtomicTranscriptionRateLimitAllowedResult = Readonly<{
+  action: "claimed";
+  metadata: RubyWhisperTranscriptionRateLimitMetadata;
+  ok: true;
+  status: "allowed";
+}>;
+
+export type RubyWhisperAtomicTranscriptionRateLimitDeniedResult = Readonly<{
+  action: "rate_limited";
+  apiErrorMetadata: RubyWhisperTranscriptionRateLimitMetadata;
+  errorCode: "rate_limited";
+  metadata: RubyWhisperTranscriptionRateLimitMetadata;
+  ok: false;
+  status: "rate_limited";
+}>;
+
+export type RubyWhisperAtomicTranscriptionRateLimitResult =
+  | RubyWhisperAtomicTranscriptionRateLimitAllowedResult
+  | RubyWhisperAtomicTranscriptionRateLimitDeniedResult
   | RubyWhisperPersistentTranscriptionRateLimitFailure;
 
 export type EvaluateAndPersistRubyWhisperTranscriptionRateLimitInput =
@@ -125,6 +149,82 @@ export type SupabaseTranscriptionRateLimitsClient = Readonly<{
     tableName: typeof supabaseTranscriptionRateLimitsTableName,
   ) => SupabaseTranscriptionRateLimitsTableQuery;
 }>;
+
+export type ClaimRubyWhisperTranscriptionRateLimitInput =
+  EvaluateAndPersistRubyWhisperTranscriptionRateLimitInput;
+
+export type SupabaseClaimTranscriptionRateLimitRpcArgs = Readonly<{
+  p_clerk_user_id: string;
+  p_limit: number;
+  p_now: string;
+  p_window_seconds: number;
+}>;
+
+export type SupabaseClaimTranscriptionRateLimitRow = Readonly<{
+  limit: number;
+  request_count: number;
+  retry_after_seconds: number | null;
+  status: "allowed" | "rate_limited";
+  window_end: string;
+  window_start: string;
+}>;
+
+export type SupabaseClaimTranscriptionRateLimitSingleResult = Readonly<{
+  data: SupabaseClaimTranscriptionRateLimitRow | null;
+  error: unknown | null;
+}>;
+
+export type SupabaseClaimTranscriptionRateLimitRpcQuery = Readonly<{
+  maybeSingle: () => PromiseLike<SupabaseClaimTranscriptionRateLimitSingleResult>;
+}>;
+
+export type SupabaseClaimTranscriptionRateLimitClient = Readonly<{
+  rpc: (
+    functionName: typeof supabaseClaimTranscriptionRateLimitRpcName,
+    args: SupabaseClaimTranscriptionRateLimitRpcArgs,
+  ) => SupabaseClaimTranscriptionRateLimitRpcQuery;
+}>;
+
+export async function claimRubyWhisperTranscriptionRateLimit<
+  Client extends SupabaseClaimTranscriptionRateLimitClient,
+>(
+  input: ClaimRubyWhisperTranscriptionRateLimitInput,
+  createClient: SupabaseServiceRoleClientFactory<Client>,
+): Promise<RubyWhisperAtomicTranscriptionRateLimitResult> {
+  const clerkUserId = normalizeText(input.clerkUserId);
+
+  if (!clerkUserId) {
+    return missingUserResult();
+  }
+
+  const now = normalizeTimestamp(input.now);
+  const claimPolicy = claimPolicyFromEvaluator({
+    clerkUserId,
+    now,
+    planState: input.planState,
+    policy: input.policy,
+  });
+
+  if (!claimPolicy) {
+    return missingUserResult();
+  }
+
+  const client = createSupabaseServiceRoleClient(createClient);
+  const { data, error } = await client
+    .rpc(supabaseClaimTranscriptionRateLimitRpcName, {
+      p_clerk_user_id: clerkUserId,
+      p_limit: claimPolicy.limit,
+      p_now: now,
+      p_window_seconds: claimPolicy.windowSeconds,
+    })
+    .maybeSingle();
+
+  if (error || !data) {
+    return claimFailedResult();
+  }
+
+  return atomicClaimResultFromRow(data);
+}
 
 export async function evaluateAndPersistRubyWhisperTranscriptionRateLimit<
   Client extends SupabaseTranscriptionRateLimitsClient,
@@ -225,6 +325,101 @@ function createRateLimitUpsert(
   };
 }
 
+function atomicClaimResultFromRow(
+  row: SupabaseClaimTranscriptionRateLimitRow,
+): RubyWhisperAtomicTranscriptionRateLimitResult {
+  const metadata = rateLimitMetadataFromRpcRow(row);
+
+  if (!metadata) {
+    return claimFailedResult();
+  }
+
+  if (row.status === "allowed") {
+    return {
+      action: "claimed",
+      metadata,
+      ok: true,
+      status: "allowed",
+    };
+  }
+
+  if (row.status === "rate_limited") {
+    return {
+      action: "rate_limited",
+      apiErrorMetadata: metadata,
+      errorCode: "rate_limited",
+      metadata,
+      ok: false,
+      status: "rate_limited",
+    };
+  }
+
+  return claimFailedResult();
+}
+
+function rateLimitMetadataFromRpcRow(
+  row: SupabaseClaimTranscriptionRateLimitRow,
+): RubyWhisperTranscriptionRateLimitMetadata | undefined {
+  const limit = normalizePositiveInteger(row.limit);
+  const requestCount = normalizeNonnegativeInteger(row.request_count);
+  const windowStart = normalizeRequiredTimestamp(row.window_start);
+  const windowEnd = normalizeRequiredTimestamp(row.window_end);
+
+  if (!limit || requestCount === undefined || !windowStart || !windowEnd) {
+    return undefined;
+  }
+
+  return {
+    limit,
+    requestCount,
+    ...(row.status === "rate_limited"
+      ? { retryAfterSeconds: normalizeRetryAfter(row.retry_after_seconds) }
+      : {}),
+    windowEnd,
+    windowStart,
+  };
+}
+
+function claimPolicyFromEvaluator(input: {
+  clerkUserId: string;
+  now: string;
+  planState: RubyWhisperTranscriptionRateLimitInput["planState"];
+  policy: RubyWhisperTranscriptionRateLimitPolicy | undefined;
+}) {
+  const evaluation = evaluateRubyWhisperTranscriptionRateLimit({
+    clerkUserId: input.clerkUserId,
+    now: input.now,
+    planState: input.planState,
+    policy: input.policy,
+    requestCount: 0,
+    windowStart: input.now,
+  });
+
+  if (!evaluation.ok) {
+    return undefined;
+  }
+
+  const windowStartMs = new Date(evaluation.metadata.windowStart).getTime();
+  const windowEndMs = new Date(evaluation.metadata.windowEnd).getTime();
+  const windowSeconds = Math.ceil((windowEndMs - windowStartMs) / 1_000);
+
+  return {
+    limit: evaluation.metadata.limit,
+    windowSeconds: windowSeconds > 0 ? windowSeconds : 1,
+  };
+}
+
+function claimFailedResult(): RubyWhisperPersistentTranscriptionRateLimitFailure {
+  return {
+    error: {
+      code: "supabase_transcription_rate_limit_claim_failed",
+      message: "Unable to claim transcription rate-limit metadata.",
+    },
+    ok: false,
+    status: "claim_failed",
+  };
+}
+
 function missingUserResult(): RubyWhisperPersistentTranscriptionRateLimitFailure {
   return {
     error: {
@@ -244,6 +439,38 @@ function normalizeText(value: string | null | undefined) {
   }
 
   return trimmedValue;
+}
+
+function normalizePositiveInteger(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(value));
+}
+
+function normalizeNonnegativeInteger(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+
+  return Math.floor(value);
+}
+
+function normalizeRetryAfter(value: unknown) {
+  const retryAfterSeconds = normalizePositiveInteger(value);
+
+  return retryAfterSeconds > 0 ? retryAfterSeconds : 1;
+}
+
+function normalizeRequiredTimestamp(value: unknown) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const timestamp = new Date(value);
+
+  return Number.isFinite(timestamp.getTime()) ? timestamp.toISOString() : undefined;
 }
 
 function normalizeTimestamp(nowInput: RubyWhisperTranscriptionRateLimitInput["now"]) {
