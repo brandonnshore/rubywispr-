@@ -168,46 +168,52 @@ export async function claimStripeWebhookEvent<
     return invalidInputResult();
   }
 
-  const now = normalizeTimestamp(input.now);
-  const client = createSupabaseServiceRoleClient(createClient);
-  const { data, error } = await client
-    .from(supabaseStripeWebhookEventsTableName)
-    .insert({
-      created_at: now,
-      event_type: eventType,
-      status: "processing",
-      stripe_created_at: normalizeStripeCreatedTimestamp(input.stripeCreatedAt),
-      stripe_event_id: eventId,
-      updated_at: now,
-    })
-    .select(supabaseStripeWebhookEventsColumns)
-    .maybeSingle();
+  try {
+    const now = normalizeTimestamp(input.now);
+    const client = createSupabaseServiceRoleClient(createClient);
+    const { data, error } = await client
+      .from(supabaseStripeWebhookEventsTableName)
+      .insert({
+        created_at: now,
+        event_type: eventType,
+        status: "processing",
+        stripe_created_at: normalizeStripeCreatedTimestamp(
+          input.stripeCreatedAt,
+        ),
+        stripe_event_id: eventId,
+        updated_at: now,
+      })
+      .select(supabaseStripeWebhookEventsColumns)
+      .maybeSingle();
 
-  if (!error && data) {
+    if (!error && data) {
+      return {
+        action: "claimed",
+        event: data,
+        ok: true,
+        status: "claimed",
+      };
+    }
+
+    if (!isUniqueConstraintError(error)) {
+      return claimFailedResult();
+    }
+
+    const existingEvent = await readStripeWebhookEvent(client, eventId);
+
+    if (!existingEvent) {
+      return claimFailedResult();
+    }
+
     return {
-      action: "claimed",
-      event: data,
-      ok: true,
-      status: "claimed",
+      action: "duplicate",
+      event: existingEvent,
+      ok: false,
+      status: "duplicate",
     };
-  }
-
-  if (!isUniqueConstraintError(error)) {
+  } catch {
     return claimFailedResult();
   }
-
-  const existingEvent = await readStripeWebhookEvent(client, eventId);
-
-  if (!existingEvent) {
-    return claimFailedResult();
-  }
-
-  return {
-    action: "duplicate",
-    event: existingEvent,
-    ok: false,
-    status: "duplicate",
-  };
 }
 
 export async function markStripeWebhookEventProcessed<
@@ -291,21 +297,27 @@ async function updateStripeWebhookEvent<
   status: "failed" | "processed",
   createClient: SupabaseServiceRoleClientFactory<Client>,
 ): Promise<MarkStripeWebhookEventResult> {
-  const client = createSupabaseServiceRoleClient(createClient);
-  const { data, error } = await client
-    .from(supabaseStripeWebhookEventsTableName)
-    .update(event)
-    .select(supabaseStripeWebhookEventsColumns)
-    .eq("stripe_event_id", eventId)
-    .maybeSingle();
+  let result: SupabaseStripeWebhookEventSingleResult;
 
-  if (error || !data) {
+  try {
+    const client = createSupabaseServiceRoleClient(createClient);
+    result = await client
+      .from(supabaseStripeWebhookEventsTableName)
+      .update(event)
+      .select(supabaseStripeWebhookEventsColumns)
+      .eq("stripe_event_id", eventId)
+      .maybeSingle();
+  } catch {
+    return updateFailedResult();
+  }
+
+  if (result.error || !result.data) {
     return updateFailedResult();
   }
 
   return {
     action,
-    event: data,
+    event: result.data,
     ok: true,
     status,
   };

@@ -220,6 +220,44 @@ test("Stripe webhook idempotency helper fails closed for backend errors", async 
     },
   );
 
+  const factoryFailure = await helper.claimStripeWebhookEvent(
+    { eventId, eventType, now },
+    () => {
+      throw new Error("private service-role config detail");
+    },
+  );
+
+  assert.deepEqual(toPlainObject(factoryFailure), {
+    error: {
+      code: "supabase_stripe_webhook_event_claim_failed",
+      message: "Unable to claim Stripe webhook event metadata.",
+    },
+    ok: false,
+    status: "claim_failed",
+  });
+  assert.doesNotMatch(JSON.stringify(factoryFailure), /service-role config/i);
+
+  const { client: rejectedInsertClient } = createStripeWebhookEventsClient({
+    rejectInsert: true,
+  });
+
+  assert.deepEqual(
+    toPlainObject(
+      await helper.claimStripeWebhookEvent(
+        { eventId, eventType, now },
+        () => rejectedInsertClient,
+      ),
+    ),
+    {
+      error: {
+        code: "supabase_stripe_webhook_event_claim_failed",
+        message: "Unable to claim Stripe webhook event metadata.",
+      },
+      ok: false,
+      status: "claim_failed",
+    },
+  );
+
   const { client: duplicateReadFailureClient } = createStripeWebhookEventsClient({
     insertError: { code: "23505", message: "duplicate key detail" },
     readError: { message: "backend detail must not echo" },
@@ -242,6 +280,29 @@ test("Stripe webhook idempotency helper fails closed for backend errors", async 
     },
   );
 
+  const { client: rejectedDuplicateReadClient } =
+    createStripeWebhookEventsClient({
+      insertError: { code: "23505", message: "duplicate key detail" },
+      rejectRead: true,
+    });
+
+  assert.deepEqual(
+    toPlainObject(
+      await helper.claimStripeWebhookEvent(
+        { eventId, eventType, now },
+        () => rejectedDuplicateReadClient,
+      ),
+    ),
+    {
+      error: {
+        code: "supabase_stripe_webhook_event_claim_failed",
+        message: "Unable to claim Stripe webhook event metadata.",
+      },
+      ok: false,
+      status: "claim_failed",
+    },
+  );
+
   const { client: updateFailureClient } = createStripeWebhookEventsClient({
     updateError: { message: "backend detail must not echo" },
   });
@@ -251,6 +312,45 @@ test("Stripe webhook idempotency helper fails closed for backend errors", async 
       await helper.markStripeWebhookEventProcessed(
         { eventId, now },
         () => updateFailureClient,
+      ),
+    ),
+    {
+      error: {
+        code: "supabase_stripe_webhook_event_update_failed",
+        message: "Unable to update Stripe webhook event metadata.",
+      },
+      ok: false,
+      status: "update_failed",
+    },
+  );
+
+  const updateFactoryFailure =
+    await helper.markStripeWebhookEventProcessed(
+      { eventId, now },
+      () => {
+        throw new Error("private update factory detail");
+      },
+    );
+
+  assert.deepEqual(toPlainObject(updateFactoryFailure), {
+    error: {
+      code: "supabase_stripe_webhook_event_update_failed",
+      message: "Unable to update Stripe webhook event metadata.",
+    },
+    ok: false,
+    status: "update_failed",
+  });
+  assert.doesNotMatch(JSON.stringify(updateFactoryFailure), /factory detail/i);
+
+  const { client: rejectedUpdateClient } = createStripeWebhookEventsClient({
+    rejectUpdate: true,
+  });
+
+  assert.deepEqual(
+    toPlainObject(
+      await helper.markStripeWebhookEventFailed(
+        { eventId, now },
+        () => rejectedUpdateClient,
       ),
     ),
     {
@@ -356,6 +456,9 @@ function createStripeWebhookEventsClient({
   existingEvent = stripeWebhookEventRow(),
   insertError = null,
   readError = null,
+  rejectInsert = false,
+  rejectRead = false,
+  rejectUpdate = false,
   updateError = null,
 } = {}) {
   const calls = [];
@@ -374,6 +477,12 @@ function createStripeWebhookEventsClient({
               return {
                 maybeSingle() {
                   calls.push({ operation: "maybeSingle", phase: "insert" });
+
+                  if (rejectInsert) {
+                    return Promise.reject(
+                      new Error("private insert rejection detail"),
+                    );
+                  }
 
                   return Promise.resolve({
                     data: insertError ? null : stripeWebhookEventRow(event),
@@ -398,6 +507,12 @@ function createStripeWebhookEventsClient({
               return {
                 maybeSingle() {
                   calls.push({ operation: "maybeSingle", phase: "read" });
+
+                  if (rejectRead) {
+                    return Promise.reject(
+                      new Error("private read rejection detail"),
+                    );
+                  }
 
                   return Promise.resolve({
                     data: readError ? null : existingEvent,
@@ -426,6 +541,12 @@ function createStripeWebhookEventsClient({
                   return {
                     maybeSingle() {
                       calls.push({ operation: "maybeSingle", phase: "update" });
+
+                      if (rejectUpdate) {
+                        return Promise.reject(
+                          new Error("private update rejection detail"),
+                        );
+                      }
 
                       return Promise.resolve({
                         data: updateError
