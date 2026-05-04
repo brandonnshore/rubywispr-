@@ -134,8 +134,8 @@ test("admin page renders admin content only for active admins", async () => {
   const markup = renderToStaticMarkup(await pageModule.default());
   const source = await readFile(adminPagePath, "utf8");
 
-  assert.match(markup, /Admin route placeholder/);
-  assert.match(markup, /server-side admin workflows/);
+  assert.match(markup, /Admin operations/);
+  assert.match(markup, /Server-side admin authorization is active/);
   assert.doesNotMatch(markup, /Admin access denied/);
   assert.match(source, /export\s+const\s+dynamic\s*=\s*["']force-dynamic["']/);
   assert.match(source, /requireRubyWhisperAdminForPage/);
@@ -161,8 +161,8 @@ test("admin page denies signed-in non-admins without rendering admin content", a
 
   assert.match(markup, /Admin access denied/);
   assert.match(markup, /does not have an active RubyWhisper admin role/);
-  assert.doesNotMatch(markup, /Admin route placeholder/);
-  assert.doesNotMatch(markup, /server-side admin workflows/);
+  assert.doesNotMatch(markup, /Admin operations/);
+  assert.doesNotMatch(markup, /Server-side admin authorization is active/);
 });
 
 test("admin page fails closed without rendering admin content on backend errors", async () => {
@@ -183,8 +183,8 @@ test("admin page fails closed without rendering admin content on backend errors"
   const markup = renderToStaticMarkup(await pageModule.default());
 
   assert.match(markup, /Admin access denied/);
-  assert.doesNotMatch(markup, /Admin route placeholder/);
-  assert.doesNotMatch(markup, /server-side admin workflows/);
+  assert.doesNotMatch(markup, /Admin operations/);
+  assert.doesNotMatch(markup, /Server-side admin authorization is active/);
 });
 
 test("admin page preserves the Clerk sign-in redirect for signed-out requests", async () => {
@@ -280,6 +280,15 @@ function createAdminPageRequire(requireAdminForPage) {
     switch (specifier) {
       case "react/jsx-runtime":
         return requireCommonJs("react/jsx-runtime");
+      case "next/link":
+        return {
+          default: ({ href, children, ...props }) =>
+            requireCommonJs("react").createElement(
+              "a",
+              { ...props, href },
+              children,
+            ),
+        };
       case "@/lib/admin/auth":
         return {
           requireRubyWhisperAdminForPage: requireAdminForPage,

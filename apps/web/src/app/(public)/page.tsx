@@ -1,44 +1,75 @@
+import Link from "next/link";
+
 const routeAreas = [
   {
     href: "/sign-in",
     label: "Sign in",
-    owner: "Email link entry point for returning RubyWhisper users.",
+    owner: "Return with a browser-based email link.",
   },
   {
     href: "/sign-up",
     label: "Sign up",
-    owner: "Email link account creation for new RubyWhisper users.",
+    owner: "Create an account for the Mac beta.",
   },
   {
     href: "/account",
     label: "Account",
-    owner: "Future Clerk-protected customer account surface.",
+    owner: "Review terms acceptance and billing actions.",
   },
   {
     href: "/admin",
     label: "Admin",
-    owner: "Future server-side admin operations surface.",
+    owner: "Protected operator surface for internal use.",
   },
   {
     href: "/api/status",
     label: "API status",
-    owner: "Deterministic backend route wiring check.",
+    owner: "Check the backend route wiring.",
   },
 ];
 
 export default function PublicHome() {
   return (
-    <main className="surface-shell">
-      <section className="surface-panel" aria-labelledby="public-heading">
-        <p className="surface-kicker">Public</p>
-        <h1 id="public-heading">RubyWhisper web route skeleton</h1>
-        <p className="surface-copy">
-          This placeholder marks the public marketing surface for the
-          RubyWhisper web app. Auth, billing, transcription, and launch copy
-          are intentionally out of scope for this route skeleton.
+    <main className="surface-shell public-shell">
+      <section
+        className="surface-panel public-panel"
+        aria-labelledby="public-heading"
+      >
+        <header className="route-header">
+          <Link className="route-brand" href="/" aria-label="RubyWhisper home">
+            RubyWhisper
+          </Link>
+          <nav className="route-nav" aria-label="Primary routes">
+            <Link href="/sign-in">Sign in</Link>
+            <Link href="/account">Account</Link>
+            <Link href="/admin">Admin</Link>
+          </nav>
+        </header>
+
+        <p className="surface-kicker">Mac dictation</p>
+        <h1 id="public-heading">RubyWhisper</h1>
+        <p className="surface-offer">
+          Fast Mac dictation that works anywhere you can type.
+        </p>
+        <p className="surface-copy public-copy">
+          RubyWhisper is being shaped around native-feeling dictation, explicit
+          account consent, and privacy-forward defaults: no server-side audio or
+          transcript storage, with recent wisprs kept locally on the Mac.
         </p>
 
-        <nav className="route-list" aria-label="RubyWhisper placeholder routes">
+        <div className="cta-row" aria-label="RubyWhisper actions">
+          <Link className="rw-button" href="/sign-up">
+            Sign up
+          </Link>
+          <Link className="rw-button rw-button-secondary" href="/sign-in">
+            Sign in
+          </Link>
+        </div>
+
+        <nav
+          className="route-list public-route-list"
+          aria-label="RubyWhisper routes"
+        >
           {routeAreas.map((route) => (
             <a className="route-link" href={route.href} key={route.href}>
               <span>{route.label}</span>

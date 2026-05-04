@@ -270,6 +270,15 @@ function createAccountPageRequire() {
     switch (specifier) {
       case "react/jsx-runtime":
         return requireCommonJs("react/jsx-runtime");
+      case "next/link":
+        return {
+          default: ({ href, children, ...props }) =>
+            requireCommonJs("react").createElement(
+              "a",
+              { ...props, href },
+              children,
+            ),
+        };
       case "@/lib/auth/clerk":
         return {
           requireClerkUserIdForPage: async () => "user_rw_synthetic_member_001",
