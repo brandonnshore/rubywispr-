@@ -60,12 +60,13 @@ Backend validation uses the same root commands because RubyWhisper backend route
   and metadata for downstream route work, enforces the 600,000ms duration cap,
   and returns route-safe `invalid_audio` / `duration_limit_reached` failures
   before provider work.
-- `src/app/api/desktop/transcribe/route.ts` owns the RW-041B/RW-041C desktop
+- `src/app/api/desktop/transcribe/route.ts` owns the RW-041B/RW-041C/RW-041D desktop
   transcription route shell. It authenticates Clerk users, checks Terms/Privacy,
   reads subscription and usage metadata, enforces quota entitlement, maps parser
-  failures to shared desktop API errors, and stops at an injectable continuation
-  point that executes mocked provider transcription for cleanup-disabled
-  requests while cleanup-enabled requests fail closed until RW-042 lands.
+  failures to shared desktop API errors, executes mocked provider transcription
+  for cleanup-disabled requests, records metadata-only request rows, increments
+  metadata-only usage counters after successful provider output, and keeps
+  cleanup-enabled requests failed closed until RW-042 lands.
 
 ## Usage And Trial Quota Contract
 
@@ -79,6 +80,10 @@ Current server-only helper surfaces:
   normalized quota state.
 - `src/lib/usage/supabase-usage-counters.ts` owns metadata-only
   `usage_counters` reads and prepared increments.
+- `src/lib/usage/supabase-transcription-requests.ts` owns metadata-only
+  `transcription_requests` writes for request id, status, provider, plan state,
+  duration, word count, latency, app version, OS version, and error code fields
+  only.
 - `src/lib/usage/quota-service.ts` owns entitlement decisions and post-success
   usage increments.
 - `src/lib/account/profile-metadata.ts` reads metadata-only profile state for a

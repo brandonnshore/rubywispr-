@@ -28,6 +28,10 @@ const usageQuotaHelpers = [
     path: path.join(srcRoot, "lib", "usage", "supabase-usage-counters.ts"),
   },
   {
+    moduleSpecifier: "@/lib/usage/supabase-transcription-requests",
+    path: path.join(srcRoot, "lib", "usage", "supabase-transcription-requests.ts"),
+  },
+  {
     moduleSpecifier: "@/lib/supabase/server",
     path: path.join(srcRoot, "lib", "supabase", "server.ts"),
   },
