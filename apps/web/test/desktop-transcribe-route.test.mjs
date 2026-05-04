@@ -214,16 +214,147 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
     planState: "trial_active",
     provider: "mock_provider",
     providerLatencyMs: 24,
+    requestId: "req_rw_synthetic_route_001",
     trialWordsLimit: 5000,
-    trialWordsRemaining: 3900,
+    trialWordsRemaining: 3897,
+    trialWordsUsed: 1103,
   });
-  assert.deepEqual(providerCall.input, {
-    audio: providerCall.input.audio,
-    audioDurationMs: 4200,
-    audioMimeType: "audio/wav",
-  });
+  assert.deepEqual(
+    {
+      audioDurationMs: providerCall.input.audioDurationMs,
+      audioMimeType: providerCall.input.audioMimeType,
+      requestId: providerCall.input.requestId,
+    },
+    {
+      audioDurationMs: 4200,
+      audioMimeType: "audio/wav",
+      requestId: "req_rw_synthetic_route_001",
+    },
+  );
   assert.ok(providerCall.input.audio instanceof Blob);
+  assert.deepEqual(
+    toPlainObject(calls).map((call) => call.operation),
+    [
+      "requireAuth",
+      "readProfile",
+      "readSubscription",
+      "readUsageCounters",
+      "evaluateEntitlement",
+      "parseRequest",
+      "createRequestId",
+      "providerClient.transcribe",
+      "prepareUsageIncrement",
+      "writeRequestMetadata",
+      "writeUsageCounterIncrement",
+    ],
+  );
+  assert.deepEqual(
+    toPlainObject(calls.find((call) => call.operation === "writeRequestMetadata").input),
+    {
+      appVersion: "0.1.0-test",
+      audioDurationMs: 4200,
+      cleanedWordCount: 3,
+      clerkUserId: "user_rw_synthetic_member_001",
+      now: "2026-05-04T07:30:00.000Z",
+      osVersion: "macOS synthetic",
+      planState: "trial_active",
+      provider: "mock_provider",
+      latencyMs: 24,
+      requestId: "req_rw_synthetic_route_001",
+      status: "success",
+    },
+  );
   assert.doesNotMatch(JSON.stringify(body), /rawTranscript|providerRequestBody|context|dictionary/i);
+});
+
+test("desktop transcribe route increments paid and Friend metadata without trial spend", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+
+  for (const scenario of [
+    {
+      planState: "paid_active",
+      subscription: { planState: "paid_active", subscriptionStatus: "active" },
+    },
+    {
+      planState: "friend_of_ruby_active",
+      subscription: {
+        friendOfRubyUntil: "2026-06-01T00:00:00.000Z",
+        planState: "friend_of_ruby_active",
+      },
+    },
+  ]) {
+    const { dependencies } = createRouteDependencies({
+      evaluateEntitlement: (input) =>
+        entitlementAllowedForPlan(input.usageCounters, scenario.planState),
+      readSubscription: async (clerkUserId) => ({
+        action: "found",
+        ok: true,
+        subscription: accountSubscription({
+          clerkUserId,
+          ...scenario.subscription,
+        }),
+      }),
+      readUsageCounters: async (clerkUserId) => ({
+        action: "found",
+        counters: accountUsageCounters({
+          clerkUserId,
+          trialWordsRemaining: 0,
+          trialWordsUsed: 5000,
+        }),
+        ok: true,
+      }),
+    });
+    const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+    const response = await handler(syntheticAudioRequest());
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.planState, scenario.planState);
+    assert.equal(body.cleanedWordCount, 3);
+    assert.equal(body.trialWordsUsed, 5000);
+    assert.equal(body.trialWordsRemaining, 0);
+  }
+});
+
+test("desktop transcribe route sanitizes Supabase write failures after provider success", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+
+  for (const override of [
+    {
+      writeRequestMetadata: async () => ({
+        error: {
+          code: "supabase_transcription_request_write_failed",
+          message: "Unable to write transcription request metadata.",
+        },
+        ok: false,
+        status: "write_failed",
+      }),
+    },
+    {
+      writeUsageCounterIncrement: async () => ({
+        error: {
+          code: "supabase_usage_counters_write_failed",
+          message: "Unable to write usage counter metadata.",
+        },
+        ok: false,
+        status: "write_failed",
+      }),
+    },
+  ]) {
+    const { dependencies } = createRouteDependencies(override);
+    const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+    const response = await handler(syntheticAudioRequest());
+    const body = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(body.error.code, "service_unavailable");
+    assert.equal(body.requestId, "req_rw_synthetic_route_001");
+    assert.doesNotMatch(
+      JSON.stringify(body),
+      /audio|transcript|cleaned|context|dictionary|provider payload|database detail/i,
+    );
+  }
 });
 
 test("desktop transcribe route maps provider failures to shared errors", async () => {
@@ -268,6 +399,7 @@ test("desktop transcribe route maps provider failures to shared errors", async (
     assert.equal(response.status, scenario.status);
     assert.equal(response.headers.get("Cache-Control"), "no-store");
     assert.equal(body.error.code, scenario.apiErrorCode);
+    assert.equal(body.requestId, "req_rw_synthetic_route_001");
     assert.deepEqual(body.metadata, {
       appVersion: "0.1.0-test",
       audioDurationMs: 4200,
@@ -313,6 +445,7 @@ test("desktop transcribe route fails closed for cleanup-enabled requests", async
   assert.equal(response.status, 503);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   assert.equal(body.error.code, "service_unavailable");
+  assert.equal(body.requestId, "req_rw_synthetic_route_001");
   assert.deepEqual(body.metadata, {
     appVersion: "0.1.0-test",
     audioDurationMs: 4200,
@@ -328,12 +461,14 @@ test("desktop transcribe provider continuation can be invoked directly", async (
   const response = await routeModule.executeDesktopTranscribeProviderContinuation(
     continuationInput(),
     providerClientReturningSuccess(),
+    directContinuationDependencies(),
   );
   const body = await response.json();
 
   assert.equal(response.status, 200);
   assert.equal(body.cleanedText, "Synthetic provider output.");
   assert.equal(body.cleanedWordCount, 3);
+  assert.equal(body.requestId, "req_rw_synthetic_route_001");
 });
 
 test("desktop transcribe route stays server-only and provider-safe", async () => {
@@ -439,11 +574,23 @@ function createRouteModuleRequire() {
           evaluateRubyWhisperQuotaEntitlement: () => {
             throw new Error("Default quota dependency is outside this route test.");
           },
+          prepareRubyWhisperQuotaUsageIncrement: () => {
+            throw new Error("Default usage increment dependency is outside this route test.");
+          },
+        };
+      case "@/lib/usage/supabase-transcription-requests":
+        return {
+          writeRubyWhisperTranscriptionRequestMetadata: async () => {
+            throw new Error("Default request metadata dependency is outside this route test.");
+          },
         };
       case "@/lib/usage/supabase-usage-counters":
         return {
           readRubyWhisperUsageCounters: async () => {
             throw new Error("Default usage dependency is outside this route test.");
+          },
+          upsertRubyWhisperUsageCounterIncrement: async () => {
+            throw new Error("Default usage write dependency is outside this route test.");
           },
         };
       default:
@@ -455,6 +602,11 @@ function createRouteModuleRequire() {
 function createRouteDependencies(overrides = {}) {
   const calls = [];
   const dependencies = {
+    createRequestId() {
+      calls.push({ operation: "createRequestId" });
+
+      return "req_rw_synthetic_route_001";
+    },
     evaluateEntitlement(input) {
       calls.push({ input, operation: "evaluateEntitlement" });
 
@@ -469,6 +621,11 @@ function createRouteDependencies(overrides = {}) {
       return parseSuccess();
     },
     providerClient: providerClientReturningSuccess(calls),
+    prepareUsageIncrement(input) {
+      calls.push({ input, operation: "prepareUsageIncrement" });
+
+      return preparedUsageIncrement(input);
+    },
     async readProfile(clerkUserId) {
       calls.push({ clerkUserId, operation: "readProfile" });
 
@@ -494,6 +651,27 @@ function createRouteDependencies(overrides = {}) {
         action: "defaulted",
         counters: accountUsageCounters({ clerkUserId }),
         ok: true,
+      };
+    },
+    async writeRequestMetadata(input) {
+      calls.push({ input, operation: "writeRequestMetadata" });
+
+      return {
+        action: "inserted",
+        ok: true,
+        request: input,
+      };
+    },
+    async writeUsageCounterIncrement(input) {
+      calls.push({ input, operation: "writeUsageCounterIncrement" });
+
+      const increment = preparedUsageIncrement(input);
+
+      return {
+        action: "upserted",
+        counters: increment.counters,
+        ok: true,
+        usageCounter: increment.usageCounter,
       };
     },
     async requireAuth() {
@@ -634,13 +812,79 @@ function continuationInput(overrides = {}) {
 }
 
 function entitlementAllowed(usageCounters = accountUsageCounters()) {
+  return entitlementAllowedForPlan(usageCounters, "trial_active");
+}
+
+function entitlementAllowedForPlan(usageCounters, planState) {
   return {
     canTranscribe: true,
-    metadata: quotaMetadata("trial_active", usageCounters),
+    metadata: quotaMetadata(planState, usageCounters),
     ok: true,
-    planState: "trial_active",
+    planState,
     preflightPolicy: "allow_if_started_under_limit",
     status: "allowed",
+  };
+}
+
+function preparedUsageIncrement(input) {
+  const billableWordCount =
+    typeof input.billableWordCount === "number" && Number.isFinite(input.billableWordCount)
+      ? Math.max(0, Math.floor(input.billableWordCount))
+      : 0;
+  const usageCounters = input.usageCounters;
+  const trialWordsIncrement =
+    input.entitlement?.planState === "trial_active" ? billableWordCount : 0;
+  const trialWordsUsed = Math.min(
+    usageCounters.trialWordsLimit,
+    usageCounters.trialWordsUsed + trialWordsIncrement,
+  );
+  const counters = accountUsageCounters({
+    clerkUserId: usageCounters.clerkUserId,
+    lifetimeWordsUsed: usageCounters.lifetimeWordsUsed + billableWordCount,
+    monthlyPeriodStart: "2026-05-01",
+    monthlyWordsUsed: usageCounters.monthlyWordsUsed + billableWordCount,
+    trialWordsRemaining: Math.max(0, usageCounters.trialWordsLimit - trialWordsUsed),
+    trialWordsUsed,
+    updatedAt: syntheticNow.toISOString(),
+  });
+
+  return {
+    billableWordCount,
+    counters,
+    ok: true,
+    planState: input.entitlement?.planState ?? "trial_active",
+    preflightPolicy: "allow_if_started_under_limit",
+    usageCounter: {
+      clerk_user_id: usageCounters.clerkUserId,
+      lifetime_words_used: usageCounters.lifetimeWordsUsed + billableWordCount,
+      monthly_period_start: "2026-05-01",
+      monthly_words_used: usageCounters.monthlyWordsUsed + billableWordCount,
+      trial_words_used: usageCounters.trialWordsUsed + trialWordsIncrement,
+      updated_at: syntheticNow.toISOString(),
+    },
+    willExhaustTrial:
+      usageCounters.trialWordsRemaining > 0 &&
+      counters.trialWordsRemaining === 0 &&
+      input.entitlement?.planState === "trial_active",
+  };
+}
+
+function directContinuationDependencies() {
+  return {
+    createRequestId: () => "req_rw_synthetic_route_001",
+    now: () => syntheticNow,
+    prepareUsageIncrement: preparedUsageIncrement,
+    writeRequestMetadata: async (input) => ({
+      action: "inserted",
+      ok: true,
+      request: input,
+    }),
+    writeUsageCounterIncrement: async (input) => ({
+      action: "upserted",
+      counters: preparedUsageIncrement(input).counters,
+      ok: true,
+      usageCounter: preparedUsageIncrement(input).usageCounter,
+    }),
   };
 }
 
@@ -771,6 +1015,7 @@ function createApiErrorResponse(code, options = {}) {
         retryable: descriptor.retryable,
       },
       ...(metadata ? { metadata } : {}),
+      ...(options.requestId ? { requestId: options.requestId } : {}),
       ok: false,
     },
     {
