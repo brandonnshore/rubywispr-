@@ -16,8 +16,28 @@ const nextStaticRoot = path.join(webRoot, ".next", "static");
 const sourceFileExtensions = new Set([".js", ".jsx", ".mjs", ".ts", ".tsx"]);
 const publicBundleExtensions = new Set([".css", ".html", ".js", ".map", ".mjs"]);
 const clerkServerSecretNames = ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SECRET"];
+const supabaseServerEnvNames = [
+  "SUPABASE_URL",
+  "SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
+];
 const stripeServerSecretNames = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"];
-const serverSecretNames = [...clerkServerSecretNames, ...stripeServerSecretNames];
+const adminBootstrapEnvNames = ["RUBYWHISPER_ADMIN_BOOTSTRAP_EMAILS"];
+const serverSecretNames = [
+  ...clerkServerSecretNames,
+  ...supabaseServerEnvNames,
+  ...stripeServerSecretNames,
+  ...adminBootstrapEnvNames,
+  "GROQ_API_KEY",
+  "SENTRY_AUTH_TOKEN",
+  "APP_DOWNLOAD_SIGNING_KEY_OR_TOKEN",
+];
+const serverConfigHelpers = [
+  {
+    moduleSpecifier: "@/config/server",
+    path: path.join(srcRoot, "config", "server.ts"),
+  },
+];
 const serverAuthHelpers = [
   {
     moduleSpecifier: "@/lib/auth/clerk",
@@ -30,6 +50,24 @@ const serverAuthHelpers = [
   {
     moduleSpecifier: "@/lib/auth/terms-acceptance",
     path: path.join(srcRoot, "lib", "auth", "terms-acceptance.ts"),
+  },
+];
+const serverAdminHelpers = [
+  {
+    moduleSpecifier: "@/lib/admin/api",
+    path: path.join(srcRoot, "lib", "admin", "api.ts"),
+  },
+  {
+    moduleSpecifier: "@/lib/admin/auth",
+    path: path.join(srcRoot, "lib", "admin", "auth.ts"),
+  },
+  {
+    moduleSpecifier: "@/lib/admin/bootstrap",
+    path: path.join(srcRoot, "lib", "admin", "bootstrap.ts"),
+  },
+  {
+    moduleSpecifier: "@/lib/admin/roles",
+    path: path.join(srcRoot, "lib", "admin", "roles.ts"),
   },
 ];
 const serverAccountHelpers = [
@@ -71,6 +109,12 @@ const serverBillingHelpers = [
     path: path.join(srcRoot, "lib", "billing", "stripe.ts"),
   },
 ];
+const serverSupabaseHelpers = [
+  {
+    moduleSpecifier: "@/lib/supabase/server",
+    path: path.join(srcRoot, "lib", "supabase", "server.ts"),
+  },
+];
 const serverBillingRoutes = [
   {
     moduleSpecifier: "@/app/api/stripe/checkout/route",
@@ -109,6 +153,7 @@ const serverUsageHelpers = [
   },
 ];
 const serverOnlyHelpers = [
+  ...serverAdminHelpers,
   ...serverAuthHelpers,
   ...serverAccountHelpers,
   ...serverDesktopTranscribeHelpers,
@@ -117,8 +162,19 @@ const serverOnlyHelpers = [
   ...serverProviderHelpers,
   ...serverBillingHelpers,
   ...serverBillingRoutes,
+  ...serverSupabaseHelpers,
+];
+const browserForbiddenHelpers = [
+  ...serverOnlyHelpers,
+  ...serverConfigHelpers,
+];
+const adminSensitivePaths = [
+  path.join(srcRoot, "app", "admin"),
+  path.join(srcRoot, "app", "api", "admin"),
+  path.join(srcRoot, "lib", "admin"),
 ];
 const authSensitivePaths = [
+  ...adminSensitivePaths,
   path.join(srcRoot, "app", "(auth)"),
   path.join(srcRoot, "app", "api", "account"),
   path.join(srcRoot, "app", "api", "desktop"),
@@ -141,6 +197,43 @@ const clientAuthorizationPatterns = [
   /<\s*SignedOut\b/,
   /<\s*Protect\b/,
   /\bRedirectToSignIn\b/,
+];
+
+const privateAdminContentFieldPatterns = [
+  {
+    label: "raw transcript field",
+    pattern:
+      /\b(?:rawTranscript|raw_transcript|transcriptText|transcript_text|transcriptContent|transcript_content)\b/,
+  },
+  {
+    label: "cleaned transcript field",
+    pattern:
+      /\b(?:cleanedText|cleaned_text|cleanedTranscript|cleaned_transcript)\b/,
+  },
+  {
+    label: "audio content field",
+    pattern:
+      /\b(?:rawAudio|raw_audio|audio(?:Blob|Body|Buffer|Bytes|Content|Data|File|Input|Payload|Url|URL)|audio_(?:blob|body|buffer|bytes|content|data|file|input|payload))\b/,
+  },
+  {
+    label: "clipboard content field",
+    pattern:
+      /\b(?:clipboardContent|clipboardText|clipboardValue|clipboard_content|clipboard_text|clipboard_value)\b/,
+  },
+  {
+    label: "bare private content payload field",
+    pattern: /(?:^|[,{]\s*)(?:audio|clipboard|transcript)\s*:/m,
+  },
+  {
+    label: "private content select column",
+    pattern:
+      /\bselect\s*\(\s*["'`][^"'`]*\b(?:audio|clipboard|raw_transcript|transcript)\b/i,
+  },
+  {
+    label: "private provider or context field",
+    pattern:
+      /\b(?:appContext|app_context|dictionaryTerms|dictionary_terms|privateContent|private_content|providerRequestBody|provider_request_body|providerResponseBody|provider_response_body)\b/,
+  },
 ];
 
 const sensitiveLoggingPatterns = [
@@ -186,7 +279,7 @@ const nonSyntheticFixturePatterns = [
   },
 ];
 
-test("server auth, account, desktop, provider, and Stripe billing surfaces remain server-only", async () => {
+test("server auth, admin, account, desktop, provider, Supabase, and Stripe billing surfaces remain server-only", async () => {
   for (const helper of serverOnlyHelpers) {
     const source = await readFile(helper.path, "utf8");
     const relativePath = normalizePath(path.relative(webRoot, helper.path));
@@ -204,7 +297,7 @@ test("server auth, account, desktop, provider, and Stripe billing surfaces remai
   }
 });
 
-test("browser-bound source cannot import server auth helpers or decide authorization", async () => {
+test("browser-bound source cannot import server auth/admin helpers or decide authorization", async () => {
   const violations = [];
 
   for (const filePath of await listFiles(srcRoot, sourceFileExtensions)) {
@@ -217,7 +310,7 @@ test("browser-bound source cannot import server auth helpers or decide authoriza
     const relativePath = normalizePath(path.relative(webRoot, filePath));
     const moduleSpecifiers = extractModuleSpecifiers(source);
 
-    for (const helper of serverOnlyHelpers) {
+    for (const helper of browserForbiddenHelpers) {
       if (moduleSpecifiers.some((specifier) => importsHelper(filePath, specifier, helper))) {
         violations.push(`${relativePath} imports ${helper.moduleSpecifier}`);
       }
@@ -226,6 +319,27 @@ test("browser-bound source cannot import server auth helpers or decide authoriza
     for (const pattern of clientAuthorizationPatterns) {
       if (pattern.test(source)) {
         violations.push(`${relativePath} contains client-only authorization logic`);
+      }
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
+test("admin source exposes only metadata fields", async () => {
+  const violations = [];
+
+  for (const filePath of await listFiles(srcRoot, sourceFileExtensions)) {
+    if (!isAdminSensitivePath(filePath)) {
+      continue;
+    }
+
+    const source = await readFile(filePath, "utf8");
+    const relativePath = normalizePath(path.relative(webRoot, filePath));
+
+    for (const { label, pattern } of privateAdminContentFieldPatterns) {
+      if (pattern.test(source)) {
+        violations.push(`${relativePath} contains ${label}`);
       }
     }
   }
@@ -379,6 +493,12 @@ function isAuthSensitivePath(filePath) {
 
     return filePath.startsWith(`${authPath}${path.sep}`);
   });
+}
+
+function isAdminSensitivePath(filePath) {
+  return adminSensitivePaths.some((adminPath) =>
+    filePath.startsWith(`${adminPath}${path.sep}`),
+  );
 }
 
 function extractModuleSpecifiers(source) {
