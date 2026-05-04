@@ -1,0 +1,348 @@
+import assert from "node:assert/strict";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+);
+const webRoot = path.join(repoRoot, "apps", "web");
+const srcRoot = path.join(webRoot, "src");
+const testRoot = path.join(webRoot, "test");
+const nextStaticRoot = path.join(webRoot, ".next", "static");
+
+const sourceFileExtensions = new Set([".js", ".jsx", ".mjs", ".ts", ".tsx"]);
+const publicBundleExtensions = new Set([".css", ".html", ".js", ".map", ".mjs"]);
+const clerkServerSecretNames = ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SECRET"];
+const serverAuthHelpers = [
+  {
+    moduleSpecifier: "@/lib/auth/clerk",
+    path: path.join(srcRoot, "lib", "auth", "clerk.ts"),
+  },
+  {
+    moduleSpecifier: "@/lib/auth/profile-sync",
+    path: path.join(srcRoot, "lib", "auth", "profile-sync.ts"),
+  },
+];
+const authSensitivePaths = [
+  path.join(srcRoot, "app", "(auth)"),
+  path.join(srcRoot, "app", "api", "account"),
+  path.join(srcRoot, "config"),
+  path.join(srcRoot, "lib", "auth"),
+  path.join(srcRoot, "proxy.ts"),
+];
+
+const clientAuthorizationPatterns = [
+  /\buseAuth\s*\(/,
+  /\buseUser\s*\(/,
+  /<\s*SignedIn\b/,
+  /<\s*SignedOut\b/,
+  /<\s*Protect\b/,
+  /\bRedirectToSignIn\b/,
+];
+
+const sensitiveLoggingPatterns = [
+  /\bconsole\.(?:debug|error|info|log|warn)\s*\(/,
+  /\b(?:logger|log)\.(?:debug|error|info|trace|warn)\s*\([^)]*\b(?:auth|jwt|link|magic|session|ticket|token)\b/ims,
+  /\bJSON\.stringify\s*\([^)]*\b(?:auth|cookie|header|jwt|link|magic|session|ticket|token)\b[^)]*\)/ims,
+];
+
+const storedCredentialPatterns = [
+  {
+    label: "magic link or auth URL assignment",
+    pattern:
+      /\b(?:auth|clerk|magic|session|ticket)[_-]?(?:link|url)\b\s*[:=]\s*["'][^"']+["']/i,
+  },
+  {
+    label: "session token or JWT assignment",
+    pattern:
+      /\b(?:auth|clerk|jwt|session|ticket|token)[_-]?(?:jwt|token|value)?\b\s*[:=]\s*["'][^"']{12,}["']/i,
+  },
+  {
+    label: "query parameter token literal",
+    pattern: /[?&](?:jwt|session|ticket|token)=/i,
+  },
+];
+
+const nonSyntheticFixturePatterns = [
+  {
+    label: "JWT-like value",
+    pattern: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
+  },
+  {
+    label: "Clerk secret or publishable key value",
+    pattern: /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{20,}\b/,
+  },
+  {
+    label: "long Clerk session or ticket identifier",
+    pattern: /\b(?:sess|ticket)_[A-Za-z0-9_-]{16,}\b/,
+  },
+  {
+    label: "magic-link URL value",
+    pattern:
+      /https?:\/\/[^\s"'`]*(?:clerk|sign-in|sign-up|magic)[^\s"'`]*(?:ticket|token|session)=/i,
+  },
+];
+
+test("server auth helpers remain server-only", async () => {
+  for (const helper of serverAuthHelpers) {
+    const source = await readFile(helper.path, "utf8");
+    const relativePath = normalizePath(path.relative(webRoot, helper.path));
+
+    assert.match(
+      source,
+      /^import\s+["']server-only["'];/m,
+      `${relativePath} must be marked server-only`,
+    );
+    assert.doesNotMatch(
+      source,
+      /\bNEXT_PUBLIC_/,
+      `${relativePath} must not read client-exposed env names`,
+    );
+  }
+});
+
+test("browser-bound source cannot import server auth helpers or decide authorization", async () => {
+  const violations = [];
+
+  for (const filePath of await listFiles(srcRoot, sourceFileExtensions)) {
+    const source = await readFile(filePath, "utf8");
+
+    if (!isBrowserBoundSource(filePath, source)) {
+      continue;
+    }
+
+    const relativePath = normalizePath(path.relative(webRoot, filePath));
+    const moduleSpecifiers = extractModuleSpecifiers(source);
+
+    for (const helper of serverAuthHelpers) {
+      if (moduleSpecifiers.some((specifier) => importsHelper(filePath, specifier, helper))) {
+        violations.push(`${relativePath} imports ${helper.moduleSpecifier}`);
+      }
+    }
+
+    for (const pattern of clientAuthorizationPatterns) {
+      if (pattern.test(source)) {
+        violations.push(`${relativePath} contains client-only authorization logic`);
+      }
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
+test("client source and public bundles do not expose Clerk server secrets", async (t) => {
+  const violations = [];
+
+  for (const filePath of await listFiles(srcRoot, sourceFileExtensions)) {
+    const source = await readFile(filePath, "utf8");
+
+    if (!isBrowserBoundSource(filePath, source)) {
+      continue;
+    }
+
+    collectSecretNameViolations(violations, filePath, source);
+  }
+
+  const publicBundleFiles = await listFilesIfDirectory(
+    nextStaticRoot,
+    publicBundleExtensions,
+  );
+
+  if (publicBundleFiles.length === 0) {
+    t.diagnostic(".next/static is absent; run npm run build before this test for public bundle coverage.");
+  }
+
+  for (const filePath of publicBundleFiles) {
+    collectSecretNameViolations(violations, filePath, await readFile(filePath, "utf8"));
+  }
+
+  assert.deepEqual(violations, []);
+});
+
+test("auth-sensitive source does not log or store token and magic-link material", async () => {
+  const violations = [];
+
+  for (const filePath of await listFiles(srcRoot, sourceFileExtensions)) {
+    if (!isAuthSensitivePath(filePath)) {
+      continue;
+    }
+
+    const source = await readFile(filePath, "utf8");
+    const relativePath = normalizePath(path.relative(webRoot, filePath));
+
+    for (const pattern of sensitiveLoggingPatterns) {
+      if (pattern.test(source)) {
+        violations.push(`${relativePath} contains auth-sensitive logging`);
+      }
+    }
+
+    for (const { label, pattern } of storedCredentialPatterns) {
+      if (pattern.test(source)) {
+        violations.push(`${relativePath} contains ${label}`);
+      }
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
+test("auth test fixtures use only synthetic values", async () => {
+  const violations = [];
+
+  for (const filePath of await listFiles(testRoot, new Set([".mjs"]))) {
+    const source = await readFile(filePath, "utf8");
+    const relativePath = normalizePath(path.relative(webRoot, filePath));
+
+    for (const { label, pattern } of nonSyntheticFixturePatterns) {
+      if (pattern.test(source)) {
+        violations.push(`${relativePath} contains ${label}`);
+      }
+    }
+
+    for (const email of extractEmails(source)) {
+      if (!isSyntheticEmail(email)) {
+        violations.push(`${relativePath} contains non-placeholder email ${email}`);
+      }
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
+function collectSecretNameViolations(violations, filePath, source) {
+  const relativePath = normalizePath(path.relative(webRoot, filePath));
+
+  for (const secretName of clerkServerSecretNames) {
+    if (new RegExp(`\\b${secretName}\\b`).test(source)) {
+      violations.push(`${relativePath} exposes ${secretName}`);
+    }
+  }
+}
+
+async function listFiles(directory, allowedExtensions) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const filePaths = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(directory, entry.name);
+
+      if (entry.isDirectory()) {
+        return listFiles(entryPath, allowedExtensions);
+      }
+
+      if (entry.isFile() && allowedExtensions.has(path.extname(entry.name))) {
+        return [entryPath];
+      }
+
+      return [];
+    }),
+  );
+
+  return filePaths.flat();
+}
+
+async function listFilesIfDirectory(directory, allowedExtensions) {
+  try {
+    return await listFiles(directory, allowedExtensions);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+function isBrowserBoundSource(filePath, source) {
+  const relativePath = normalizePath(path.relative(srcRoot, filePath));
+
+  if (relativePath === "config/client.ts") {
+    return true;
+  }
+
+  if (/^["']use client["'];/.test(source.trimStart())) {
+    return true;
+  }
+
+  return extractModuleSpecifiers(source).some((specifier) =>
+    ["@clerk/nextjs", "@clerk/react"].includes(specifier),
+  );
+}
+
+function isAuthSensitivePath(filePath) {
+  return authSensitivePaths.some((authPath) => {
+    if (path.extname(authPath)) {
+      return filePath === authPath;
+    }
+
+    return filePath.startsWith(`${authPath}${path.sep}`);
+  });
+}
+
+function extractModuleSpecifiers(source) {
+  const moduleSpecifiers = [];
+  const importExportRegex =
+    /\b(?:import|export)\s+(?:type\s+)?(?:[^"'()]*?\s+from\s+)?["']([^"']+)["']/g;
+  const dynamicImportRegex = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
+
+  for (const match of source.matchAll(importExportRegex)) {
+    moduleSpecifiers.push(match[1]);
+  }
+
+  for (const match of source.matchAll(dynamicImportRegex)) {
+    moduleSpecifiers.push(match[1]);
+  }
+
+  return moduleSpecifiers;
+}
+
+function importsHelper(importerPath, moduleSpecifier, helper) {
+  return (
+    moduleSpecifier === helper.moduleSpecifier ||
+    resolveModuleSpecifier(importerPath, moduleSpecifier) === helper.path
+  );
+}
+
+function resolveModuleSpecifier(importerPath, moduleSpecifier) {
+  if (moduleSpecifier.startsWith("@/")) {
+    return resolveTypeScriptPath(path.join(srcRoot, moduleSpecifier.slice(2)));
+  }
+
+  if (moduleSpecifier.startsWith(".")) {
+    return resolveTypeScriptPath(path.resolve(path.dirname(importerPath), moduleSpecifier));
+  }
+
+  return moduleSpecifier;
+}
+
+function resolveTypeScriptPath(filePath) {
+  if (sourceFileExtensions.has(path.extname(filePath))) {
+    return filePath;
+  }
+
+  return `${filePath}.ts`;
+}
+
+function extractEmails(source) {
+  return [...source.matchAll(/\b[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})\b/gi)].map(
+    (match) => match[0],
+  );
+}
+
+function isSyntheticEmail(email) {
+  const domain = email.split("@").at(-1)?.toLowerCase();
+
+  return Boolean(
+    domain &&
+      (domain === "example.com" ||
+        domain.endsWith(".example") ||
+        domain.endsWith(".invalid") ||
+        domain.endsWith(".test")),
+  );
+}
+
+function normalizePath(filePath) {
+  return filePath.split(path.sep).join("/");
+}

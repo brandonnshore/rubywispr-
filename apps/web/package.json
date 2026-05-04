@@ -9,10 +9,12 @@
     "lint": "eslint",
     "typecheck": "tsc --project tsconfig.typecheck.json --noEmit",
     "test": "node --test",
+    "test:auth-privacy": "node --test test/auth-privacy-security-guardrails.test.mjs test/clerk-auth-route-shell.test.mjs test/clerk-env-guardrails.test.mjs test/clerk-server-auth-guardrails.test.mjs test/clerk-supabase-profile-sync.test.mjs",
     "test:schema-privacy": "node --test test/supabase-migration-privacy.test.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.0",
+    "@clerk/react": "^6.5.0",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",

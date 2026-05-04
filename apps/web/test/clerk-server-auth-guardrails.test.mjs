@@ -16,9 +16,13 @@ test("Next 16 Clerk proxy protects account and admin page routes", async () => {
     proxy,
     /import\s+\{\s*clerkMiddleware,\s*createRouteMatcher\s*\}\s+from\s+["']@clerk\/nextjs\/server["']/,
   );
+  assert.match(proxy, /NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY/);
+  assert.match(proxy, /NextResponse\.next\(\)/);
+  assert.match(proxy, /const\s+clerkProtectedProxy\s*=\s*clerkMiddleware/);
   assert.match(proxy, /createRouteMatcher\(\[\s*["']\/account\(\.\*\)["']/);
   assert.match(proxy, /["']\/admin\(\.\*\)["']/);
   assert.match(proxy, /await\s+auth\.protect\(\)/);
+  assert.match(proxy, /return\s+clerkProtectedProxy\(request,\s*event\)/);
   assert.match(proxy, /["']\/\(api\|trpc\)\(\.\*\)["']/);
   assert.doesNotMatch(proxy, /\/api\/status.*protect/s);
 });

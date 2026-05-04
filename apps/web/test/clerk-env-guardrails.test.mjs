@@ -70,7 +70,7 @@ test("Clerk placeholders expose only the publishable key as NEXT_PUBLIC", async 
   }
 });
 
-test("client-facing source references Clerk provider SDK only from auth route shell", async () => {
+test("client-facing source references Clerk browser SDK only from auth route shell", async () => {
   const violations = [];
 
   for (const filePath of await listSourceFiles(srcRoot)) {
@@ -89,7 +89,7 @@ test("client-facing source references Clerk provider SDK only from auth route sh
 
     for (const moduleSpecifier of extractModuleSpecifiers(source)) {
       if (
-        moduleSpecifier === "@clerk/nextjs" &&
+        ["@clerk/nextjs", "@clerk/react"].includes(moduleSpecifier) &&
         !relativePath.startsWith("src/app/(auth)/")
       ) {
         violations.push(
