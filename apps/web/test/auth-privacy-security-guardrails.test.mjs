@@ -16,6 +16,8 @@ const nextStaticRoot = path.join(webRoot, ".next", "static");
 const sourceFileExtensions = new Set([".js", ".jsx", ".mjs", ".ts", ".tsx"]);
 const publicBundleExtensions = new Set([".css", ".html", ".js", ".map", ".mjs"]);
 const clerkServerSecretNames = ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SECRET"];
+const stripeServerSecretNames = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"];
+const serverSecretNames = [...clerkServerSecretNames, ...stripeServerSecretNames];
 const serverAuthHelpers = [
   {
     moduleSpecifier: "@/lib/auth/clerk",
@@ -54,6 +56,12 @@ const serverProviderHelpers = [
     path: path.join(srcRoot, "lib", "providers", "groq.ts"),
   },
 ];
+const serverBillingHelpers = [
+  {
+    moduleSpecifier: "@/lib/billing/stripe",
+    path: path.join(srcRoot, "lib", "billing", "stripe.ts"),
+  },
+];
 const serverDesktopTranscribeHelpers = [
   {
     moduleSpecifier: "@/lib/desktop-transcribe/request",
@@ -88,6 +96,7 @@ const serverOnlyHelpers = [
   ...serverRateLimitHelpers,
   ...serverUsageHelpers,
   ...serverProviderHelpers,
+  ...serverBillingHelpers,
 ];
 const authSensitivePaths = [
   path.join(srcRoot, "app", "(auth)"),
@@ -96,6 +105,7 @@ const authSensitivePaths = [
   path.join(srcRoot, "config"),
   path.join(srcRoot, "lib", "account"),
   path.join(srcRoot, "lib", "auth"),
+  path.join(srcRoot, "lib", "billing"),
   path.join(srcRoot, "lib", "desktop-transcribe"),
   path.join(srcRoot, "lib", "providers"),
   path.join(srcRoot, "lib", "rate-limit"),
@@ -202,7 +212,7 @@ test("browser-bound source cannot import server auth helpers or decide authoriza
   assert.deepEqual(violations, []);
 });
 
-test("client source and public bundles do not expose Clerk server secrets", async (t) => {
+test("client source and public bundles do not expose server secrets", async (t) => {
   const violations = [];
 
   for (const filePath of await listFiles(srcRoot, sourceFileExtensions)) {
@@ -284,7 +294,7 @@ test("auth test fixtures use only synthetic values", async () => {
 function collectSecretNameViolations(violations, filePath, source) {
   const relativePath = normalizePath(path.relative(webRoot, filePath));
 
-  for (const secretName of clerkServerSecretNames) {
+  for (const secretName of serverSecretNames) {
     if (new RegExp(`\\b${secretName}\\b`).test(source)) {
       violations.push(`${relativePath} exposes ${secretName}`);
     }
