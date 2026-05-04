@@ -89,6 +89,7 @@ The command is also covered by `npm run test` because it uses Node's test runner
 - Authorization decisions stay server-side. Browser-bound files may render Clerk sign-in/sign-up UI, but must not use `useAuth`, `useUser`, `SignedIn`, `SignedOut`, `Protect`, or redirect helpers to gate protected product/admin access.
 - Auth-sensitive source avoids console/logger output and obvious storage of magic links, session tickets, JWTs, or tokens.
 - Auth test fixtures use only synthetic IDs and placeholder email domains such as `example.com` or `.test`; do not add real magic links, session tokens, JWTs, private env values, or customer email addresses.
+- Backend privacy logging guardrails reject ad hoc logging, direct capture SDK calls, and sensitive `JSON.stringify` usage in auth/API/provider/observability source. They also verify the approved privacy logger remains server-only and side-effect free.
 
 After `npm run build`, rerun `npm run test:auth-privacy` or the focused changed-file scan so the public bundle artifact check covers the latest `.next/static` output.
 
@@ -97,6 +98,16 @@ After `npm run build`, rerun `npm run test:auth-privacy` or the focused changed-
 Future mocked backend route tests should import from `test/support/backend-integration.mjs`. The helper exports synthetic Clerk/Supabase/provider fixtures plus `invokeRouteHandler`, `invokeServerFunction`, `createSyntheticBackendRequest`, and `createMockBackendProviders`.
 
 Keep these tests offline-only. Do not pass live Clerk, Stripe, Supabase, Groq, Sentry, auth, billing, or private env values into the helper; it rejects live-looking hosts, credential-like strings, private env source references, and guarded server secret names.
+
+## Backend No-Body Logging Contract
+
+`src/lib/observability/privacy-logger.ts` is the server-only RW-030 helper for privacy-safe backend log metadata. Future backend, account, provider, cleanup, transcription, support, and admin code should use `sanitizeRubyWhisperPrivacyLogMetadata`, `createRubyWhisperPrivacyLogEvent`, or the `createRubyWhisperBackendRequest*LogEvent` helpers before handing data to any future log sink.
+
+Allowed metadata is limited to request/account/plan/duration/word-count/latency/provider/app/version/status/error-code fields. This matches the RW-044 logging guidance in `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md#logging-and-observability`, where support workflows should investigate through `requestId` and `error.code` rather than private content.
+
+Never log request or response bodies, multipart audio, raw transcripts, cleaned text, context, clipboard contents, dictionary terms, prompts, provider request or response bodies, headers, cookies, auth/session material, private env values, secrets, or local Recent Wisprs. Do not add ad hoc `console` or logger calls in sensitive backend source; extend the approved helpers and tests instead.
+
+Live log sinks, Sentry/crash reporting, production sampling, and provider dashboard configuration remain human-gated setup work. Agents may add provider-neutral helpers and tests, but production/staging observability providers must not be configured with live credentials without explicit approval.
 
 ## Shared API Error Contract
 
