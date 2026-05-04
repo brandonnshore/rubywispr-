@@ -97,6 +97,12 @@ Current server-only helper surfaces:
   metadata for account and quota decisions.
 - `src/lib/account/desktop-account-snapshot.ts` composes the desktop-facing
   account state from profile, subscription, and usage metadata.
+- `src/lib/rate-limit/transcription.ts` owns the local/mockable RW-031A
+  transcription request-window decision primitive. It accepts Clerk user ID,
+  timestamps, request counts, and plan-state policy metadata only, returns
+  `allowed`, `rate_limited`, or `invalid_user`, and has no persistence,
+  network, Supabase, logging, provider, or payload side effects. Persistent
+  counters and route integration are intentionally left to follow-up leaves.
 
 Trial words are spent from the final cleaned output word count by default. The
 preflight policy is `allow_if_started_under_limit`: a trial user who starts with
@@ -177,6 +183,11 @@ The command is also covered by `npm run test` because it uses Node's test runner
   content only in memory. Tests use synthetic audio bytes and must not persist
   or log audio, transcripts, cleaned text, context, dictionary terms, or
   provider payloads.
+- Transcription rate-limit primitives such as
+  `src/lib/rate-limit/transcription.ts` remain server-only and evaluate only
+  metadata counters and timestamps. Tests must not add audio, transcripts,
+  cleaned text, context, dictionary terms, prompts, provider payloads, auth
+  material, private env values, network calls, or storage side effects.
 - The desktop transcription route shell is covered by
   `test/desktop-transcribe-route.test.mjs` and `test:auth-privacy`. Preflight
   and provider failures must return `rubyWhisperApiErrorResponse` payloads with
