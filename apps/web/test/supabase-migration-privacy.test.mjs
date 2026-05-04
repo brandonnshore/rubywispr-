@@ -15,6 +15,7 @@ const expectedMetadataTables = [
   "friend_of_ruby_batches",
   "profiles",
   "subscriptions",
+  "transcription_rate_limits",
   "transcription_requests",
   "usage_counters",
 ];
