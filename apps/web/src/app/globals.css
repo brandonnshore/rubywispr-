@@ -232,6 +232,13 @@ h1 {
   margin-top: 4px;
 }
 
+.account-billing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
 .account-checkbox-row {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
@@ -252,7 +259,8 @@ h1 {
   line-height: 1.5;
 }
 
-.account-acceptance-form button {
+.account-acceptance-form button,
+.account-billing-actions button {
   min-height: 48px;
   width: fit-content;
   border: 0;
@@ -264,12 +272,21 @@ h1 {
   padding: 0 18px;
 }
 
+.account-billing-actions form:last-child button {
+  border: 1px solid rgb(47 111 106 / 34%);
+  background: #ffffff;
+  color: #2f6f6a;
+}
+
 @media (max-width: 520px) {
   .surface-shell {
     place-items: start;
   }
 
-  .account-acceptance-form button {
+  .account-acceptance-form button,
+  .account-billing-actions,
+  .account-billing-actions form,
+  .account-billing-actions button {
     width: 100%;
   }
 }
