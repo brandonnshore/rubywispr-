@@ -13,6 +13,7 @@ export const supabaseMetadataTableNames = [
   "admin_roles",
   "friend_of_ruby_batches",
   "profiles",
+  "stripe_webhook_events",
   "subscriptions",
   "transcription_rate_limits",
   "transcription_requests",

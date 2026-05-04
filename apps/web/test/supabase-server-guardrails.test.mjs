@@ -25,6 +25,16 @@ const forbiddenClientModuleSpecifiers = [
   "@/lib/supabase/server",
   "src/lib/supabase/server",
 ];
+const expectedMetadataTableNames = [
+  "admin_roles",
+  "friend_of_ruby_batches",
+  "profiles",
+  "stripe_webhook_events",
+  "subscriptions",
+  "transcription_rate_limits",
+  "transcription_requests",
+  "usage_counters",
+];
 const sourceFileExtensions = new Set([".ts", ".tsx"]);
 
 test("Supabase service-role helper stays server-only and explicit", async () => {
@@ -36,6 +46,17 @@ test("Supabase service-role helper stays server-only and explicit", async () => 
   assert.match(helper, /\bSUPABASE_SERVICE_ROLE_KEY\b/);
   assert.doesNotMatch(helper, /\bNEXT_PUBLIC_/);
   assert.doesNotMatch(helper, /@supabase\/supabase-js/);
+});
+
+test("Supabase metadata table guardrails enumerate server-only tables", async () => {
+  const helper = await readFile(serverOnlySupabaseModulePath, "utf8");
+
+  for (const tableName of expectedMetadataTableNames) {
+    assert.match(helper, new RegExp(`["']${tableName}["']`));
+  }
+
+  assert.match(helper, /access:\s*["']server-service-role-only["']/);
+  assert.match(helper, /containsPrivateAudioOrTranscriptContent:\s*false/);
 });
 
 test("client-facing code cannot import Supabase service-role helpers", async () => {
