@@ -67,6 +67,8 @@ Future workers must follow these rules:
 - Do not add live Supabase writes here until the owning Clerk, Stripe, usage, admin, or request-metadata ticket defines the access rules and tests.
 - Do not store audio payloads, transcripts, cleaned text, clipboard contents, local history, app context, or dictionary content in Supabase.
 
+`src/lib/auth/profile-sync.ts` prepares and upserts the metadata-only `profiles` row for Clerk users. Future auth routes should call `syncClerkUserSupabaseProfile` only after server-side Clerk session verification and primary-email lookup, passing `{ clerkUserId, primaryEmail }`; the helper writes only `clerk_user_id` and `email` through the server-only Supabase service-role factory.
+
 ## Validation
 
 ```bash
