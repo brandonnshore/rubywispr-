@@ -45,8 +45,13 @@ Backend validation uses the same root commands because RubyWhisper backend route
 - `src/app/account/page.tsx` is the authenticated customer account placeholder scaffolded by RUB-82. Clerk auth belongs to RW-022, subscription/account data belongs to RW-024/RW-025/RW-026, and the production account UI belongs to RW-082.
 - `src/app/admin/page.tsx` is the admin placeholder scaffolded by RUB-82. Server-side admin roles belong to RW-028, the beta health dashboard belongs to RW-084, Friend of Ruby code workflows belong to RW-085, and later auth/admin security audit belongs to RW-101.
 - `src/app/api/status/route.ts` is the current smoke API. Future API routes stay under `src/app/api/*` and must keep provider, billing, Supabase service-role, webhook, and signing logic server-only.
-- Future provider gateway routes and clients are not part of the scaffold. Groq/provider client work belongs to RW-040, transcription/cleanup gateway behavior belongs to Wave 4 backend tickets, desktop-facing backend routes must follow `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md` for RW-044, and mocked provider integration coverage belongs to RW-046.
 - `src/lib/api/errors.ts` exposes the server-only RW-044 backend error contract helper. Future desktop API route handlers should use `rubyWhisperApiErrorResponse` so non-2xx responses keep stable codes, `Cache-Control: no-store`, and metadata-only payloads.
+- `src/lib/providers/client.ts` exposes the server-only RW-040A provider
+  contract and mockable provider surface. Live Groq adapters belong to later
+  RW-040 leaves, transcription/cleanup gateway behavior belongs to Wave 4
+  backend tickets, desktop-facing backend routes must follow
+  `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md` for RW-044, and mocked
+  provider integration coverage belongs to RW-046.
 
 ## Usage And Trial Quota Contract
 
@@ -139,6 +144,9 @@ The command is also covered by `npm run test` because it uses Node's test runner
   `src/lib/account/profile-metadata.ts`, and
   `src/lib/account/subscription-cache.ts` remain server-only, and
   `/api/desktop` source stays covered by the same privacy scans.
+- Provider helpers such as `src/lib/providers/client.ts` remain server-only,
+  mockable, and free of live credentials, network calls, and persisted provider
+  payloads until their owning integration tickets add those surfaces.
 - Authorization decisions stay server-side. Browser-bound files may render Clerk sign-in/sign-up UI, but must not use `useAuth`, `useUser`, `SignedIn`, `SignedOut`, `Protect`, or redirect helpers to gate protected product/admin access.
 - Auth-sensitive source avoids console/logger output and obvious storage of magic links, session tickets, JWTs, or tokens.
 - Auth test fixtures use only synthetic IDs and placeholder email domains such as `example.com` or `.test`; do not add real magic links, session tokens, JWTs, private env values, or customer email addresses.

@@ -44,7 +44,17 @@ const serverAccountHelpers = [
     path: path.join(srcRoot, "lib", "account", "subscription-cache.ts"),
   },
 ];
-const serverOnlyHelpers = [...serverAuthHelpers, ...serverAccountHelpers];
+const serverProviderHelpers = [
+  {
+    moduleSpecifier: "@/lib/providers/client",
+    path: path.join(srcRoot, "lib", "providers", "client.ts"),
+  },
+];
+const serverOnlyHelpers = [
+  ...serverAuthHelpers,
+  ...serverAccountHelpers,
+  ...serverProviderHelpers,
+];
 const authSensitivePaths = [
   path.join(srcRoot, "app", "(auth)"),
   path.join(srcRoot, "app", "api", "account"),
@@ -52,6 +62,7 @@ const authSensitivePaths = [
   path.join(srcRoot, "config"),
   path.join(srcRoot, "lib", "account"),
   path.join(srcRoot, "lib", "auth"),
+  path.join(srcRoot, "lib", "providers"),
   path.join(srcRoot, "proxy.ts"),
 ];
 
@@ -107,7 +118,7 @@ const nonSyntheticFixturePatterns = [
   },
 ];
 
-test("server auth and account helpers remain server-only", async () => {
+test("server auth, account, and provider helpers remain server-only", async () => {
   for (const helper of serverOnlyHelpers) {
     const source = await readFile(helper.path, "utf8");
     const relativePath = normalizePath(path.relative(webRoot, helper.path));
