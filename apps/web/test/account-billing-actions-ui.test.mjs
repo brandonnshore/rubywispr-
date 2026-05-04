@@ -38,6 +38,8 @@ test("signed-in account page renders compact billing actions without provider in
   assert.match(markup, /Upgrade monthly/);
   assert.match(markup, /Upgrade annual/);
   assert.match(markup, /Manage billing/);
+  assert.match(markup, /Open download page/);
+  assert.match(markup, /href="\/download"/);
   assert.match(markup, /aria-label="Billing actions"/);
   assert.match(markup, /role="status"/);
   assert.match(markup, /aria-live="polite"/);
@@ -56,6 +58,8 @@ test("signed-in account page renders compact billing actions without provider in
   assert.match(source, /Upgrade monthly/);
   assert.match(source, /Upgrade annual/);
   assert.match(source, /Manage billing/);
+  assert.match(source, /DownloadSection/);
+  assert.match(source, /href=["']\/download["']/);
   assert.match(source, /aria-label=["']Billing actions["']/);
   assert.match(source, /role=["']status["']/);
   assert.match(source, /aria-live=["']polite["']/);

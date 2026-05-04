@@ -12,6 +12,11 @@ const routeAreas = [
     owner: "Create an account for the Mac beta.",
   },
   {
+    href: "/download",
+    label: "Download",
+    owner: "Get the Mac beta when a safe release link is available.",
+  },
+  {
     href: "/pricing",
     label: "Pricing",
     owner: "Compare launch plans and start checkout.",
@@ -45,6 +50,7 @@ export default function PublicHome() {
             RubyWhisper
           </Link>
           <nav className="route-nav" aria-label="Primary routes">
+            <Link href="/download">Download</Link>
             <Link href="/pricing">Pricing</Link>
             <Link href="/sign-in">Sign in</Link>
             <Link href="/account">Account</Link>
@@ -64,8 +70,8 @@ export default function PublicHome() {
         </p>
 
         <div className="cta-row" aria-label="RubyWhisper actions">
-          <Link className="rw-button" href="/sign-up">
-            Sign up
+          <Link className="rw-button" href="/download">
+            Download beta
           </Link>
           <Link className="rw-button rw-button-secondary" href="/pricing">
             View pricing

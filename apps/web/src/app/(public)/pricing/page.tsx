@@ -49,6 +49,7 @@ export default function PricingPage() {
           </Link>
           <nav className="route-nav" aria-label="Primary routes">
             <Link href="/">Home</Link>
+            <Link href="/download">Download</Link>
             <Link href="/sign-up">Sign up</Link>
             <Link href="/account">Account</Link>
           </nav>
@@ -113,7 +114,8 @@ export default function PricingPage() {
         <p className="pricing-fallback-note">
           Checkout opens through Stripe. If checkout is unavailable or you are
           signed out, RubyWhisper will route you through the existing account
-          fallback flow.
+          fallback flow. The Mac beta download page will show a direct download
+          only when release hosting is configured.
         </p>
       </section>
     </main>
