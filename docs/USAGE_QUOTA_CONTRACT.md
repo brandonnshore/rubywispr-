@@ -11,6 +11,9 @@ launch audit tickets that touch usage or trial entitlement.
   `apps/web/src/lib/usage/supabase-usage-counters.ts`.
 - Entitlement and post-success increment preparation lives in
   `apps/web/src/lib/usage/quota-service.ts`.
+- Metadata-only fair-use signaling lives in
+  `apps/web/src/lib/usage/fair-use.ts`; it is non-enforcing and must receive
+  explicit policy thresholds from callers or tests.
 - The metadata schema lives in
   `supabase/migrations/20260504005703_product_metadata_schema.sql`.
 - Desktop-facing quota failures must use
@@ -40,6 +43,9 @@ launch audit tickets that touch usage or trial entitlement.
 - Paid active users and Friend of Ruby active users are allowed without spending
   trial words. Their successful usage still increments lifetime and monthly
   metadata counters for admin, fair-use, and support workflows.
+- Paid and Friend fair-use evaluation is a server-only metadata signal. It may
+  return normal, watch, or limit-recommended style metadata for admin/support
+  review, but it does not define customer copy or block transcription.
 - Blocked accounts, payment failures, subscription-required states, and
   exhausted trials fail closed before provider work.
 

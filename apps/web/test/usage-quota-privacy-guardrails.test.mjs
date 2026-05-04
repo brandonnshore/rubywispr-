@@ -20,6 +20,10 @@ const usageQuotaHelpers = [
     path: path.join(srcRoot, "lib", "usage", "quota.ts"),
   },
   {
+    moduleSpecifier: "@/lib/usage/fair-use",
+    path: path.join(srcRoot, "lib", "usage", "fair-use.ts"),
+  },
+  {
     moduleSpecifier: "@/lib/usage/quota-service",
     path: path.join(srcRoot, "lib", "usage", "quota-service.ts"),
   },
