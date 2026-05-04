@@ -60,10 +60,26 @@ const serverDesktopTranscribeHelpers = [
     path: path.join(srcRoot, "lib", "desktop-transcribe", "request.ts"),
   },
 ];
+const serverRateLimitHelpers = [
+  {
+    moduleSpecifier: "@/lib/rate-limit/transcription",
+    path: path.join(srcRoot, "lib", "rate-limit", "transcription.ts"),
+  },
+  {
+    moduleSpecifier: "@/lib/rate-limit/supabase-transcription-rate-limits",
+    path: path.join(
+      srcRoot,
+      "lib",
+      "rate-limit",
+      "supabase-transcription-rate-limits.ts",
+    ),
+  },
+];
 const serverOnlyHelpers = [
   ...serverAuthHelpers,
   ...serverAccountHelpers,
   ...serverDesktopTranscribeHelpers,
+  ...serverRateLimitHelpers,
   ...serverProviderHelpers,
 ];
 const authSensitivePaths = [
@@ -75,6 +91,7 @@ const authSensitivePaths = [
   path.join(srcRoot, "lib", "auth"),
   path.join(srcRoot, "lib", "desktop-transcribe"),
   path.join(srcRoot, "lib", "providers"),
+  path.join(srcRoot, "lib", "rate-limit"),
   path.join(srcRoot, "proxy.ts"),
 ];
 
