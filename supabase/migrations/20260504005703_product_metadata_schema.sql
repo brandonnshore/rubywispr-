@@ -81,6 +81,7 @@ create table public.transcription_requests (
   request_id text not null,
   status text not null,
   provider text not null,
+  plan_state text not null,
   audio_duration_ms integer,
   cleaned_word_count integer,
   latency_ms integer,
@@ -93,6 +94,7 @@ create table public.transcription_requests (
   constraint transcription_requests_request_id_not_blank check (btrim(request_id) <> ''),
   constraint transcription_requests_status_not_blank check (btrim(status) <> ''),
   constraint transcription_requests_provider_not_blank check (btrim(provider) <> ''),
+  constraint transcription_requests_plan_state_not_blank check (btrim(plan_state) <> ''),
   constraint transcription_requests_audio_duration_nonnegative check (
     audio_duration_ms is null or audio_duration_ms >= 0
   ),

@@ -12,7 +12,10 @@ import {
   type RubyWhisperSubscriptionCacheReadResult,
   type SupabaseSubscriptionCacheClient,
 } from "@/lib/account/subscription-cache";
-import { rubyWhisperApiErrorResponse } from "@/lib/api/errors";
+import {
+  rubyWhisperApiErrorResponse,
+  type RubyWhisperApiErrorCode,
+} from "@/lib/api/errors";
 import {
   requireClerkUserId,
   type ClerkRequiredAuthState,
@@ -32,13 +35,24 @@ import type { SupabaseServiceRoleRuntimeConfig } from "@/lib/supabase/server";
 import { countRubyWhisperBillableOutputWords } from "@/lib/usage/quota";
 import {
   evaluateRubyWhisperQuotaEntitlement,
+  prepareRubyWhisperQuotaUsageIncrement,
   type RubyWhisperQuotaAllowedResult,
   type RubyWhisperQuotaEntitlementInput,
   type RubyWhisperQuotaEntitlementResult,
+  type RubyWhisperQuotaUsageIncrementInput,
+  type RubyWhisperQuotaUsageIncrementResult,
 } from "@/lib/usage/quota-service";
 import {
+  writeRubyWhisperTranscriptionRequestMetadata,
+  type RubyWhisperTranscriptionRequestMetadataWriteResult,
+  type SupabaseTranscriptionRequestsClient,
+  type WriteRubyWhisperTranscriptionRequestMetadataInput,
+} from "@/lib/usage/supabase-transcription-requests";
+import {
   readRubyWhisperUsageCounters,
+  upsertRubyWhisperUsageCounterIncrement,
   type RubyWhisperUsageCounters,
+  type RubyWhisperUsageCountersIncrementUpsertedResult,
   type RubyWhisperUsageCountersReadResult,
   type SupabaseUsageCountersClient,
 } from "@/lib/usage/supabase-usage-counters";
@@ -62,8 +76,10 @@ export type DesktopTranscribeProviderSuccessPayload = Readonly<{
   ok: true;
   planState: RubyWhisperQuotaAllowedResult["planState"];
   provider: RubyWhisperProviderTranscriptionResult["provider"];
+  requestId: string;
   trialWordsLimit: number;
   trialWordsRemaining: number;
+  trialWordsUsed: number;
   appVersion?: string;
   osVersion?: string;
   providerLatencyMs?: number;
@@ -73,9 +89,13 @@ export type DesktopTranscribeRouteDependencies = Readonly<{
   evaluateEntitlement: (
     input: RubyWhisperQuotaEntitlementInput,
   ) => RubyWhisperQuotaEntitlementResult;
+  createRequestId: () => string;
   now: () => Date;
   parseRequest: (request: Request) => Promise<DesktopTranscribeRequestParseResult>;
   providerClient: RubyWhisperProviderClient;
+  prepareUsageIncrement: (
+    input: RubyWhisperQuotaUsageIncrementInput,
+  ) => RubyWhisperQuotaUsageIncrementResult;
   readProfile: (
     clerkUserId: string,
   ) => Promise<RubyWhisperAccountProfileMetadataReadResult>;
@@ -85,11 +105,18 @@ export type DesktopTranscribeRouteDependencies = Readonly<{
   readUsageCounters: (
     clerkUserId: string,
   ) => Promise<RubyWhisperUsageCountersReadResult>;
+  writeRequestMetadata: (
+    input: WriteRubyWhisperTranscriptionRequestMetadataInput,
+  ) => Promise<RubyWhisperTranscriptionRequestMetadataWriteResult>;
+  writeUsageCounterIncrement: (
+    input: RubyWhisperQuotaUsageIncrementInput,
+  ) => Promise<RubyWhisperUsageCountersIncrementUpsertedResult>;
   requireAuth: () => Promise<ClerkRequiredAuthState>;
 }>;
 
 type DesktopTranscribeSupabaseClient = SupabaseAccountProfileClient &
   SupabaseSubscriptionCacheClient &
+  SupabaseTranscriptionRequestsClient &
   SupabaseUsageCountersClient;
 
 export function createDesktopTranscribeRouteHandler(
@@ -157,6 +184,7 @@ export function createDesktopTranscribeRouteHandler(
           usageCounters: usageCountersResult.counters,
         },
         dependencies.providerClient,
+        dependencies,
       );
     } catch {
       return rubyWhisperApiErrorResponse("service_unavailable");
@@ -167,28 +195,111 @@ export function createDesktopTranscribeRouteHandler(
 export async function executeDesktopTranscribeProviderContinuation(
   input: DesktopTranscribePreflightContinuationInput,
   providerClient: RubyWhisperProviderClient,
+  dependencies: Pick<
+    DesktopTranscribeRouteDependencies,
+    | "createRequestId"
+    | "now"
+    | "prepareUsageIncrement"
+    | "writeRequestMetadata"
+    | "writeUsageCounterIncrement"
+  > = defaultDesktopTranscribeRouteDependencies,
 ) {
+  const requestId = dependencies.createRequestId();
+
   if (input.requestInput.cleanupSettings.cleanupEnabled) {
     return rubyWhisperApiErrorResponse("service_unavailable", {
       metadata: createProviderRouteMetadata(input),
+      requestId,
     });
   }
 
   const transcriptionResult = await providerClient.transcribe(
-    input.requestInput.providerInput,
+    {
+      ...input.requestInput.providerInput,
+      requestId,
+    },
   );
 
   if (!transcriptionResult.ok) {
+    await dependencies.writeRequestMetadata({
+      ...createRequestMetadataInput(input, requestId, {
+        errorCode: transcriptionResult.error.apiErrorCode,
+        provider:
+          typeof transcriptionResult.metadata?.provider === "string"
+            ? transcriptionResult.metadata.provider
+            : "groq",
+        providerLatencyMs: transcriptionResult.metadata?.providerLatencyMs,
+        status: "failure",
+        timestamp: dependencies.now(),
+      }),
+    });
+
     return rubyWhisperApiErrorResponse(transcriptionResult.error.apiErrorCode, {
       metadata: {
         ...createProviderRouteMetadata(input),
         ...transcriptionResult.metadata,
       },
+      requestId,
     });
   }
 
+  const cleanedWordCount = countRubyWhisperBillableOutputWords(
+    transcriptionResult.result.text,
+  );
+  const usageIncrement = dependencies.prepareUsageIncrement({
+    billableWordCount: cleanedWordCount,
+    entitlement: input.entitlement,
+    friendOfRubyUntil: input.subscription.friendOfRubyUntil,
+    isBlocked: input.profile.isBlocked,
+    now: dependencies.now(),
+    paymentFailed: input.subscription.paymentFailed,
+    planState: input.subscription.planState,
+    requiresSubscription: input.subscription.requiresSubscription,
+    subscriptionStatus: input.subscription.subscriptionStatus,
+    usageCounters: input.usageCounters,
+  });
+
+  if (!usageIncrement.ok) {
+    return rubyWhisperApiErrorResponse("service_unavailable", { requestId });
+  }
+
+  const requestMetadataResult = await dependencies.writeRequestMetadata(
+    createRequestMetadataInput(input, requestId, {
+      cleanedWordCount,
+      provider: transcriptionResult.result.provider,
+      providerLatencyMs: transcriptionResult.result.providerLatencyMs,
+      status: "success",
+      timestamp: dependencies.now(),
+    }),
+  );
+
+  if (!requestMetadataResult.ok) {
+    return rubyWhisperApiErrorResponse("service_unavailable", { requestId });
+  }
+
+  const usageWriteResult = await dependencies.writeUsageCounterIncrement({
+    billableWordCount: cleanedWordCount,
+    entitlement: input.entitlement,
+    friendOfRubyUntil: input.subscription.friendOfRubyUntil,
+    isBlocked: input.profile.isBlocked,
+    now: dependencies.now(),
+    paymentFailed: input.subscription.paymentFailed,
+    planState: input.subscription.planState,
+    requiresSubscription: input.subscription.requiresSubscription,
+    subscriptionStatus: input.subscription.subscriptionStatus,
+    usageCounters: input.usageCounters,
+  });
+
+  if (!usageWriteResult.ok) {
+    return rubyWhisperApiErrorResponse("service_unavailable", { requestId });
+  }
+
   return Response.json(
-    createProviderSuccessPayload(input, transcriptionResult.result),
+    createProviderSuccessPayload(input, transcriptionResult.result, {
+      cleanedWordCount,
+      requestId,
+      usageCounters: usageWriteResult.counters,
+    }),
     {
       headers: {
         "Cache-Control": "no-store",
@@ -199,9 +310,11 @@ export async function executeDesktopTranscribeProviderContinuation(
 }
 
 const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependencies = {
+  createRequestId: () => globalThis.crypto.randomUUID(),
   evaluateEntitlement: evaluateRubyWhisperQuotaEntitlement,
   now: () => new Date(),
   parseRequest: parseDesktopTranscribeRequest,
+  prepareUsageIncrement: prepareRubyWhisperQuotaUsageIncrement,
   providerClient: createRubyWhisperGroqProviderClient(),
   readProfile: (clerkUserId) =>
     readRubyWhisperAccountProfileMetadata(
@@ -216,6 +329,22 @@ const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependenc
   readUsageCounters: (clerkUserId) =>
     readRubyWhisperUsageCounters(
       { clerkUserId },
+      createDesktopTranscribeSupabaseClient,
+    ),
+  writeRequestMetadata: (input) =>
+    writeRubyWhisperTranscriptionRequestMetadata(
+      input,
+      createDesktopTranscribeSupabaseClient,
+    ),
+  writeUsageCounterIncrement: (input) =>
+    upsertRubyWhisperUsageCounterIncrement(
+      {
+        billableWordCount: input.billableWordCount,
+        clerkUserId: input.usageCounters.clerkUserId,
+        currentCounters: input.usageCounters,
+        incrementTrialWords: input.entitlement?.planState === "trial_active",
+        now: input.now,
+      },
       createDesktopTranscribeSupabaseClient,
     ),
   requireAuth: requireClerkUserId,
@@ -244,6 +373,11 @@ function hasAcceptedTerms(value: string | undefined) {
 function createProviderSuccessPayload(
   input: DesktopTranscribePreflightContinuationInput,
   result: RubyWhisperProviderTranscriptionResult,
+  success: Readonly<{
+    cleanedWordCount: number;
+    requestId: string;
+    usageCounters: RubyWhisperUsageCounters;
+  }>,
 ): DesktopTranscribeProviderSuccessPayload {
   const metadata = createProviderRouteMetadata(input);
 
@@ -253,7 +387,7 @@ function createProviderSuccessPayload(
       : {}),
     audioDurationMs: input.requestInput.metadata.audioDurationMs,
     cleanedText: result.text,
-    cleanedWordCount: countRubyWhisperBillableOutputWords(result.text),
+    cleanedWordCount: success.cleanedWordCount,
     ok: true,
     ...(typeof metadata.osVersion === "string"
       ? { osVersion: metadata.osVersion }
@@ -263,8 +397,51 @@ function createProviderSuccessPayload(
     ...(typeof result.providerLatencyMs === "number"
       ? { providerLatencyMs: result.providerLatencyMs }
       : {}),
+    requestId: success.requestId,
     trialWordsLimit: input.entitlement.metadata.trialWordsLimit,
-    trialWordsRemaining: input.entitlement.metadata.trialWordsRemaining,
+    trialWordsRemaining: success.usageCounters.trialWordsRemaining,
+    trialWordsUsed: success.usageCounters.trialWordsUsed,
+  };
+}
+
+function createRequestMetadataInput(
+  input: DesktopTranscribePreflightContinuationInput,
+  requestId: string,
+  result: Readonly<{
+    provider: RubyWhisperProviderTranscriptionResult["provider"] | string;
+    status: "success" | "failure";
+    cleanedWordCount?: number;
+    errorCode?: RubyWhisperApiErrorCode;
+    providerLatencyMs?: unknown;
+    timestamp: Date;
+  }>,
+): WriteRubyWhisperTranscriptionRequestMetadataInput {
+  const metadata = createProviderRouteMetadata(input);
+
+  return {
+    ...(typeof metadata.appVersion === "string"
+      ? { appVersion: metadata.appVersion }
+      : {}),
+    audioDurationMs: input.requestInput.metadata.audioDurationMs,
+    clerkUserId: input.clerkUserId,
+    ...(typeof result.cleanedWordCount === "number"
+      ? { cleanedWordCount: result.cleanedWordCount }
+      : {}),
+    ...(result.errorCode ? { errorCode: result.errorCode } : {}),
+    now: result.timestamp,
+    ...(typeof metadata.osVersion === "string"
+      ? { osVersion: metadata.osVersion }
+      : {}),
+    planState: input.entitlement.planState,
+    provider:
+      result.provider === "groq" || result.provider === "mock_provider"
+        ? result.provider
+        : "mock_provider",
+    ...(typeof result.providerLatencyMs === "number"
+      ? { latencyMs: result.providerLatencyMs }
+      : {}),
+    requestId,
+    status: result.status,
   };
 }
 
