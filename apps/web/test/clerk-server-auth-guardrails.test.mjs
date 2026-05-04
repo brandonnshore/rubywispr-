@@ -3,10 +3,8 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
 
-const protectedPages = [
-  path.join("src", "app", "account", "page.tsx"),
-  path.join("src", "app", "admin", "page.tsx"),
-];
+const accountPagePath = path.join("src", "app", "account", "page.tsx");
+const adminPagePath = path.join("src", "app", "admin", "page.tsx");
 
 test("Next 16 Clerk proxy protects account and admin page routes", async () => {
   const proxy = await readFile(path.join("src", "proxy.ts"), "utf8");
@@ -28,11 +26,22 @@ test("Next 16 Clerk proxy protects account and admin page routes", async () => {
 });
 
 test("protected page surfaces require Clerk auth from server code", async () => {
-  for (const pagePath of protectedPages) {
-    const source = await readFile(pagePath, "utf8");
+  const accountPage = await readFile(accountPagePath, "utf8");
+  const adminPage = await readFile(adminPagePath, "utf8");
+  const adminBoundary = await readFile(
+    path.join("src", "lib", "admin", "auth.ts"),
+    "utf8",
+  );
 
-    assert.match(source, /requireClerkUserIdForPage/);
-    assert.match(source, /await\s+requireClerkUserIdForPage\(\)/);
+  assert.match(accountPage, /requireClerkUserIdForPage/);
+  assert.match(accountPage, /await\s+requireClerkUserIdForPage\(\)/);
+  assert.match(adminPage, /requireRubyWhisperAdminForPage/);
+  assert.match(adminPage, /await\s+requireRubyWhisperAdminForPage\(\)/);
+  assert.match(adminBoundary, /requireClerkUserIdForPage/);
+  assert.match(adminBoundary, /lookupRubyWhisperAdminRole/);
+  assert.match(adminBoundary, /^import\s+["']server-only["'];/m);
+
+  for (const source of [accountPage, adminPage, adminBoundary]) {
     assert.doesNotMatch(source, /^["']use client["'];/);
     assert.doesNotMatch(source, /\buseAuth\b|\bSignedIn\b|\bSignedOut\b/);
   }
