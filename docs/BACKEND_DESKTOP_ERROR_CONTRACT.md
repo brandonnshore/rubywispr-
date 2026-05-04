@@ -178,11 +178,12 @@ Provider and cleanup failures should map to `provider_error`,
 `network_error`, `service_unavailable`, or `internal_error` without returning or
 logging provider payloads.
 
-The desktop transcription route runs the rate-limit hook after auth, Terms, and
-quota entitlement but before parsing audio or calling providers. The current
-hook is metadata-only and storage-free; production hardening still needs a
-persistent per-user counter store wired into the RW-031 primitive without
-storing dictation content or provider payloads.
+The desktop transcription route runs the rate-limit claim after auth, Terms,
+and quota entitlement but before parsing audio or calling providers. The
+production default uses the persistent per-user metadata counter store and
+returns only `retryAfterSeconds`, `requestCount`, `windowStart`, `windowEnd`,
+and `limit` for `rate_limited` responses. It must not store dictation content
+or provider payloads.
 
 `GET /api/desktop/account` should use `signed_out`, `service_unavailable`, or
 `internal_error` for account retrieval failures. It should not return private

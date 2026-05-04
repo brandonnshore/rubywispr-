@@ -15,6 +15,7 @@ import {
 import {
   rubyWhisperApiErrorResponse,
   type RubyWhisperApiErrorCode,
+  type RubyWhisperApiErrorMetadata,
 } from "@/lib/api/errors";
 import {
   requireClerkUserId,
@@ -33,10 +34,15 @@ import {
 } from "@/lib/providers/client";
 import { createRubyWhisperGroqProviderClient } from "@/lib/providers/groq";
 import {
-  evaluateRubyWhisperTranscriptionRateLimit,
+  type RubyWhisperTranscriptionRateLimitMetadata,
   type RubyWhisperTranscriptionRateLimitInput,
   type RubyWhisperTranscriptionRateLimitResult,
 } from "@/lib/rate-limit/transcription";
+import {
+  claimRubyWhisperTranscriptionRateLimit,
+  type RubyWhisperAtomicTranscriptionRateLimitResult,
+  type SupabaseClaimTranscriptionRateLimitClient,
+} from "@/lib/rate-limit/supabase-transcription-rate-limits";
 import type { SupabaseServiceRoleRuntimeConfig } from "@/lib/supabase/server";
 import { countRubyWhisperBillableOutputWords } from "@/lib/usage/quota";
 import {
@@ -91,13 +97,17 @@ export type DesktopTranscribeProviderSuccessPayload = Readonly<{
   providerLatencyMs?: number;
 }>;
 
+export type DesktopTranscribeRateLimitResult =
+  | RubyWhisperTranscriptionRateLimitResult
+  | RubyWhisperAtomicTranscriptionRateLimitResult;
+
 export type DesktopTranscribeRouteDependencies = Readonly<{
   evaluateEntitlement: (
     input: RubyWhisperQuotaEntitlementInput,
   ) => RubyWhisperQuotaEntitlementResult;
   evaluateRateLimit: (
     input: RubyWhisperTranscriptionRateLimitInput,
-  ) => RubyWhisperTranscriptionRateLimitResult;
+  ) => DesktopTranscribeRateLimitResult | Promise<DesktopTranscribeRateLimitResult>;
   createRequestId: () => string;
   now: () => Date;
   parseRequest: (request: Request) => Promise<DesktopTranscribeRequestParseResult>;
@@ -124,6 +134,7 @@ export type DesktopTranscribeRouteDependencies = Readonly<{
 }>;
 
 type DesktopTranscribeSupabaseClient = SupabaseAccountProfileClient &
+  SupabaseClaimTranscriptionRateLimitClient &
   SupabaseSubscriptionCacheClient &
   SupabaseTranscriptionRequestsClient &
   SupabaseUsageCountersClient;
@@ -175,7 +186,7 @@ export function createDesktopTranscribeRouteHandler(
         });
       }
 
-      const rateLimitResult = dependencies.evaluateRateLimit({
+      const rateLimitResult = await dependencies.evaluateRateLimit({
         clerkUserId: authState.userId,
         now: dependencies.now(),
         planState: entitlement.planState,
@@ -184,11 +195,20 @@ export function createDesktopTranscribeRouteHandler(
       if (!rateLimitResult.ok) {
         if (rateLimitResult.status === "rate_limited") {
           return rubyWhisperApiErrorResponse("rate_limited", {
-            metadata: rateLimitResult.apiErrorMetadata,
+            metadata: createRateLimitApiErrorMetadata(
+              rateLimitResult.apiErrorMetadata,
+            ),
           });
         }
 
-        return rubyWhisperApiErrorResponse(rateLimitResult.errorCode);
+        if (
+          "errorCode" in rateLimitResult &&
+          rateLimitResult.errorCode === "signed_out"
+        ) {
+          return rubyWhisperApiErrorResponse("signed_out");
+        }
+
+        return rubyWhisperApiErrorResponse("service_unavailable");
       }
 
       const parseResult = await dependencies.parseRequest(request);
@@ -341,7 +361,16 @@ export async function executeDesktopTranscribeProviderContinuation(
 const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependencies = {
   createRequestId: () => globalThis.crypto.randomUUID(),
   evaluateEntitlement: evaluateRubyWhisperQuotaEntitlement,
-  evaluateRateLimit: evaluateRubyWhisperTranscriptionRateLimit,
+  evaluateRateLimit: (input) =>
+    claimRubyWhisperTranscriptionRateLimit(
+      {
+        clerkUserId: input.clerkUserId,
+        now: input.now,
+        planState: input.planState,
+        policy: input.policy,
+      },
+      createDesktopTranscribeSupabaseClient,
+    ),
   now: () => new Date(),
   parseRequest: parseDesktopTranscribeRequest,
   prepareUsageIncrement: prepareRubyWhisperQuotaUsageIncrement,
@@ -398,6 +427,26 @@ function createDesktopTranscribeSupabaseClient(
 
 function hasAcceptedTerms(value: string | undefined) {
   return Boolean(value?.trim());
+}
+
+function createRateLimitApiErrorMetadata(
+  metadata: RubyWhisperApiErrorMetadata | RubyWhisperTranscriptionRateLimitMetadata,
+): RubyWhisperApiErrorMetadata {
+  return {
+    ...(typeof metadata.limit === "number" ? { limit: metadata.limit } : {}),
+    ...(typeof metadata.requestCount === "number"
+      ? { requestCount: metadata.requestCount }
+      : {}),
+    ...(typeof metadata.retryAfterSeconds === "number"
+      ? { retryAfterSeconds: metadata.retryAfterSeconds }
+      : {}),
+    ...(typeof metadata.windowEnd === "string"
+      ? { windowEnd: metadata.windowEnd }
+      : {}),
+    ...(typeof metadata.windowStart === "string"
+      ? { windowStart: metadata.windowStart }
+      : {}),
+  };
 }
 
 function createProviderSuccessPayload(
