@@ -47,6 +47,8 @@ test("server auth helper returns structured unauthenticated JSON for API routes"
 
   assert.match(helper, /import\s+["']server-only["']/);
   assert.match(helper, /from\s+["']@clerk\/nextjs\/server["']/);
+  assert.match(helper, /serverEnv\.client\.clerkPublishableKey/);
+  assert.match(helper, /if\s*\(\s*!isClerkConfigured\s*\)/);
   assert.match(helper, /const\s+\{\s*userId\s*\}\s*=\s*await\s+auth\(\)/);
   assert.match(helper, /code:\s*["']clerk_session_required["']/);
   assert.match(helper, /status:\s*401/);

@@ -4,6 +4,8 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 
+import { serverEnv } from "@/config/server";
+
 export const clerkUnauthenticatedError = {
   code: "clerk_session_required",
   message: "A Clerk user session is required.",
@@ -23,7 +25,16 @@ export type ClerkRequiredAuthState =
   | ClerkAuthenticatedState
   | ClerkUnauthenticatedState;
 
+const isClerkConfigured = Boolean(serverEnv.client.clerkPublishableKey);
+
 export async function requireClerkUserId(): Promise<ClerkRequiredAuthState> {
+  if (!isClerkConfigured) {
+    return {
+      ok: false,
+      error: clerkUnauthenticatedError,
+    };
+  }
+
   const { userId } = await auth();
 
   if (!userId) {
