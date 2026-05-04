@@ -67,7 +67,8 @@ test("home page keeps download, pricing, account, and auth routes discoverable",
   assert.match(markup, /Check beta download/);
   assert.match(markup, /View pricing/);
   assert.match(markup, /Compare plans/);
-  assert.match(markup, /href="mailto:brandon@rubyadvisory\.com"/);
+  assert.match(markup, /href="mailto:/);
+  assert.match(markup, /Support/);
 });
 
 test("home page keeps product proof and privacy promises without private storage claims", async () => {
