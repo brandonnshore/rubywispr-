@@ -167,8 +167,109 @@ h1 {
   box-shadow: none;
 }
 
+.account-panel {
+  width: min(100%, 820px);
+}
+
+.account-status {
+  display: grid;
+  gap: 14px;
+  margin-top: 32px;
+  border: 1px solid rgb(23 32 51 / 14%);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: clamp(20px, 4vw, 28px);
+}
+
+.account-status-required {
+  border-color: rgb(152 89 31 / 30%);
+  background: #fffdf8;
+}
+
+.account-status-label {
+  margin: 0;
+  color: #2f6f6a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.account-status-required .account-status-label {
+  color: #98591f;
+}
+
+.account-status h2 {
+  margin: 0;
+  color: #172033;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.account-status p {
+  margin: 0;
+  max-width: 64ch;
+  color: #3f4757;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.account-metadata {
+  color: #172033;
+  font-weight: 700;
+}
+
+.account-feedback,
+.account-status .account-warning {
+  border-left: 3px solid #98591f;
+  padding-left: 12px;
+}
+
+.account-acceptance-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 4px;
+}
+
+.account-checkbox-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.account-checkbox-row input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: #2f6f6a;
+}
+
+.account-checkbox-row label {
+  color: #172033;
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+
+.account-acceptance-form button {
+  min-height: 48px;
+  width: fit-content;
+  border: 0;
+  border-radius: 8px;
+  background: #2f6f6a;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  padding: 0 18px;
+}
+
 @media (max-width: 520px) {
   .surface-shell {
     place-items: start;
+  }
+
+  .account-acceptance-form button {
+    width: 100%;
   }
 }
