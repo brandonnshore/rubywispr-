@@ -95,6 +95,10 @@ export function AuthRouteShell({ mode }: { mode: AuthMode }) {
           {copy.alternatePrompt}{" "}
           <a href={copy.alternateHref}>{copy.alternateLabel}</a>
         </p>
+        <p className="auth-switch">
+          Review <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a>{" "}
+          before trial dictation. Need help? <a href="/support">Support</a>.
+        </p>
       </section>
     </main>
   );

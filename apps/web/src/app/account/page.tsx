@@ -58,6 +58,9 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           <Link className="route-text-link" href="/">
             RubyWhisper home
           </Link>
+          <Link className="route-text-link" href="/support">
+            Support
+          </Link>
         </header>
         <section
           className="status-panel account-summary"
@@ -384,15 +387,21 @@ function SupportSection() {
       <p className="account-status-label">Support</p>
       <h2 id="account-support-heading">Account support</h2>
       <p>
-        For account, billing, or beta access help, email support without
-        including private dictation text or local app content.
+        For account, billing, or beta access help, review support guidance or
+        email support without including private dictation text or local app
+        content.
       </p>
-      <a
-        className="rw-button rw-button-secondary"
-        href={`mailto:${supportEmail}`}
-      >
-        Email support
-      </a>
+      <div className="account-action-row" aria-label="Support actions">
+        <Link className="rw-button rw-button-secondary" href="/support">
+          Open support
+        </Link>
+        <a
+          className="rw-button rw-button-secondary"
+          href={`mailto:${supportEmail}`}
+        >
+          Email support
+        </a>
+      </div>
     </section>
   );
 }
@@ -432,14 +441,20 @@ function TermsAcceptanceSection({
       <p className="account-status-label">Required</p>
       <h2 id="terms-heading">Accept Terms and Privacy before transcription</h2>
       <p>
-        Final public legal pages are not part of this release step. This
-        placeholder confirms that acceptance is required before trial
+        Review the current{" "}
+        <Link className="route-text-link" href="/terms">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link className="route-text-link" href="/privacy">
+          Privacy
+        </Link>{" "}
+        pages before accepting. Acceptance is required before trial
         transcription and records only the acceptance timestamp.
       </p>
       <p>
-        Review the Terms and Privacy pages when they are published. Do not use
-        RubyWhisper trial transcription until you are ready to accept those
-        notices.
+        Do not use RubyWhisper trial transcription until you are ready to
+        accept those notices.
       </p>
       {message ? <p className="account-feedback">{message}</p> : null}
       <TermsUnavailableNote status={termsState.status} />

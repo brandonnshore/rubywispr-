@@ -52,6 +52,7 @@ export default function PricingPage() {
             <Link href="/download">Download</Link>
             <Link href="/sign-up">Sign up</Link>
             <Link href="/account">Account</Link>
+            <Link href="/support">Support</Link>
           </nav>
         </header>
 
@@ -116,6 +117,22 @@ export default function PricingPage() {
           signed out, RubyWhisper will route you through the existing account
           fallback flow. The Mac beta download page will show a direct download
           only when release hosting is configured.
+        </p>
+        <p className="pricing-fallback-note">
+          Review{" "}
+          <Link className="route-text-link" href="/terms">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link className="route-text-link" href="/privacy">
+            Privacy
+          </Link>{" "}
+          before trial dictation. For account, billing, or beta access help,
+          use{" "}
+          <Link className="route-text-link" href="/support">
+            Support
+          </Link>
+          .
         </p>
       </section>
     </main>
