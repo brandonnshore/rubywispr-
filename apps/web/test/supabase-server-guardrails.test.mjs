@@ -16,13 +16,21 @@ const serverOnlySupabaseModulePath = path.join(
   "supabase",
   "server.ts",
 );
+const serverOnlyFriendOfRubyBatchModulePath = path.join(
+  srcRoot,
+  "lib",
+  "friend-of-ruby",
+  "batches.ts",
+);
 const forbiddenClientEnvNames = [
   "SUPABASE_URL",
   "SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
 ];
 const forbiddenClientModuleSpecifiers = [
+  "@/lib/friend-of-ruby/batches",
   "@/lib/supabase/server",
+  "src/lib/friend-of-ruby/batches",
   "src/lib/supabase/server",
 ];
 const expectedMetadataTableNames = [
@@ -59,7 +67,7 @@ test("Supabase metadata table guardrails enumerate server-only tables", async ()
   assert.match(helper, /containsPrivateAudioOrTranscriptContent:\s*false/);
 });
 
-test("client-facing code cannot import Supabase service-role helpers", async () => {
+test("client-facing code cannot import service-role helpers", async () => {
   const sourceFiles = await listSourceFiles(srcRoot);
   const violations = [];
 
@@ -71,7 +79,7 @@ test("client-facing code cannot import Supabase service-role helpers", async () 
     }
 
     for (const moduleSpecifier of extractModuleSpecifiers(source)) {
-      if (isServerOnlySupabaseImport(filePath, moduleSpecifier)) {
+      if (isForbiddenServiceRoleImport(filePath, moduleSpecifier)) {
         violations.push(
           `${path.relative(webRoot, filePath)} imports ${moduleSpecifier}`,
         );
@@ -179,12 +187,14 @@ function extractModuleSpecifiers(source) {
   return moduleSpecifiers;
 }
 
-function isServerOnlySupabaseImport(importerPath, moduleSpecifier) {
+function isForbiddenServiceRoleImport(importerPath, moduleSpecifier) {
   const resolvedPath = resolveModuleSpecifier(importerPath, moduleSpecifier);
 
   return (
     moduleSpecifier === "@/lib/supabase/server" ||
-    resolvedPath === serverOnlySupabaseModulePath
+    moduleSpecifier === "@/lib/friend-of-ruby/batches" ||
+    resolvedPath === serverOnlySupabaseModulePath ||
+    resolvedPath === serverOnlyFriendOfRubyBatchModulePath
   );
 }
 
