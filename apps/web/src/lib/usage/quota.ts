@@ -128,17 +128,17 @@ export function createRubyWhisperUsageQuotaState(
   }
 
   if (
-    input.hasActiveSubscription ||
-    normalizedPlanState === "paid_active"
-  ) {
-    return createUsageQuotaState("paid_active", true, trialQuota);
-  }
-
-  if (
     normalizedPlanState === "friend_of_ruby_active" ||
     isFutureDate(input.friendOfRubyUntil, input.now)
   ) {
     return createUsageQuotaState("friend_of_ruby_active", true, trialQuota);
+  }
+
+  if (
+    input.hasActiveSubscription ||
+    normalizedPlanState === "paid_active"
+  ) {
+    return createUsageQuotaState("paid_active", true, trialQuota);
   }
 
   if (

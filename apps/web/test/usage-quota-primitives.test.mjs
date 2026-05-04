@@ -158,10 +158,28 @@ test("usage quota state represents trial, paid, friend, and blocked outcomes", a
   assert.equal(
     usageQuota.createRubyWhisperUsageQuotaState({
       friendOfRubyUntil: "2026-06-01T00:00:00.000Z",
+      hasActiveSubscription: true,
       now: "2026-05-04T00:00:00.000Z",
       trialWordsUsed: 5_000,
     }).planState,
     "friend_of_ruby_active",
+  );
+
+  assert.deepEqual(
+    usageQuota.createRubyWhisperUsageQuotaState({
+      friendOfRubyUntil: "2026-04-01T00:00:00.000Z",
+      now: "2026-05-04T00:00:00.000Z",
+      trialWordsUsed: 5_000,
+    }),
+    {
+      canTranscribe: false,
+      isTrialExhausted: true,
+      isTrialLow: false,
+      planState: "trial_exhausted",
+      trialWordsLimit: 5_000,
+      trialWordsRemaining: 0,
+      trialWordsUsed: 5_000,
+    },
   );
 
   assert.deepEqual(

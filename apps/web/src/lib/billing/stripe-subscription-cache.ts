@@ -169,16 +169,18 @@ export function mapStripeSubscriptionEventToCacheRow(
       "ruby_whisper_friend_of_ruby_until",
     ]),
   );
+  const isFriendOfRubyActive = isFutureDate(friendOfRubyUntil, input.now);
   const plan = normalizeRubyWhisperPlan({
     customerMetadata,
     friendOfRubyUntil,
+    isFriendOfRubyActive,
     priceIds: input.priceIds,
     subscription,
     subscriptionMetadata,
   });
   const status = normalizeSafeStripeSubscriptionStatus({
     eventType,
-    friendOfRubyUntil,
+    isFriendOfRubyActive,
     plan,
     status: subscription.status,
   });
@@ -241,6 +243,7 @@ function normalizeRubyWhisperPlan(
   input: Readonly<{
     customerMetadata: Stripe.Metadata;
     friendOfRubyUntil: string | undefined;
+    isFriendOfRubyActive: boolean;
     priceIds: Partial<StripeBillingPriceIds> | undefined;
     subscription: Stripe.Subscription;
     subscriptionMetadata: Stripe.Metadata;
@@ -258,7 +261,7 @@ function normalizeRubyWhisperPlan(
     return metadataPlan;
   }
 
-  if (metadataPlan === "friend_of_ruby") {
+  if (metadataPlan === "friend_of_ruby" && input.isFriendOfRubyActive) {
     return "friend_of_ruby";
   }
 
@@ -268,7 +271,9 @@ function normalizeRubyWhisperPlan(
     return pricePlan;
   }
 
-  return input.friendOfRubyUntil ? "friend_of_ruby" : "unknown";
+  return input.friendOfRubyUntil && input.isFriendOfRubyActive
+    ? "friend_of_ruby"
+    : "unknown";
 }
 
 function normalizePlanFromPriceIds(
@@ -303,7 +308,7 @@ function normalizePlanFromPriceIds(
 function normalizeSafeStripeSubscriptionStatus(
   input: Readonly<{
     eventType: string;
-    friendOfRubyUntil: string | undefined;
+    isFriendOfRubyActive: boolean;
     plan: SupabaseStripeSubscriptionCacheWriteRow["plan"];
     status: string | null | undefined;
   }>,
@@ -320,7 +325,7 @@ function normalizeSafeStripeSubscriptionStatus(
   if (
     entitlementGrantingStatuses.has(normalizedStatus) &&
     input.plan === "unknown" &&
-    !input.friendOfRubyUntil
+    !input.isFriendOfRubyActive
   ) {
     return "canceled";
   }
@@ -424,6 +429,24 @@ function normalizeOutputTimestamp(value: Date | string | undefined) {
   return Number.isFinite(date.getTime())
     ? date.toISOString()
     : new Date(0).toISOString();
+}
+
+function isFutureDate(
+  value: string | undefined,
+  nowInput: Date | string | undefined,
+) {
+  if (!value) {
+    return false;
+  }
+
+  const date = new Date(value);
+  const now = nowInput ? new Date(nowInput) : new Date();
+
+  return (
+    Number.isFinite(date.getTime()) &&
+    Number.isFinite(now.getTime()) &&
+    date.getTime() > now.getTime()
+  );
 }
 
 function isStripeSubscriptionObject(

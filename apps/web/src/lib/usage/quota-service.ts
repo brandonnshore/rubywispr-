@@ -118,14 +118,6 @@ export function evaluateRubyWhisperQuotaEntitlement(
     );
   }
 
-  if (requiresSubscription && !hasActiveSubscription) {
-    return rejectedQuotaResult(
-      "subscription_required",
-      "subscription_required",
-      input.usageCounters,
-    );
-  }
-
   const quotaState = createRubyWhisperUsageQuotaState({
     friendOfRubyUntil: input.friendOfRubyUntil,
     hasActiveSubscription,
@@ -134,6 +126,18 @@ export function evaluateRubyWhisperQuotaEntitlement(
     trialWordsLimit: input.usageCounters.trialWordsLimit,
     trialWordsUsed: input.usageCounters.trialWordsUsed,
   });
+
+  if (
+    requiresSubscription &&
+    !hasActiveSubscription &&
+    quotaState.planState !== "friend_of_ruby_active"
+  ) {
+    return rejectedQuotaResult(
+      "subscription_required",
+      "subscription_required",
+      input.usageCounters,
+    );
+  }
 
   if (!quotaState.canTranscribe) {
     return rejectedQuotaResult(

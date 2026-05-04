@@ -170,9 +170,11 @@ test("desktop account snapshot allows active Friend of Ruby entitlement", async 
     profile: profileMetadata(),
     subscription: subscriptionMetadata({
       friendOfRubyUntil: "2027-05-04T05:00:00.000Z",
+      hasActiveSubscription: true,
       isFriendOfRubyActive: true,
       plan: "friend_of_ruby",
       planState: "friend_of_ruby_active",
+      subscriptionStatus: "active",
     }),
     usageCounters: usageCounters({ trialWordsUsed: 5_000 }),
   });
@@ -182,6 +184,30 @@ test("desktop account snapshot allows active Friend of Ruby entitlement", async 
   assert.equal(result.snapshot.canTranscribe, true);
   assert.equal(result.snapshot.failureCode, undefined);
   assert.equal(result.snapshot.planState, "friend_of_ruby_active");
+});
+
+test("desktop account snapshot rejects expired Friend of Ruby entitlement", async () => {
+  const helper = await loadDesktopAccountSnapshotHelper();
+  const result = helper.createRubyWhisperDesktopAccountSnapshot({
+    now: "2026-05-04T05:00:00.000Z",
+    profile: profileMetadata(),
+    subscription: subscriptionMetadata({
+      friendOfRubyUntil: "2026-04-04T05:00:00.000Z",
+      isFriendOfRubyActive: false,
+      plan: "friend_of_ruby",
+      planState: "subscription_required",
+      requiresSubscription: true,
+      subscriptionStatus: "canceled",
+    }),
+    usageCounters: usageCounters({ trialWordsUsed: 5_000 }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.snapshot.accountStatus, "subscription_required");
+  assert.equal(result.snapshot.canTranscribe, false);
+  assert.equal(result.snapshot.failureCode, "subscription_required");
+  assert.equal(result.snapshot.planState, "subscription_required");
+  assert.doesNotMatch(JSON.stringify(result), forbiddenPrivateFixturePattern);
 });
 
 test("desktop account snapshot represents missing Terms distinctly", async () => {
