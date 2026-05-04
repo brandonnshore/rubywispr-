@@ -205,6 +205,10 @@ The command is also covered by `npm run test` because it uses Node's test runner
   `no-store`, cleanup-disabled provider success uses synthetic/mocked
   transcription output in tests, cleanup-enabled requests fail closed pending
   RW-042, and live provider calls remain out of autonomous validation.
+- Admin API route handlers must call `requireRubyWhisperAdminForApi` from
+  `src/lib/admin/api.ts` on every request before returning protected data.
+  Denials return shared `rubyWhisperApiErrorResponse` payloads, and backend
+  role lookup failures fail closed with privacy-safe metadata only.
 - Authorization decisions stay server-side. Browser-bound files may render Clerk sign-in/sign-up UI, but must not use `useAuth`, `useUser`, `SignedIn`, `SignedOut`, `Protect`, or redirect helpers to gate protected product/admin access.
 - Auth-sensitive source avoids console/logger output and obvious storage of magic links, session tickets, JWTs, or tokens.
 - Auth test fixtures use only synthetic IDs and placeholder email domains such as `example.com` or `.test`; do not add real magic links, session tokens, JWTs, private env values, or customer email addresses.
