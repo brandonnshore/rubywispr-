@@ -48,6 +48,33 @@ Backend validation uses the same root commands because RubyWhisper backend route
 - Future provider gateway routes and clients are not part of the scaffold. Groq/provider client work belongs to RW-040, transcription/cleanup gateway behavior belongs to Wave 4 backend tickets, desktop-facing backend routes must follow `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md` for RW-044, and mocked provider integration coverage belongs to RW-046.
 - `src/lib/api/errors.ts` exposes the server-only RW-044 backend error contract helper. Future desktop API route handlers should use `rubyWhisperApiErrorResponse` so non-2xx responses keep stable codes, `Cache-Control: no-store`, and metadata-only payloads.
 
+## Usage And Trial Quota Contract
+
+The shared usage policy lives in `../../docs/USAGE_QUOTA_CONTRACT.md`. Use it
+before changing account APIs, desktop transcription routes, Mac account/settings
+surfaces, billing/admin views, usage tests, or launch audit docs.
+
+Current server-only helper surfaces:
+
+- `src/lib/usage/quota.ts` owns word counting, the 5,000-word trial default, and
+  normalized quota state.
+- `src/lib/usage/supabase-usage-counters.ts` owns metadata-only
+  `usage_counters` reads and prepared increments.
+- `src/lib/usage/quota-service.ts` owns entitlement decisions and post-success
+  usage increments.
+
+Trial words are spent from the final cleaned output word count by default. The
+preflight policy is `allow_if_started_under_limit`: a trial user who starts with
+remaining words may finish the request, and the successful final output can mark
+the trial exhausted for the next request. Paid and Friend of Ruby active users
+do not spend trial words, but successful usage still increments lifetime/monthly
+metadata counters.
+
+Do not store audio, raw transcripts, cleaned text, prompts, context,
+screenshots, clipboard contents, local Recent Wisprs, dictionary terms, provider
+payloads, auth material, private env values, or secrets in usage counters,
+request metadata, logs, tests, PR bodies, or Linear comments.
+
 ## Environment Placeholders
 
 `apps/web/.env.example` contains blank placeholder names only. Copy names into a private env file or provider secret store when an integration ticket requires real values.

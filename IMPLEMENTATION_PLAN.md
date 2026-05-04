@@ -160,6 +160,8 @@ Required work:
 - Implement usage/quota counters.
 - Implement admin role model.
 - Implement beta admin page.
+- Follow the usage policy in `docs/USAGE_QUOTA_CONTRACT.md` for trial word
+  counting, quota errors, and metadata-only storage.
 
 Dependencies:
 
@@ -235,6 +237,9 @@ Required work:
 - Enforce single-whisper duration cap of 10 minutes.
 - Return structured errors for unauthenticated, terms-not-accepted, trial-exhausted, subscription-required, rate-limited, provider-down, and invalid-audio states.
 - Store request metadata only.
+- Apply `docs/USAGE_QUOTA_CONTRACT.md` so quota preflight, post-success
+  increments, and usage metadata stay consistent across backend and desktop
+  surfaces.
 
 Dependencies:
 
