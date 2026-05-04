@@ -69,7 +69,10 @@ test("account acceptance action and API route expose sanitized outcomes", async 
   assert.match(actionSource, /redirect\(`\/account\?terms=\$\{result\.status\}`\)/);
   assert.doesNotMatch(actionSource, /from\s+["']@\/lib\/auth\/terms-acceptance["']/);
 
-  assert.match(routeSource, /export\s+async\s+function\s+POST\(\)/);
+  assert.match(routeSource, /export\s+async\s+function\s+POST\(\s*request:\s*Request\s*\)/);
+  assert.match(routeSource, /terms_acknowledgement_required/);
+  assert.match(routeSource, /status:\s*400/);
+  assert.match(routeSource, /termsPrivacyAccepted/);
   assert.match(routeSource, /recordSignedInAccountTermsAcceptance/);
   assert.match(routeSource, /status:\s*401/);
   assert.match(routeSource, /service_unavailable["']\s*\?\s*503\s*:\s*409/);

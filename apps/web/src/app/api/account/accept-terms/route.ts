@@ -2,7 +2,27 @@ import { NextResponse } from "next/server";
 
 import { recordSignedInAccountTermsAcceptance } from "@/app/account/terms-acceptance";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const hasAcknowledgement = await readTermsAcknowledgement(request);
+
+  if (!hasAcknowledgement) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "terms_acknowledgement_required",
+          message: "Terms and Privacy acknowledgement is required.",
+        },
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+        status: 400,
+      },
+    );
+  }
+
   const result = await recordSignedInAccountTermsAcceptance();
 
   if (result.status === "unauthenticated") {
@@ -53,4 +73,25 @@ export async function POST() {
       status: 200,
     },
   );
+}
+
+async function readTermsAcknowledgement(request: Request) {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const body = (await request.json().catch(() => null)) as
+      | { termsPrivacyAccepted?: unknown }
+      | null;
+
+    return body?.termsPrivacyAccepted === true;
+  }
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const body = await request.text();
+    const params = new URLSearchParams(body);
+
+    return params.get("termsPrivacyAccepted") === "on";
+  }
+
+  return false;
 }
