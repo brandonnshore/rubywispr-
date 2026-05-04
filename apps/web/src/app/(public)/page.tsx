@@ -40,9 +40,19 @@ const routeAreas = [
     owner: "Create an account for beta access, terms, and billing state.",
   },
   {
+    href: "/sign-in",
+    label: "Sign in",
+    owner: "Return to your account when you already have beta access.",
+  },
+  {
     href: "/account",
     label: "Account",
     owner: "Manage terms, billing actions, support, and download readiness.",
+  },
+  {
+    href: "/api/status",
+    label: "System status",
+    owner: "Check the public health endpoint before trying a beta workflow.",
   },
 ];
 
@@ -160,7 +170,9 @@ export default function PublicHome() {
         <section className="marketing-section" aria-labelledby="routes-heading">
           <div className="marketing-section-heading">
             <p className="surface-kicker">Next steps</p>
-            <h2 id="routes-heading">Download, account, pricing, and support.</h2>
+            <h2 id="routes-heading">
+              Download, account, pricing, status, and support.
+            </h2>
           </div>
           <nav
             className="route-list marketing-route-list"
