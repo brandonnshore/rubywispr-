@@ -1,4 +1,6 @@
-import { ClerkProvider, SignIn, SignUp } from "@clerk/nextjs";
+"use client";
+
+import { ClerkProvider, SignIn, SignUp } from "@clerk/react";
 import type { ReactNode } from "react";
 
 import { clientEnv } from "@/config/client";

@@ -16,9 +16,13 @@ test("Next 16 Clerk proxy protects account and admin page routes", async () => {
     proxy,
     /import\s+\{\s*clerkMiddleware,\s*createRouteMatcher\s*\}\s+from\s+["']@clerk\/nextjs\/server["']/,
   );
+  assert.match(proxy, /NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY/);
+  assert.match(proxy, /NextResponse\.next\(\)/);
+  assert.match(proxy, /const\s+clerkProtectedProxy\s*=\s*clerkMiddleware/);
   assert.match(proxy, /createRouteMatcher\(\[\s*["']\/account\(\.\*\)["']/);
   assert.match(proxy, /["']\/admin\(\.\*\)["']/);
   assert.match(proxy, /await\s+auth\.protect\(\)/);
+  assert.match(proxy, /return\s+clerkProtectedProxy\(request,\s*event\)/);
   assert.match(proxy, /["']\/\(api\|trpc\)\(\.\*\)["']/);
   assert.doesNotMatch(proxy, /\/api\/status.*protect/s);
 });
@@ -43,6 +47,8 @@ test("server auth helper returns structured unauthenticated JSON for API routes"
 
   assert.match(helper, /import\s+["']server-only["']/);
   assert.match(helper, /from\s+["']@clerk\/nextjs\/server["']/);
+  assert.match(helper, /serverEnv\.client\.clerkPublishableKey/);
+  assert.match(helper, /if\s*\(\s*!isClerkConfigured\s*\)/);
   assert.match(helper, /const\s+\{\s*userId\s*\}\s*=\s*await\s+auth\(\)/);
   assert.match(helper, /code:\s*["']clerk_session_required["']/);
   assert.match(helper, /status:\s*401/);

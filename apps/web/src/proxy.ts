@@ -1,15 +1,28 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
 const isProtectedPageRoute = createRouteMatcher([
   "/account(.*)",
   "/admin(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, request) => {
+const isClerkConfigured = Boolean(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim(),
+);
+
+const clerkProtectedProxy = clerkMiddleware(async (auth, request) => {
   if (isProtectedPageRoute(request)) {
     await auth.protect();
   }
 });
+
+export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (!isClerkConfigured) {
+    return NextResponse.next();
+  }
+
+  return clerkProtectedProxy(request, event);
+}
 
 export const config = {
   matcher: [
