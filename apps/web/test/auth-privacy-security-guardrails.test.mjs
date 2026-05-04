@@ -30,10 +30,27 @@ const serverAuthHelpers = [
     path: path.join(srcRoot, "lib", "auth", "terms-acceptance.ts"),
   },
 ];
+const serverAccountHelpers = [
+  {
+    moduleSpecifier: "@/lib/account/desktop-account-snapshot",
+    path: path.join(srcRoot, "lib", "account", "desktop-account-snapshot.ts"),
+  },
+  {
+    moduleSpecifier: "@/lib/account/profile-metadata",
+    path: path.join(srcRoot, "lib", "account", "profile-metadata.ts"),
+  },
+  {
+    moduleSpecifier: "@/lib/account/subscription-cache",
+    path: path.join(srcRoot, "lib", "account", "subscription-cache.ts"),
+  },
+];
+const serverOnlyHelpers = [...serverAuthHelpers, ...serverAccountHelpers];
 const authSensitivePaths = [
   path.join(srcRoot, "app", "(auth)"),
   path.join(srcRoot, "app", "api", "account"),
+  path.join(srcRoot, "app", "api", "desktop"),
   path.join(srcRoot, "config"),
+  path.join(srcRoot, "lib", "account"),
   path.join(srcRoot, "lib", "auth"),
   path.join(srcRoot, "proxy.ts"),
 ];
@@ -90,8 +107,8 @@ const nonSyntheticFixturePatterns = [
   },
 ];
 
-test("server auth helpers remain server-only", async () => {
-  for (const helper of serverAuthHelpers) {
+test("server auth and account helpers remain server-only", async () => {
+  for (const helper of serverOnlyHelpers) {
     const source = await readFile(helper.path, "utf8");
     const relativePath = normalizePath(path.relative(webRoot, helper.path));
 
@@ -121,7 +138,7 @@ test("browser-bound source cannot import server auth helpers or decide authoriza
     const relativePath = normalizePath(path.relative(webRoot, filePath));
     const moduleSpecifiers = extractModuleSpecifiers(source);
 
-    for (const helper of serverAuthHelpers) {
+    for (const helper of serverOnlyHelpers) {
       if (moduleSpecifiers.some((specifier) => importsHelper(filePath, specifier, helper))) {
         violations.push(`${relativePath} imports ${helper.moduleSpecifier}`);
       }
