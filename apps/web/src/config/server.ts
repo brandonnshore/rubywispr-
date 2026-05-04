@@ -3,6 +3,7 @@ import { clientEnv } from "./client";
 export const serverRuntimeEnvVariableNames = [
   "SUPABASE_URL",
   "SUPABASE_ANON_KEY",
+  "RUBYWHISPER_ADMIN_BOOTSTRAP_EMAILS",
   "STRIPE_MONTHLY_PRICE_ID",
   "STRIPE_ANNUAL_PRICE_ID",
   "SENTRY_DSN",
@@ -49,6 +50,11 @@ export const serverEnv = Object.freeze({
     url: readOptionalServerEnv("SUPABASE_URL"),
     anonKey: readOptionalServerEnv("SUPABASE_ANON_KEY"),
     serviceRoleKey: readOptionalServerEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  },
+  admin: {
+    bootstrapAllowedEmails: readOptionalServerEnv(
+      "RUBYWHISPER_ADMIN_BOOTSTRAP_EMAILS",
+    ),
   },
   stripe: {
     secretKey: readOptionalServerEnv("STRIPE_SECRET_KEY"),

@@ -67,6 +67,7 @@ test("client config exposes only NEXT_PUBLIC variables", async () => {
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
     "SUPABASE_ANON_KEY",
+    "RUBYWHISPER_ADMIN_BOOTSTRAP_EMAILS",
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
     "STRIPE_MONTHLY_PRICE_ID",
