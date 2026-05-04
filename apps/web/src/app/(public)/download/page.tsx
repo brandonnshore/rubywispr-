@@ -22,9 +22,24 @@ const nextSteps = [
     note: "Review the launch trial and paid beta plan.",
   },
   {
+    href: "/terms",
+    label: "Read Terms",
+    note: "Review beta usage and acceptance language before trial dictation.",
+  },
+  {
+    href: "/privacy",
+    label: "Read Privacy",
+    note: "Confirm metadata-only server records and local Recent Wisprs.",
+  },
+  {
+    href: "/support",
+    label: "Open support",
+    note: "Get beta help without sending private dictation text.",
+  },
+  {
     href: `mailto:${supportEmail}`,
     label: "Email support",
-    note: "Ask for beta access status without sending private dictation text.",
+    note: "Contact support after reviewing privacy-safe support guidance.",
   },
 ];
 
@@ -45,6 +60,7 @@ export default function DownloadPage() {
             <Link href="/">Home</Link>
             <Link href="/pricing">Pricing</Link>
             <Link href="/account">Account</Link>
+            <Link href="/support">Support</Link>
           </nav>
         </header>
 

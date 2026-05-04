@@ -50,6 +50,21 @@ const routeAreas = [
     owner: "Manage terms, billing actions, support, and download readiness.",
   },
   {
+    href: "/terms",
+    label: "Terms",
+    owner: "Review beta usage, limits, and account acceptance language.",
+  },
+  {
+    href: "/privacy",
+    label: "Privacy",
+    owner: "Understand metadata-only server records and local Recent Wisprs.",
+  },
+  {
+    href: "/support",
+    label: "Support",
+    owner: "Get beta help without sending private dictation text.",
+  },
+  {
     href: "/api/status",
     label: "System status",
     owner: "Check the public health endpoint before trying a beta workflow.",
@@ -73,6 +88,7 @@ export default function PublicHome() {
             <Link href="/sign-up">Sign up</Link>
             <Link href="/sign-in">Sign in</Link>
             <Link href="/account">Account</Link>
+            <Link href="/support">Support</Link>
           </nav>
         </header>
 
@@ -185,10 +201,8 @@ export default function PublicHome() {
               </a>
             ))}
             <a className="route-link" href={`mailto:${supportEmail}`}>
-              <span>Support</span>
-              <small>
-                Email beta questions without sending private dictation text.
-              </small>
+              <span>Email support</span>
+              <small>Use email after reviewing privacy-safe support guidance.</small>
             </a>
           </nav>
         </section>
