@@ -101,9 +101,11 @@ Current server-only helper surfaces:
   transcription request-window decision primitive. It accepts Clerk user ID,
   timestamps, request counts, and plan-state policy metadata only, returns
   `allowed`, `rate_limited`, or `invalid_user`, and has no persistence,
-  network, Supabase, logging, provider, or payload side effects. The desktop
-  transcription route calls this hook before parsing/provider work; persistent
-  cross-request counters remain a follow-up RW-031 production store task.
+  network, Supabase, logging, provider, or payload side effects.
+- `src/lib/rate-limit/supabase-transcription-rate-limits.ts` owns the
+  server-only Supabase metadata store helpers. The production desktop
+  transcription route uses the atomic claim helper so cross-request counters are
+  read and updated before parsing audio or calling providers.
 
 Trial words are spent from the final cleaned output word count by default. The
 preflight policy is `allow_if_started_under_limit`: a trial user who starts with
@@ -136,11 +138,9 @@ and `billingPortalUrl: null`.
 ### Desktop Transcription Route
 
 `src/app/api/desktop/transcribe/route.ts` checks Clerk auth, Terms acceptance,
-quota entitlement, and the local transcription rate-limit hook before parsing
-audio or calling providers. The default rate-limit hook is storage-free and
-therefore only enforces the current metadata window passed to it; production
-abuse protection still needs a persistent per-user counter store wired into the
-RW-031 rate-limit primitive without storing audio, transcripts, cleanup context,
+quota entitlement, and the persistent transcription rate-limit claim before
+parsing audio or calling providers. The default claim uses per-user Supabase
+metadata only and must not store audio, transcripts, cleanup context,
 dictionary terms, provider payloads, auth material, or private env values.
 
 ## Environment Placeholders

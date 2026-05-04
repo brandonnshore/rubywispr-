@@ -208,6 +208,13 @@ test("desktop transcribe route returns rate_limited before parser or provider wo
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   assert.equal(response.headers.get("Retry-After"), "30");
   assert.equal(body.error.code, "rate_limited");
+  assert.deepEqual(Object.keys(body.metadata).sort(), [
+    "limit",
+    "requestCount",
+    "retryAfterSeconds",
+    "windowEnd",
+    "windowStart",
+  ]);
   assert.deepEqual(body.metadata, {
     limit: 20,
     requestCount: 20,
@@ -229,6 +236,54 @@ test("desktop transcribe route returns rate_limited before parser or provider wo
   assert.doesNotMatch(
     JSON.stringify(body),
     /audio|transcript|cleaned|context|dictionary|provider payload|user_rw_synthetic/i,
+  );
+});
+
+test("desktop transcribe route maps persistent rate-limit failures before parser or writes", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+  const { calls, dependencies } = createRouteDependencies({
+    evaluateRateLimit: async () => ({
+      error: {
+        code: "supabase_transcription_rate_limit_claim_failed",
+        message: "Unable to claim transcription rate-limit metadata.",
+      },
+      ok: false,
+      status: "claim_failed",
+    }),
+    parseRequest: () => {
+      throw new Error("Parser must not run when rate-limit persistence fails.");
+    },
+    providerClient: providerClientThatMustNotRun("rate-limit persistence failure"),
+    writeRequestMetadata: () => {
+      throw new Error("Request metadata must not be written before parsing/provider work.");
+    },
+    writeUsageCounterIncrement: () => {
+      throw new Error("Usage counters must not be written before parsing/provider work.");
+    },
+  });
+  const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+  const response = await handler(syntheticAudioRequest());
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(body.error.code, "service_unavailable");
+  assert.equal(body.error.retryable, true);
+  assert.equal(body.metadata, undefined);
+  assert.deepEqual(
+    toPlainObject(calls).map((call) => call.operation),
+    [
+      "requireAuth",
+      "readProfile",
+      "readSubscription",
+      "readUsageCounters",
+      "evaluateEntitlement",
+      "evaluateRateLimit",
+    ],
+  );
+  assert.doesNotMatch(
+    JSON.stringify(body),
+    /audio|transcript|cleaned|context|dictionary|supabase_transcription_rate_limit/i,
   );
 });
 
@@ -701,7 +756,7 @@ test("desktop transcribe route stays server-only and provider-safe", async () =>
   assert.match(source, /runRubyWhisperConservativeCleanup/);
   assert.match(source, /parseDesktopTranscribeRequest/);
   assert.match(source, /evaluateRubyWhisperQuotaEntitlement/);
-  assert.match(source, /evaluateRubyWhisperTranscriptionRateLimit/);
+  assert.match(source, /claimRubyWhisperTranscriptionRateLimit/);
   assert.match(source, /createRubyWhisperGroqProviderClient/);
   assert.match(source, /executeDesktopTranscribeProviderContinuation/);
   assert.match(source, /rubyWhisperApiErrorResponse\(["']signed_out["']\)/);
@@ -830,6 +885,12 @@ function createRouteModuleRequire() {
             throw new Error("Default rate-limit dependency is outside this route test.");
           },
         };
+      case "@/lib/rate-limit/supabase-transcription-rate-limits":
+        return {
+          claimRubyWhisperTranscriptionRateLimit: async () => {
+            throw new Error("Default persistent rate-limit dependency is outside this route test.");
+          },
+        };
       case "@/lib/usage/quota":
         return {
           countRubyWhisperBillableOutputWords,
@@ -880,7 +941,7 @@ function createRouteDependencies(overrides = {}) {
     evaluateRateLimit(input) {
       calls.push({ input, operation: "evaluateRateLimit" });
 
-      return rateLimitAllowed(input);
+      return rateLimitAllowed();
     },
     now() {
       return syntheticNow;
@@ -1096,8 +1157,9 @@ function entitlementAllowedForPlan(usageCounters, planState) {
   };
 }
 
-function rateLimitAllowed(input = {}) {
+function rateLimitAllowed() {
   return {
+    action: "claimed",
     metadata: {
       limit: 20,
       requestCount: 4,
@@ -1105,11 +1167,6 @@ function rateLimitAllowed(input = {}) {
       windowStart: "2026-05-04T07:30:00.000Z",
     },
     ok: true,
-    state: {
-      clerkUserId: input.clerkUserId ?? "user_rw_synthetic_member_001",
-      requestCount: 4,
-      windowStart: "2026-05-04T07:30:00.000Z",
-    },
     status: "allowed",
   };
 }
@@ -1126,13 +1183,11 @@ function rateLimitRejected() {
   return {
     apiErrorMetadata: metadata,
     errorCode: "rate_limited",
-    metadata,
-    ok: false,
-    state: {
-      clerkUserId: "user_rw_synthetic_member_001",
-      requestCount: 20,
-      windowStart: "2026-05-04T07:30:00.000Z",
+    metadata: {
+      ...metadata,
+      disallowedInternalDetail: "provider payload must not echo",
     },
+    ok: false,
     status: "rate_limited",
   };
 }
