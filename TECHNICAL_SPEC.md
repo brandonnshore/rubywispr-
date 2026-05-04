@@ -475,6 +475,10 @@ Handles Stripe events and updates Supabase.
 
 ## Error Handling
 
+The canonical backend-to-desktop error contract lives in
+`docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`. Backend routes must use those stable
+machine codes and keep responses/logs metadata-only.
+
 | Error | User-facing behavior | Storage/logging |
 | --- | --- | --- |
 | Signed out | Open sign-in flow | Metadata only |

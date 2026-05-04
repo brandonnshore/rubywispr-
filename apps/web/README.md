@@ -45,7 +45,7 @@ Backend validation uses the same root commands because RubyWhisper backend route
 - `src/app/account/page.tsx` is the authenticated customer account placeholder scaffolded by RUB-82. Clerk auth belongs to RW-022, subscription/account data belongs to RW-024/RW-025/RW-026, and the production account UI belongs to RW-082.
 - `src/app/admin/page.tsx` is the admin placeholder scaffolded by RUB-82. Server-side admin roles belong to RW-028, the beta health dashboard belongs to RW-084, Friend of Ruby code workflows belong to RW-085, and later auth/admin security audit belongs to RW-101.
 - `src/app/api/status/route.ts` is the current smoke API. Future API routes stay under `src/app/api/*` and must keep provider, billing, Supabase service-role, webhook, and signing logic server-only.
-- Future provider gateway routes and clients are not part of the scaffold. Groq/provider client work belongs to RW-040, transcription/cleanup gateway behavior belongs to Wave 4 backend tickets, backend-to-desktop error shapes belong to RW-044, and mocked provider integration coverage belongs to RW-046.
+- Future provider gateway routes and clients are not part of the scaffold. Groq/provider client work belongs to RW-040, transcription/cleanup gateway behavior belongs to Wave 4 backend tickets, desktop-facing backend routes must follow `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md` for RW-044, and mocked provider integration coverage belongs to RW-046.
 
 ## Environment Placeholders
 
