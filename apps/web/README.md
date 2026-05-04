@@ -46,6 +46,7 @@ Backend validation uses the same root commands because RubyWhisper backend route
 - `src/app/admin/page.tsx` is the admin placeholder scaffolded by RUB-82. Server-side admin roles belong to RW-028, the beta health dashboard belongs to RW-084, Friend of Ruby code workflows belong to RW-085, and later auth/admin security audit belongs to RW-101.
 - `src/app/api/status/route.ts` is the current smoke API. Future API routes stay under `src/app/api/*` and must keep provider, billing, Supabase service-role, webhook, and signing logic server-only.
 - Future provider gateway routes and clients are not part of the scaffold. Groq/provider client work belongs to RW-040, transcription/cleanup gateway behavior belongs to Wave 4 backend tickets, desktop-facing backend routes must follow `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md` for RW-044, and mocked provider integration coverage belongs to RW-046.
+- `src/lib/api/errors.ts` exposes the server-only RW-044 backend error contract helper. Future desktop API route handlers should use `rubyWhisperApiErrorResponse` so non-2xx responses keep stable codes, `Cache-Control: no-store`, and metadata-only payloads.
 
 ## Environment Placeholders
 
@@ -96,6 +97,12 @@ After `npm run build`, rerun `npm run test:auth-privacy` or the focused changed-
 Future mocked backend route tests should import from `test/support/backend-integration.mjs`. The helper exports synthetic Clerk/Supabase/provider fixtures plus `invokeRouteHandler`, `invokeServerFunction`, `createSyntheticBackendRequest`, and `createMockBackendProviders`.
 
 Keep these tests offline-only. Do not pass live Clerk, Stripe, Supabase, Groq, Sentry, auth, billing, or private env values into the helper; it rejects live-looking hosts, credential-like strings, private env source references, and guarded server secret names.
+
+## Shared API Error Contract
+
+`src/lib/api/errors.ts` is the server-only, framework-neutral RW-044 helper for desktop-facing backend errors. Future desktop-facing routes should use `rubyWhisperApiErrorResponse` so non-2xx responses keep the canonical code matrix, short safe messages, retryability, metadata allowlist, and `Cache-Control: no-store`.
+
+Existing account web routes can keep their route-specific validation shape until their owning migration tickets require desktop compatibility. In particular, POST `/api/account/accept-terms` still returns `terms_acknowledgement_required` for missing form acknowledgement and `clerk_session_required` for the current Clerk session guard; missing accepted Terms state for dictation routes maps to `terms_required` through the shared helper.
 
 ## Validation
 
