@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { clientEnv } from "@/config/client";
 import { requireClerkUserIdForPage } from "@/lib/auth/clerk";
 
 import {
@@ -12,8 +13,15 @@ import {
   readAccountTermsAcceptanceState,
   type AccountTermsAcceptanceState,
 } from "./terms-acceptance";
+import {
+  readAccountPageMetadata,
+  type AccountMetadataState,
+  type AccountPageMetadata,
+} from "./metadata";
 
 export const dynamic = "force-dynamic";
+
+const supportEmail = "brandon@rubyadvisory.com";
 
 type AccountPageProps = Readonly<{
   searchParams?: Promise<
@@ -26,13 +34,15 @@ type AccountPageProps = Readonly<{
 }>;
 
 export default async function AccountPage({ searchParams }: AccountPageProps) {
-  await requireClerkUserIdForPage();
+  const clerkUserId = await requireClerkUserIdForPage();
 
-  const [termsState, termsMessage, billingMessage] = await Promise.all([
-    readAccountTermsAcceptanceState(),
-    resolveTermsMessage(searchParams),
-    resolveBillingMessage(searchParams),
-  ]);
+  const [termsState, accountMetadata, termsMessage, billingMessage] =
+    await Promise.all([
+      readAccountTermsAcceptanceState(),
+      readAccountPageMetadata(clerkUserId),
+      resolveTermsMessage(searchParams),
+      resolveBillingMessage(searchParams),
+    ]);
 
   return (
     <main className="surface-shell account-shell">
@@ -54,38 +64,276 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           aria-label="Account status summary"
         >
           <p>
-            Terms and Privacy acceptance is required before RubyWhisper can
-            transcribe trial dictation. This account view records only
-            acceptance metadata for the signed-in session.
+            This signed-in account view shows account, plan, billing, support,
+            download, and aggregate usage metadata only. It does not display
+            dictation text, local context, clipboard data, dictionary data, or
+            media from the Mac app.
           </p>
         </section>
+        <ProfileSection metadata={accountMetadata} />
         <TermsAcceptanceSection
           message={termsMessage}
           termsState={termsState}
         />
-        <DownloadSection />
+        <PlanStatusSection metadata={accountMetadata} />
+        <UsageMetadataSection metadata={accountMetadata} />
         <BillingActionsSection message={billingMessage} />
+        <DownloadSection />
+        <SupportSection />
       </section>
     </main>
   );
 }
 
-function DownloadSection() {
+function ProfileSection({
+  metadata,
+}: Readonly<{
+  metadata: AccountPageMetadata;
+}>) {
+  const profile = metadata.profile;
+
   return (
     <section
       className="status-panel account-status"
+      aria-labelledby="account-profile-heading"
+    >
+      <p className="account-status-label">Profile</p>
+      <h2 id="account-profile-heading">Signed-in account</h2>
+      {profile.ok ? (
+        <dl className="account-metadata-list">
+          <div>
+            <dt>Email</dt>
+            <dd>{profile.value.email}</dd>
+          </div>
+          <div>
+            <dt>Account access</dt>
+            <dd>{profile.value.isBlocked ? "Blocked" : "Enabled"}</dd>
+          </div>
+        </dl>
+      ) : (
+        <UnavailableMetadataNotice
+          label="Profile metadata"
+          state={profile}
+        />
+      )}
+    </section>
+  );
+}
+
+function DownloadSection() {
+  const latestDownloadUrl = clientEnv.latestAppDownloadUrl;
+
+  return (
+    <section
+      className={
+        latestDownloadUrl
+          ? "status-panel account-status account-status-success"
+          : "status-panel account-status account-status-required"
+      }
       aria-labelledby="account-download-heading"
     >
-      <p className="account-status-label">Download</p>
-      <h2 id="account-download-heading">Mac beta app</h2>
-      <p>
-        Download status lives on the public download page so release hosting
-        can be updated without putting local paths or private URLs in account
-        copy.
+      <p className="account-status-label">
+        {latestDownloadUrl ? "Available" : "Beta artifact pending"}
       </p>
-      <Link className="rw-button rw-button-secondary" href="/download">
-        Open download page
-      </Link>
+      <h2 id="account-download-heading">Mac beta app</h2>
+      {latestDownloadUrl ? (
+        <>
+          <p>
+            Release hosting is configured for the latest RubyWhisper Mac beta.
+            Keep this account available for sign-in, Terms/Privacy acceptance,
+            and billing state.
+          </p>
+          <div className="account-action-row" aria-label="Download actions">
+            <a
+              className="rw-button"
+              href={latestDownloadUrl}
+              rel="noopener noreferrer"
+            >
+              Download RubyWhisper Mac beta
+            </a>
+            <Link className="rw-button rw-button-secondary" href="/download">
+              Open download page
+            </Link>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>
+            No public Mac beta artifact is configured for this environment.
+            This placeholder avoids local paths, private URLs, or claims about
+            signing and notarization that belong to later release work.
+          </p>
+          <Link className="rw-button rw-button-secondary" href="/download">
+            Open download page
+          </Link>
+        </>
+      )}
+    </section>
+  );
+}
+
+function PlanStatusSection({
+  metadata,
+}: Readonly<{
+  metadata: AccountPageMetadata;
+}>) {
+  const snapshot = metadata.snapshot.ok ? metadata.snapshot.value : null;
+  const subscription = metadata.subscription.ok
+    ? metadata.subscription.value
+    : null;
+  const planState = snapshot?.planState ?? subscription?.planState;
+
+  return (
+    <section
+      className={resolvePlanStatusClassName(planState)}
+      aria-labelledby="account-plan-heading"
+    >
+      <p className="account-status-label">
+        {planState ? formatPlanState(planState) : "Unavailable"}
+      </p>
+      <h2 id="account-plan-heading">Plan status</h2>
+      {planState ? (
+        <>
+          <p>
+            Plan and entitlement state is metadata-only and may take a moment
+            to update after checkout or billing changes.
+          </p>
+          <dl className="account-metadata-list">
+            <div>
+              <dt>Plan state</dt>
+              <dd>{formatPlanState(planState)}</dd>
+            </div>
+            <div>
+              <dt>Account state</dt>
+              <dd>
+                {snapshot ? formatPlanState(snapshot.accountStatus) : "Pending"}
+              </dd>
+            </div>
+            <div>
+              <dt>Current plan</dt>
+              <dd>
+                {subscription ? formatPlanState(subscription.plan) : "Pending"}
+              </dd>
+            </div>
+            <div>
+              <dt>Subscription status</dt>
+              <dd>
+                {subscription?.subscriptionStatus
+                  ? formatPlanState(subscription.subscriptionStatus)
+                  : "No active subscription metadata"}
+              </dd>
+            </div>
+            <div>
+              <dt>Can transcribe</dt>
+              <dd>
+                {snapshot ? formatBoolean(snapshot.canTranscribe) : "Pending"}
+              </dd>
+            </div>
+            <div>
+              <dt>Current period ends</dt>
+              <dd>{formatOptionalDate(subscription?.currentPeriodEnd)}</dd>
+            </div>
+            <div>
+              <dt>Friend of Ruby until</dt>
+              <dd>{formatOptionalDate(subscription?.friendOfRubyUntil)}</dd>
+            </div>
+            <div>
+              <dt>Plan metadata updated</dt>
+              <dd>{formatOptionalDate(subscription?.updatedAt)}</dd>
+            </div>
+          </dl>
+        </>
+      ) : (
+        <UnavailableMetadataNotice
+          label="Plan metadata"
+          state={metadata.subscription}
+        />
+      )}
+      {!metadata.snapshot.ok && planState ? (
+        <p className="account-warning">
+          Full account readiness is unavailable until profile, plan, and usage
+          metadata can be read together.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function UsageMetadataSection({
+  metadata,
+}: Readonly<{
+  metadata: AccountPageMetadata;
+}>) {
+  const usage = metadata.snapshot.ok
+    ? metadata.snapshot.value
+    : metadata.usageCounters.ok
+      ? metadata.usageCounters.value
+      : null;
+
+  return (
+    <section
+      className="status-panel account-status"
+      aria-labelledby="account-usage-heading"
+    >
+      <p className="account-status-label">Usage</p>
+      <h2 id="account-usage-heading">Trial and usage metadata</h2>
+      {usage ? (
+        <>
+          <p>
+            Word counts are aggregate usage metadata for account and plan
+            decisions. Private Mac app content is not shown here.
+          </p>
+          <dl className="account-metadata-list account-usage-list">
+            <div>
+              <dt>Trial words used</dt>
+              <dd>{formatNumber(usage.trialWordsUsed)}</dd>
+            </div>
+            <div>
+              <dt>Trial words limit</dt>
+              <dd>{formatNumber(usage.trialWordsLimit)}</dd>
+            </div>
+            <div>
+              <dt>Trial words remaining</dt>
+              <dd>{formatNumber(usage.trialWordsRemaining)}</dd>
+            </div>
+            <div>
+              <dt>Trial state</dt>
+              <dd>
+                {usage.isTrialExhausted
+                  ? "Exhausted"
+                  : usage.isTrialLow
+                    ? "Low"
+                    : "Available"}
+              </dd>
+            </div>
+            <div>
+              <dt>Monthly words used</dt>
+              <dd>{formatNumber(usage.monthlyWordsUsed)}</dd>
+            </div>
+            <div>
+              <dt>Monthly period start</dt>
+              <dd>{formatOptionalDate(usage.monthlyPeriodStart)}</dd>
+            </div>
+            <div>
+              <dt>Lifetime words used</dt>
+              <dd>{formatNumber(usage.lifetimeWordsUsed)}</dd>
+            </div>
+            <div>
+              <dt>Usage metadata updated</dt>
+              <dd>
+                {"updatedAt" in usage
+                  ? formatOptionalDate(usage.updatedAt)
+                  : "Available from account snapshot"}
+              </dd>
+            </div>
+          </dl>
+        </>
+      ) : (
+        <UnavailableMetadataNotice
+          label="Usage metadata"
+          state={metadata.usageCounters}
+        />
+      )}
     </section>
   );
 }
@@ -104,7 +352,8 @@ function BillingActionsSection({
       <h2 id="billing-heading">Plan and billing</h2>
       <p>
         Choose a paid RubyWhisper plan or open billing management for an
-        existing subscription from this account.
+        existing subscription. Checkout and portal sessions are created by
+        server actions.
       </p>
       {message ? (
         <p className="account-feedback" role="status" aria-live="polite">
@@ -122,6 +371,28 @@ function BillingActionsSection({
           <button type="submit">Manage billing</button>
         </form>
       </div>
+    </section>
+  );
+}
+
+function SupportSection() {
+  return (
+    <section
+      className="status-panel account-status"
+      aria-labelledby="account-support-heading"
+    >
+      <p className="account-status-label">Support</p>
+      <h2 id="account-support-heading">Account support</h2>
+      <p>
+        For account, billing, or beta access help, email support without
+        including private dictation text or local app content.
+      </p>
+      <a
+        className="rw-button rw-button-secondary"
+        href={`mailto:${supportEmail}`}
+      >
+        Email support
+      </a>
     </section>
   );
 }
@@ -172,7 +443,10 @@ function TermsAcceptanceSection({
       </p>
       {message ? <p className="account-feedback">{message}</p> : null}
       <TermsUnavailableNote status={termsState.status} />
-      <form className="account-acceptance-form" action={acceptAccountTermsPrivacy}>
+      <form
+        className="account-acceptance-form"
+        action={acceptAccountTermsPrivacy}
+      >
         <div className="account-checkbox-row">
           <input
             id="termsPrivacyAccepted"
@@ -215,6 +489,24 @@ function TermsUnavailableNote({
   }
 
   return null;
+}
+
+function UnavailableMetadataNotice<T>({
+  label,
+  state,
+}: Readonly<{
+  label: string;
+  state: AccountMetadataState<T>;
+}>) {
+  if (state.ok) {
+    return null;
+  }
+
+  return (
+    <p className="account-warning" role="status">
+      {label} is unavailable: {metadataUnavailableMessage(state.reason)}
+    </p>
+  );
 }
 
 async function resolveTermsMessage(
@@ -287,4 +579,62 @@ function formatAcceptedAt(value: string) {
     timeStyle: "short",
     timeZone: "UTC",
   }).format(acceptedAt);
+}
+
+function formatOptionalDate(value: string | undefined) {
+  if (!value) {
+    return "Not available";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en").format(value);
+}
+
+function formatBoolean(value: boolean) {
+  return value ? "Yes" : "No";
+}
+
+function formatPlanState(value: string) {
+  return value
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function metadataUnavailableMessage(reason: string) {
+  switch (reason) {
+    case "invalid_input":
+      return "metadata did not pass account consistency checks.";
+    case "missing_metadata":
+      return "required account metadata has not been created yet.";
+    case "missing_user":
+      return "a signed-in account is required.";
+    default:
+      return "server-only account services are not configured or are temporarily unavailable.";
+  }
+}
+
+function resolvePlanStatusClassName(planState: string | undefined) {
+  if (planState === "paid_active" || planState === "friend_of_ruby_active") {
+    return "status-panel account-status account-status-success";
+  }
+
+  if (planState === "payment_failed" || planState === "subscription_required") {
+    return "status-panel account-status account-status-required";
+  }
+
+  return "status-panel account-status";
 }

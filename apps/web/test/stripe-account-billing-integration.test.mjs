@@ -471,6 +471,12 @@ function createAccountPageRequire() {
     switch (specifier) {
       case "react/jsx-runtime":
         return requireCommonJs("react/jsx-runtime");
+      case "@/config/client":
+        return {
+          clientEnv: {
+            latestAppDownloadUrl: undefined,
+          },
+        };
       case "next/link":
         return {
           default: ({ href, children, ...props }) =>
@@ -484,6 +490,10 @@ function createAccountPageRequire() {
         return {
           requireClerkUserIdForPage: async () => syntheticUserId,
         };
+      case "./metadata":
+        return {
+          readAccountPageMetadata: async () => activeTrialAccountMetadata(),
+        };
       case "./actions":
         return {
           acceptAccountTermsPrivacy: async () => {},
@@ -494,12 +504,73 @@ function createAccountPageRequire() {
       case "./terms-acceptance":
         return {
           readAccountTermsAcceptanceState: async () => ({
-            status: "missing",
+            status: "required",
           }),
         };
       default:
         throw new Error(`Unexpected account page dependency ${specifier}`);
     }
+  };
+}
+
+function activeTrialAccountMetadata() {
+  return {
+    profile: {
+      ok: true,
+      value: {
+        clerkUserId: syntheticUserId,
+        email: "member@example.com",
+        isBlocked: false,
+        termsAcceptedAt: "2026-05-04T05:00:00.000Z",
+      },
+    },
+    snapshot: {
+      ok: true,
+      value: {
+        accountStatus: "active",
+        billingPortalAvailable: false,
+        billingPortalUrl: null,
+        canTranscribe: true,
+        email: "member@example.com",
+        isTrialExhausted: false,
+        isTrialLow: false,
+        lifetimeWordsUsed: 1_250,
+        monthlyPeriodStart: "2026-05-01",
+        monthlyWordsUsed: 1_000,
+        planState: "trial_active",
+        preflightPolicy: "allow_if_started_under_limit",
+        termsAccepted: true,
+        trialWordsLimit: 5_000,
+        trialWordsRemaining: 4_000,
+        trialWordsUsed: 1_000,
+      },
+    },
+    subscription: {
+      ok: true,
+      value: {
+        clerkUserId: syntheticUserId,
+        hasActiveSubscription: false,
+        isFriendOfRubyActive: false,
+        paymentFailed: false,
+        plan: "trial",
+        planState: "trial_active",
+        requiresSubscription: false,
+      },
+    },
+    usageCounters: {
+      ok: true,
+      value: {
+        clerkUserId: syntheticUserId,
+        isTrialExhausted: false,
+        isTrialLow: false,
+        lifetimeWordsUsed: 1_250,
+        monthlyPeriodStart: "2026-05-01",
+        monthlyWordsUsed: 1_000,
+        trialWordsLimit: 5_000,
+        trialWordsRemaining: 4_000,
+        trialWordsUsed: 1_000,
+      },
+    },
   };
 }
 
