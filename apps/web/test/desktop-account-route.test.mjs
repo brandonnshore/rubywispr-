@@ -46,6 +46,25 @@ const forbiddenPrivateDesktopAccountFragments = [
 ];
 const forbiddenPrivateFixturePattern =
   /private transcript|private audio|private cleaned text|private context|private clipboard|private prompt|Bearer rw_synthetic_placeholder|rubywhisper\.env|\.env\.local/i;
+const expectedDesktopAccountSuccessPayloadKeys = [
+  "accountStatus",
+  "billingPortalAvailable",
+  "billingPortalUrl",
+  "canTranscribe",
+  "email",
+  "isTrialExhausted",
+  "isTrialLow",
+  "lifetimeWordsUsed",
+  "monthlyPeriodStart",
+  "monthlyWordsUsed",
+  "ok",
+  "planState",
+  "preflightPolicy",
+  "termsAccepted",
+  "trialWordsLimit",
+  "trialWordsRemaining",
+  "trialWordsUsed",
+];
 
 test("desktop account route returns shared signed_out error", async () => {
   const routeModule = await loadDesktopAccountRouteModule();
@@ -144,6 +163,10 @@ test("desktop account route returns signed-in account snapshot metadata only", a
     ok: true,
     ...snapshot,
   });
+  assert.deepEqual(
+    Object.keys(body).sort(),
+    expectedDesktopAccountSuccessPayloadKeys,
+  );
   assert.deepEqual(toPlainObject(calls), [
     {
       clerkUserId: "user_rw_synthetic_member_001",
