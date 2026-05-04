@@ -9,7 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --project tsconfig.typecheck.json --noEmit",
     "test": "node --test",
-    "test:auth-privacy": "node --test test/auth-privacy-security-guardrails.test.mjs test/privacy-logging-guardrails.test.mjs test/usage-quota-privacy-guardrails.test.mjs test/provider-client-contract.test.mjs test/groq-provider-client.test.mjs test/backend-integration-harness.test.mjs test/desktop-account-route.test.mjs test/desktop-account-snapshot.test.mjs test/clerk-auth-route-shell.test.mjs test/clerk-env-guardrails.test.mjs test/clerk-server-auth-guardrails.test.mjs test/clerk-supabase-profile-sync.test.mjs test/clerk-terms-acceptance.test.mjs",
+    "test:auth-privacy": "node --test test/auth-privacy-security-guardrails.test.mjs test/privacy-logging-guardrails.test.mjs test/usage-quota-privacy-guardrails.test.mjs test/provider-client-contract.test.mjs test/groq-provider-client.test.mjs test/backend-integration-harness.test.mjs test/desktop-transcribe-request.test.mjs test/desktop-account-route.test.mjs test/desktop-account-snapshot.test.mjs test/clerk-auth-route-shell.test.mjs test/clerk-env-guardrails.test.mjs test/clerk-server-auth-guardrails.test.mjs test/clerk-supabase-profile-sync.test.mjs test/clerk-terms-acceptance.test.mjs",
     "test:schema-privacy": "node --test test/supabase-migration-privacy.test.mjs"
   },
   "dependencies": {
