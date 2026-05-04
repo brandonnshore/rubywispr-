@@ -6,8 +6,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   assertNoLiveBackendIntegrationInput,
+  assertNoPrivateProviderFixtureInput,
   createMockBackendProviders,
+  createMockProviderClient,
   createSyntheticBackendRequest,
+  createSyntheticProviderFailure,
+  createSyntheticProviderTranscriptionSuccess,
   invokeRouteHandler,
   invokeServerFunction,
   syntheticBackendFixtures,
@@ -121,6 +125,18 @@ test("mock backend providers fail closed unless a synthetic override is supplied
     providers.groq.createCompletion(),
     /No synthetic provider completion mock was provided/,
   );
+  assert.deepEqual(await providers.providerClient.transcribe(), {
+    error: {
+      apiErrorCode: "provider_error",
+      code: "provider_unavailable",
+      message: "Synthetic provider is unavailable.",
+      retryable: true,
+    },
+    metadata: {
+      provider: "mock_provider",
+    },
+    ok: false,
+  });
 
   const overriddenProviders = createMockBackendProviders({
     supabase: {
@@ -137,6 +153,73 @@ test("mock backend providers fail closed unless a synthetic override is supplied
     rows: [syntheticBackendFixtures.supabase.profile],
     tableName: "profiles",
   });
+});
+
+test("mock provider helpers cover synthetic success and failure scenarios", async () => {
+  const providerClient = createMockProviderClient({
+    transcribe: async () =>
+      createSyntheticProviderTranscriptionSuccess({
+        audioDurationMs: 4200,
+        providerLatencyMs: 32,
+      }),
+  });
+  const success = await providerClient.transcribe();
+  const timeoutFailure = createSyntheticProviderFailure({
+    code: "provider_timeout",
+    providerLatencyMs: 225,
+    totalLatencyMs: 5_000,
+  });
+  const invalidResponseFailure = createSyntheticProviderFailure({
+    code: "provider_invalid_response",
+  });
+  const requestFailure = createSyntheticProviderFailure({
+    code: "invalid_request",
+  });
+
+  assert.deepEqual(success, {
+    ok: true,
+    result: {
+      audioDurationMs: 4200,
+      provider: "mock_provider",
+      providerLatencyMs: 32,
+      text: "synthetic provider output",
+    },
+  });
+  assert.equal(timeoutFailure.error.apiErrorCode, "network_error");
+  assert.equal(timeoutFailure.error.code, "provider_timeout");
+  assert.equal(timeoutFailure.error.retryable, true);
+  assert.deepEqual(timeoutFailure.metadata, {
+    provider: "mock_provider",
+    providerLatencyMs: 225,
+    totalLatencyMs: 5_000,
+  });
+  assert.equal(invalidResponseFailure.error.code, "provider_invalid_response");
+  assert.equal(invalidResponseFailure.error.apiErrorCode, "provider_error");
+  assert.equal(requestFailure.error.code, "invalid_request");
+  assert.equal(requestFailure.error.retryable, false);
+});
+
+test("provider fixture guardrails reject private provider payload fields", () => {
+  const privateProviderFixtures = [
+    { audio: "synthetic payload must still stay out of fixtures" },
+    { rawTranscript: "synthetic payload must still stay out of fixtures" },
+    { cleanedText: "synthetic payload must still stay out of fixtures" },
+    { context: "synthetic payload must still stay out of fixtures" },
+    { dictionaryTerms: ["synthetic-term"] },
+    { providerRequestBody: { prompt: "synthetic payload" } },
+    { result: { text: "synthetic payload must still stay out of fixtures" } },
+  ];
+
+  for (const fixture of privateProviderFixtures) {
+    assert.throws(
+      () => assertNoPrivateProviderFixtureInput(fixture, "provider fixture"),
+      /not provider-fixture safe/,
+    );
+    assert.throws(
+      () => createMockProviderClient(fixture),
+      /not provider-fixture safe/,
+    );
+  }
 });
 
 test("synthetic backend fixtures contain only placeholder emails", () => {

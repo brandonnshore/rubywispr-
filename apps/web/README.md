@@ -159,9 +159,9 @@ After `npm run build`, rerun `npm run test:auth-privacy` or the focused changed-
 
 ## Backend Integration Test Harness
 
-Future mocked backend route tests should import from `test/support/backend-integration.mjs`. The helper exports synthetic Clerk/Supabase/provider fixtures plus `invokeRouteHandler`, `invokeServerFunction`, `createSyntheticBackendRequest`, and `createMockBackendProviders`.
+Future mocked backend route tests should import from `test/support/backend-integration.mjs`. The helper exports synthetic Clerk/Supabase/provider fixtures plus `invokeRouteHandler`, `invokeServerFunction`, `createSyntheticBackendRequest`, `createMockBackendProviders`, `createMockProviderClient`, `createSyntheticProviderTranscriptionSuccess`, `createSyntheticProviderFailure`, and `assertNoPrivateProviderFixtureInput`.
 
-Keep these tests offline-only. Do not pass live Clerk, Stripe, Supabase, Groq, Sentry, auth, billing, or private env values into the helper; it rejects live-looking hosts, credential-like strings, private env source references, and guarded server secret names.
+Keep these tests offline-only. Do not pass live Clerk, Stripe, Supabase, Groq, Sentry, auth, billing, or private env values into the helper; it rejects live-looking hosts, credential-like strings, private env source references, and guarded server secret names. Provider fixture helpers also reject private payload fields such as raw audio, transcripts, cleaned text, app context, dictionary terms, prompts, headers, cookies, and provider request/response bodies; use fixed synthetic provider output and metadata-only overrides instead.
 
 ## Backend No-Body Logging Contract
 

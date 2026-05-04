@@ -26,6 +26,91 @@ const credentialLikePatterns = [
   /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{12,}\b/i,
   /[?&](?:jwt|session|ticket|token)=/i,
 ];
+const syntheticProviderName = "mock_provider";
+const syntheticProviderOutput = "synthetic provider output";
+const safeProviderFixtureKeys = new Set([
+  "api_error_code",
+  "audio_duration_ms",
+  "cleanup",
+  "code",
+  "create_completion",
+  "error",
+  "metadata",
+  "name",
+  "ok",
+  "output_word_count",
+  "provider",
+  "provider_client",
+  "provider_latency_ms",
+  "result",
+  "retry_after_seconds",
+  "retryable",
+  "total_latency_ms",
+  "transcribe",
+]);
+const privateProviderFixtureKeyPatterns = [
+  /^(?:raw_)?audio$/,
+  /^audio_(?:blob|body|buffer|bytes|content|data|file|input|payload)$/,
+  /^(?:blob|buffer|file)$/,
+  /^(?:raw_)?transcript(?:_text)?$/,
+  /^transcription_(?:body|data|input|payload|result)$/,
+  /^cleaned_text$/,
+  /^(?:app_)?context$/,
+  /^dictionary(?:_terms?)?$/,
+  /^provider_(?:request|response)(?:_body|_data|_payload)?$/,
+  /^(?:request|response)_(?:body|data|payload)$/,
+  /^(?:message|messages|prompt|text)$/,
+  /^(?:clipboard|local_history)$/,
+  /^(?:authorization|cookie|headers?)$/,
+  /^(?:jwt|secret|session|token)$/,
+];
+const syntheticProviderErrorDescriptors = {
+  invalid_request: {
+    apiErrorCode: "invalid_audio",
+    message: "Synthetic provider request was invalid.",
+    retryable: false,
+  },
+  missing_config: {
+    apiErrorCode: "service_unavailable",
+    message: "Synthetic provider configuration is unavailable.",
+    retryable: false,
+  },
+  network_error: {
+    apiErrorCode: "network_error",
+    message: "Synthetic provider network request failed.",
+    retryable: true,
+  },
+  provider_auth_failed: {
+    apiErrorCode: "service_unavailable",
+    message: "Synthetic provider authentication failed.",
+    retryable: false,
+  },
+  provider_invalid_response: {
+    apiErrorCode: "provider_error",
+    message: "Synthetic provider response was invalid.",
+    retryable: true,
+  },
+  provider_rate_limited: {
+    apiErrorCode: "rate_limited",
+    message: "Synthetic provider rate limit was reached.",
+    retryable: true,
+  },
+  provider_timeout: {
+    apiErrorCode: "network_error",
+    message: "Synthetic provider request timed out.",
+    retryable: true,
+  },
+  provider_unavailable: {
+    apiErrorCode: "provider_error",
+    message: "Synthetic provider is unavailable.",
+    retryable: true,
+  },
+  unknown_provider_error: {
+    apiErrorCode: "provider_error",
+    message: "Synthetic provider request failed.",
+    retryable: true,
+  },
+};
 
 export function createSyntheticBackendRequest(options = {}) {
   const {
@@ -118,6 +203,12 @@ export function createSyntheticServerContext(overrides = {}) {
 
 export function createMockBackendProviders(overrides = {}) {
   assertNoLiveBackendIntegrationInput(overrides, "provider overrides");
+  assertNoPrivateProviderFixtureInput(
+    overrides.providerClient,
+    "provider client overrides",
+  );
+  assertNoPrivateProviderFixtureInput(overrides.groq, "Groq provider overrides");
+  const providerClient = createMockProviderClient(overrides.providerClient);
 
   return deepFreeze({
     clerk: {
@@ -139,12 +230,148 @@ export function createMockBackendProviders(overrides = {}) {
       ...overrides.supabase,
     },
     groq: {
+      cleanup: providerClient.cleanup,
       createCompletion: async () => {
         throw new Error("No synthetic provider completion mock was provided.");
       },
+      name: syntheticProviderName,
+      transcribe: providerClient.transcribe,
       ...overrides.groq,
     },
+    providerClient,
   });
+}
+
+export function createMockProviderClient(overrides = {}) {
+  assertNoLiveBackendIntegrationInput(overrides, "provider client overrides");
+  assertNoPrivateProviderFixtureInput(overrides, "provider client overrides");
+
+  return deepFreeze({
+    cleanup:
+      overrides.cleanup ??
+      (async () =>
+        createSyntheticProviderFailure({
+          code: "provider_unavailable",
+        })),
+    transcribe:
+      overrides.transcribe ??
+      (async () =>
+        createSyntheticProviderFailure({
+          code: "provider_unavailable",
+        })),
+  });
+}
+
+export function createSyntheticProviderTranscriptionSuccess(options = {}) {
+  assertNoLiveBackendIntegrationInput(options, "provider success options");
+  assertNoPrivateProviderFixtureInput(options, "provider success options");
+
+  return deepFreeze({
+    ok: true,
+    result: {
+      ...(isFiniteNumber(options.audioDurationMs)
+        ? { audioDurationMs: options.audioDurationMs }
+        : {}),
+      provider: syntheticProviderName,
+      providerLatencyMs: isFiniteNumber(options.providerLatencyMs)
+        ? options.providerLatencyMs
+        : syntheticBackendFixtures.provider.successMetadata.latency_ms,
+      text: syntheticProviderOutput,
+    },
+  });
+}
+
+export function createSyntheticProviderFailure(options = {}) {
+  assertNoLiveBackendIntegrationInput(options, "provider failure options");
+  assertNoPrivateProviderFixtureInput(options, "provider failure options");
+
+  const requestedCode = options.code ?? "provider_unavailable";
+  const code = syntheticProviderErrorDescriptors[requestedCode]
+    ? requestedCode
+    : "unknown_provider_error";
+  const descriptor = syntheticProviderErrorDescriptors[code];
+  const metadata = {
+    provider: syntheticProviderName,
+    ...(isFiniteNumber(options.providerLatencyMs)
+      ? { providerLatencyMs: options.providerLatencyMs }
+      : {}),
+    ...(isFiniteNumber(options.retryAfterSeconds)
+      ? { retryAfterSeconds: options.retryAfterSeconds }
+      : {}),
+    ...(isFiniteNumber(options.totalLatencyMs)
+      ? { totalLatencyMs: options.totalLatencyMs }
+      : {}),
+  };
+
+  return deepFreeze({
+    error: {
+      apiErrorCode: descriptor.apiErrorCode,
+      code,
+      message: descriptor.message,
+      retryable: descriptor.retryable,
+    },
+    metadata,
+    ok: false,
+  });
+}
+
+export function assertNoPrivateProviderFixtureInput(value, label = "value") {
+  assertNoLiveBackendIntegrationInput(value, label);
+
+  const visited = new WeakSet();
+  const violations = [];
+
+  visit(value, label);
+
+  if (violations.length > 0) {
+    throw new Error(
+      `Backend integration ${label} is not provider-fixture safe: ${violations.join(", ")}`,
+    );
+  }
+
+  function visit(currentValue, currentPath) {
+    if (currentValue === null || currentValue === undefined) {
+      return;
+    }
+
+    if (
+      typeof currentValue === "string" ||
+      typeof currentValue === "number" ||
+      typeof currentValue === "boolean" ||
+      typeof currentValue === "function"
+    ) {
+      return;
+    }
+
+    if (currentValue instanceof Headers || currentValue instanceof URL) {
+      return;
+    }
+
+    if (typeof currentValue !== "object") {
+      return;
+    }
+
+    if (visited.has(currentValue)) {
+      return;
+    }
+
+    visited.add(currentValue);
+
+    for (const [key, childValue] of Object.entries(currentValue)) {
+      const normalizedKey = normalizeProviderFixtureKey(key);
+
+      if (
+        !safeProviderFixtureKeys.has(normalizedKey) &&
+        privateProviderFixtureKeyPatterns.some((pattern) =>
+          pattern.test(normalizedKey),
+        )
+      ) {
+        violations.push(`${currentPath}.${key} uses private provider field ${key}`);
+      }
+
+      visit(childValue, `${currentPath}.${key}`);
+    }
+  }
 }
 
 export function assertNoLiveBackendIntegrationInput(value, label = "value") {
@@ -245,6 +472,17 @@ function collectUrlViolations(url, label, violations) {
       violations.push(`${label} points at live ${url.hostname}`);
     }
   }
+}
+
+function normalizeProviderFixtureKey(key) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+}
+
+function isFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function deepFreeze(value) {
