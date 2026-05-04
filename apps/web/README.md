@@ -79,6 +79,128 @@ Backend validation uses the same root commands because RubyWhisper backend route
   metadata-only usage counters after successful provider output, and keeps
   cleanup-enabled requests failed closed until RW-042 lands.
 
+## Web Design System Contract
+
+Use this section as the short implementation contract for future public,
+auth/account, pricing/checkout/download, and admin web work. The source design
+direction remains `../../WEB_DESIGN_SPEC.md`; review its
+[`Typography`](../../WEB_DESIGN_SPEC.md#typography),
+[`Color System`](../../WEB_DESIGN_SPEC.md#color-system),
+[`Accessibility`](../../WEB_DESIGN_SPEC.md#accessibility),
+[`Responsive And Platform Behavior`](../../WEB_DESIGN_SPEC.md#responsive-and-platform-behavior),
+[`Design Tokens`](../../WEB_DESIGN_SPEC.md#design-tokens),
+[`Developer Handoff Notes`](../../WEB_DESIGN_SPEC.md#developer-handoff-notes),
+and [`Design QA Checklist`](../../WEB_DESIGN_SPEC.md#design-qa-checklist)
+sections before broad visual changes. Do not copy large spec blocks into app
+docs or PRs.
+
+Current tokenized routes are `/`, `/sign-in`, `/sign-up`, `/account`, and
+`/admin`. New pricing, checkout, download, account, or admin work should extend
+these route families with the same token and validation contract.
+
+### Token And Primitive Usage
+
+`src/app/globals.css` is the source of truth for implemented web tokens and
+shared primitives. Prefer these tokens and classes before adding one-off CSS:
+
+- Color tokens: `--rw-color-background`, `--rw-color-surface`,
+  `--rw-color-surface-muted`, `--rw-color-surface-subtle`,
+  `--rw-color-text-primary`, `--rw-color-text-secondary`,
+  `--rw-color-text-muted`, `--rw-color-border`,
+  `--rw-color-border-strong`, `--rw-color-accent`,
+  `--rw-color-accent-hover`, `--rw-color-accent-soft`,
+  `--rw-color-accent-border`, `--rw-color-accent-contrast`,
+  `--rw-color-success`, `--rw-color-success-soft`,
+  `--rw-color-success-border`, `--rw-color-warning`,
+  `--rw-color-warning-soft`, `--rw-color-warning-border`,
+  `--rw-color-error`, `--rw-color-error-soft`, and
+  `--rw-color-error-border`.
+- Shape, spacing, and motion tokens: `--rw-radius-small`,
+  `--rw-radius-medium`, `--rw-space-1`, `--rw-space-2`, `--rw-space-3`,
+  `--rw-space-4`, `--rw-space-6`, `--rw-space-8`,
+  `--rw-duration-fast`, `--rw-duration-normal`, and
+  `--rw-easing-standard`.
+- Compatibility aliases exist for Tailwind/theme consumers:
+  `--color-background`, `--color-surface`, `--color-text-primary`,
+  `--color-text-secondary`, `--color-accent`, `--color-success`,
+  `--color-warning`, `--color-error`, `--radius-small`,
+  `--radius-medium`, `--space-1`, `--space-2`, `--space-3`,
+  `--space-4`, `--space-6`, `--space-8`, `--duration-fast`,
+  `--duration-normal`, and `--easing-standard`.
+- Shared layout and UI primitives: `surface-shell`, `surface-panel`,
+  `surface-kicker`, `surface-copy`, `rw-page-shell`, `rw-container`,
+  `rw-stack`, `rw-cluster`, `rw-panel`, `rw-button`,
+  `rw-button-secondary`, `rw-field`, `rw-label`, `rw-status`,
+  `rw-status-success`, `rw-status-warning`, and `rw-status-error`.
+
+Public pages should keep the light, product-led website direction, with
+full-width sections and constrained content instead of nested cards. Account,
+auth, pricing, checkout, and download pages should reuse the tokenized shell,
+buttons, fields, labels, and status treatments unless a ticket introduces a
+specific new primitive. Admin pages are utilitarian and dense: optimize for
+scanning tables, filters, statuses, and repeated operations rather than
+marketing composition, oversized hero text, or decorative framing.
+
+### Interaction And State Expectations
+
+- Interactive elements need visible `:focus-visible` states using the global
+  focus style or a token-equivalent treatment. Hover, pressed, disabled,
+  loading, success, warning, and error states must not rely on color alone.
+- Buttons and fields use at least the existing 48px minimum control height on
+  public/account flows. Dense admin controls may be more compact when the
+  surrounding table or filter UI remains keyboard reachable and legible.
+- Text must fit its container on mobile and desktop. Keep `letter-spacing: 0`
+  unless a future design-system ticket changes the typography contract; do not
+  use negative letter spacing.
+- Respect `prefers-reduced-motion`. Any added animation should shorten or
+  disable through the global reduced-motion rule or an equivalent local media
+  query.
+- Keep contrast aligned with WCAG AA intent for text, controls, focus states,
+  and status messages. Use state color plus labels, icons, borders, or copy so
+  success/warning/error meaning survives grayscale or color-vision differences.
+- Do not add nested cards, decorative blobs/orbs, bokeh backgrounds, abstract
+  SVG decoration, or dark Superwhisper-style surfaces. Use product screenshots
+  or high-fidelity app visuals when a page needs media.
+
+### Privacy And Admin Guardrails
+
+Web UI must preserve the backend privacy contract. Do not expose or store audio,
+raw transcripts, cleaned text, prompts, clipboard contents, local Recent Wisprs,
+dictionary terms, provider payloads, auth material, private env values, or
+secrets in pages, admin tables, tests, logs, screenshots, PR descriptions, or
+Linear comments.
+
+Admin pages and admin APIs must stay server-authorized. Admin UI may show
+metadata needed for operations, such as user IDs, emails, plan state, usage
+counters, request IDs, timestamps, latency, provider names, status, and safe
+error codes. It must not expose transcript, audio, clipboard, prompt, context,
+dictionary, provider request/response, or other private dictation content.
+
+### Frontend PR Validation
+
+For user-facing web PRs, record the commands run and attach or link browser
+evidence in the PR and Linear workpad. Minimum expectations:
+
+- Run `npm run lint --workspace @rubywhisper/web` after CSS, TS, TSX, route,
+  or app-doc examples change. The root fallback `npm run lint` maps to the same
+  workspace command.
+- Run `npm run typecheck --workspace @rubywhisper/web` after TS/TSX,
+  route-handler, server-action, or typed example changes. The root fallback
+  `npm run typecheck` maps to the same workspace command.
+- For docs-only changes, run a targeted Markdown/style sanity check if one is
+  added later. Until then, verify referenced paths and commands with shell
+  checks and manually review the rendered Markdown or changed diff.
+- For user-visible UI changes, run the app locally with `npm run dev
+  --workspace @rubywhisper/web`, then capture desktop and mobile-width browser
+  evidence for touched routes. Include route URLs, viewport sizes, screenshots
+  or a short video, and notes for focus state, responsive text fit, reduced
+  motion, and any status states exercised.
+- For public/account/admin surfaces, spot-check keyboard tab order, visible
+  focus, no horizontal overflow at mobile width, contrast intent, and that admin
+  evidence contains metadata only. Keep browser proof out of `.env.local`,
+  private env sources, live customer data, transcript/audio content, and
+  provider payloads.
+
 ## Usage And Trial Quota Contract
 
 The shared usage policy lives in `../../docs/USAGE_QUOTA_CONTRACT.md`. Use it
