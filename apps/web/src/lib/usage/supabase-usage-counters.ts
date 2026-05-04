@@ -95,6 +95,7 @@ export type PrepareRubyWhisperUsageCounterIncrementInput =
     Readonly<{
       billableWordCount?: unknown;
       currentCounters?: Partial<RubyWhisperUsageCounters> | null;
+      incrementTrialWords?: boolean;
     }>;
 
 export type SupabaseUsageCountersSingleResult = Readonly<{
@@ -203,12 +204,14 @@ export function prepareRubyWhisperUsageCounterIncrement(
     currentCounters.monthlyPeriodStart === monthlyPeriodStart
       ? currentCounters.monthlyWordsUsed
       : 0;
+  const trialWordsIncrement =
+    input.incrementTrialWords === false ? 0 : billableWordCount;
   const usageCounter: SupabaseUsageCounterUpsert = {
     clerk_user_id: clerkUserId,
     lifetime_words_used: currentCounters.lifetimeWordsUsed + billableWordCount,
     monthly_period_start: monthlyPeriodStart,
     monthly_words_used: monthlyBase + billableWordCount,
-    trial_words_used: currentCounters.trialWordsUsed + billableWordCount,
+    trial_words_used: currentCounters.trialWordsUsed + trialWordsIncrement,
     updated_at: normalizeUsageCounterTimestamp(input.now),
   };
 
