@@ -91,11 +91,6 @@ Current server-only helper surfaces:
   only.
 - `src/lib/usage/quota-service.ts` owns entitlement decisions and post-success
   usage increments.
-- `src/lib/rate-limit/transcription.ts` owns the local/mockable RW-031A
-  transcription rate-limit decision primitive. It evaluates per-user request
-  windows from metadata-only inputs and has no storage, network, provider, or
-  logging side effects; persistent counters and route integration belong to
-  follow-up RW-031/RW-041 leaves.
 - `src/lib/account/profile-metadata.ts` reads metadata-only profile state for a
   server-verified Clerk user.
 - `src/lib/account/subscription-cache.ts` reads normalized subscription cache
