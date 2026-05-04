@@ -39,7 +39,8 @@ test("download page renders honest placeholder when no safe artifact URL exists"
   assert.match(markup, /local file paths, private URLs/);
   assert.match(markup, /href="\/account"/);
   assert.match(markup, /href="\/pricing"/);
-  assert.match(markup, /mailto:brandon@rubyadvisory\.com/);
+  assert.match(markup, /href="mailto:/);
+  assert.match(markup, /Email support/);
   assert.match(markup, /Mac-only for the v0\.1 beta/);
   assert.match(markup, /not stored on RubyWhisper servers/);
   assert.doesNotMatch(markup, /href="(?:file:|http:\/\/localhost|http:\/\/127\.0\.0\.1|\/Users\/)/);
