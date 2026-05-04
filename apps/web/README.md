@@ -53,6 +53,17 @@ Backend validation uses the same root commands because RubyWhisper backend route
 - Blank placeholders are intentional so `lint`, `typecheck`, `test`, and `build` can run before live services exist.
 - Never print, inspect, summarize, commit, paste, or attach `.env.local` or any private env source file in workpads, PRs, docs, comments, logs, or chat. Only placeholder names belong in this repo.
 
+## Supabase Server-Only Helpers
+
+`src/lib/supabase/server.ts` is the only helper surface for future Supabase service-role access. It is marked with `server-only`, reads credentials only through `src/config/server.ts`, and currently exposes metadata table names plus a factory wrapper for a future `@supabase/supabase-js` client.
+
+Future workers must follow these rules:
+
+- Import `@/lib/supabase/server` only from server-only modules, route handlers, server actions, jobs, or scripts. Never import it from Client Components, app pages/layouts, or `src/config/client.ts`.
+- Keep `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` out of `NEXT_PUBLIC_*` names and browser bundles. Add browser Supabase access only in a future ticket that defines RLS and a client-safe publishable or anon key.
+- Do not add live Supabase writes here until the owning Clerk, Stripe, usage, admin, or request-metadata ticket defines the access rules and tests.
+- Do not store audio payloads, transcripts, cleaned text, clipboard contents, local history, app context, or dictionary content in Supabase.
+
 ## Validation
 
 ```bash
