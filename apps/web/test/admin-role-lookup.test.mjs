@@ -214,6 +214,46 @@ test("admin role lookup fails closed for missing user IDs and backend errors", a
     status: "read_failed",
   });
   assert.doesNotMatch(JSON.stringify(result), /database detail/i);
+
+  const factoryFailure = await helper.lookupRubyWhisperAdminRole(
+    { clerkUserId: "user_rw_synthetic_admin_001" },
+    () => {
+      throw new Error("private service-role config detail");
+    },
+  );
+
+  assert.deepEqual(toPlainObject(factoryFailure), {
+    action: "denied",
+    allowed: false,
+    clerkUserId: "user_rw_synthetic_admin_001",
+    error: {
+      code: "supabase_admin_role_read_failed",
+      message: "Unable to read admin role metadata.",
+    },
+    ok: false,
+    status: "read_failed",
+  });
+  assert.doesNotMatch(JSON.stringify(factoryFailure), /service-role config/i);
+
+  const { client: rejectingClient } = createAdminRoleClient({
+    rejectRead: true,
+  });
+  const rejectedRead = await helper.lookupRubyWhisperAdminRole(
+    { clerkUserId: "user_rw_synthetic_admin_001" },
+    () => rejectingClient,
+  );
+
+  assert.deepEqual(toPlainObject(rejectedRead), {
+    action: "denied",
+    allowed: false,
+    clerkUserId: "user_rw_synthetic_admin_001",
+    error: {
+      code: "supabase_admin_role_read_failed",
+      message: "Unable to read admin role metadata.",
+    },
+    ok: false,
+    status: "read_failed",
+  });
 });
 
 test("admin role lookup helper remains server-only and metadata-only", async () => {
@@ -308,7 +348,11 @@ async function loadAdminRoleHelper() {
   return commonJsModule.exports;
 }
 
-function createAdminRoleClient({ readError = null, row = null } = {}) {
+function createAdminRoleClient({
+  readError = null,
+  rejectRead = false,
+  row = null,
+} = {}) {
   const calls = [];
   const client = {
     from(tableName) {
@@ -325,6 +369,12 @@ function createAdminRoleClient({ readError = null, row = null } = {}) {
               return {
                 maybeSingle() {
                   calls.push({ operation: "maybeSingle", phase: "read" });
+
+                  if (rejectRead) {
+                    return Promise.reject(
+                      new Error("private database rejection detail"),
+                    );
+                  }
 
                   return Promise.resolve({ data: row, error: readError });
                 },

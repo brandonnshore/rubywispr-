@@ -107,25 +107,24 @@ export async function lookupRubyWhisperAdminRole<
     });
   }
 
-  const client = createSupabaseServiceRoleClient(createClient);
-  const { data, error } = await client
-    .from(supabaseAdminRolesTableName)
-    .select(supabaseAdminRoleColumns)
-    .eq("clerk_user_id", clerkUserId)
-    .maybeSingle();
+  let roleResult: SupabaseAdminRoleSingleResult;
 
-  if (error) {
-    return deniedResult({
-      clerkUserId,
-      error: {
-        code: "supabase_admin_role_read_failed",
-        message: "Unable to read admin role metadata.",
-      },
-      status: "read_failed",
-    });
+  try {
+    const client = createSupabaseServiceRoleClient(createClient);
+    roleResult = await client
+      .from(supabaseAdminRolesTableName)
+      .select(supabaseAdminRoleColumns)
+      .eq("clerk_user_id", clerkUserId)
+      .maybeSingle();
+  } catch {
+    return adminRoleReadFailedResult(clerkUserId);
   }
 
-  if (!data) {
+  if (roleResult.error) {
+    return adminRoleReadFailedResult(clerkUserId);
+  }
+
+  if (!roleResult.data) {
     return deniedResult({
       clerkUserId,
       error: {
@@ -136,7 +135,20 @@ export async function lookupRubyWhisperAdminRole<
     });
   }
 
-  return normalizeAdminRoleRow(clerkUserId, data);
+  return normalizeAdminRoleRow(clerkUserId, roleResult.data);
+}
+
+function adminRoleReadFailedResult(
+  clerkUserId: string,
+): RubyWhisperAdminRoleDeniedResult {
+  return deniedResult({
+    clerkUserId,
+    error: {
+      code: "supabase_admin_role_read_failed",
+      message: "Unable to read admin role metadata.",
+    },
+    status: "read_failed",
+  });
 }
 
 function normalizeAdminRoleRow(
