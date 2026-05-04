@@ -75,11 +75,18 @@ const serverRateLimitHelpers = [
     ),
   },
 ];
+const serverUsageHelpers = [
+  {
+    moduleSpecifier: "@/lib/usage/fair-use",
+    path: path.join(srcRoot, "lib", "usage", "fair-use.ts"),
+  },
+];
 const serverOnlyHelpers = [
   ...serverAuthHelpers,
   ...serverAccountHelpers,
   ...serverDesktopTranscribeHelpers,
   ...serverRateLimitHelpers,
+  ...serverUsageHelpers,
   ...serverProviderHelpers,
 ];
 const authSensitivePaths = [
@@ -92,6 +99,7 @@ const authSensitivePaths = [
   path.join(srcRoot, "lib", "desktop-transcribe"),
   path.join(srcRoot, "lib", "providers"),
   path.join(srcRoot, "lib", "rate-limit"),
+  path.join(srcRoot, "lib", "usage"),
   path.join(srcRoot, "proxy.ts"),
 ];
 
