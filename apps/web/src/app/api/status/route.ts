@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export const statusPayload = {
+const statusPayload = {
   service: "rubywhisper-web",
   status: "ok",
   surface: "api",
