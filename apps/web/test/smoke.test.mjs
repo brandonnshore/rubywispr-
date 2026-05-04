@@ -37,3 +37,48 @@ test("API status placeholder is deterministic and non-sensitive", async () => {
   assert.match(statusRoute, /surface: "api"/);
   assert.doesNotMatch(statusRoute, /process\.env|Date|crypto|Math\.random/);
 });
+
+test("environment examples are blank placeholders only", async () => {
+  const envExamplePaths = [".env.example", "../../.env.example"];
+
+  for (const envExamplePath of envExamplePaths) {
+    const envExample = await readFile(envExamplePath, "utf8");
+    const assignments = envExample
+      .split("\n")
+      .filter((line) => /^[A-Z0-9_]+=/.test(line));
+
+    assert.ok(assignments.length > 0, `${envExamplePath} has env names`);
+
+    for (const assignment of assignments) {
+      const [, value] = assignment.split("=", 2);
+      assert.equal(value, "", `${envExamplePath} keeps ${assignment} blank`);
+    }
+  }
+});
+
+test("client config exposes only NEXT_PUBLIC variables", async () => {
+  const clientConfig = await readFile("src/config/client.ts", "utf8");
+  const serverConfig = await readFile("src/config/server.ts", "utf8");
+  const serverOnlyNames = [
+    "CLERK_SECRET_KEY",
+    "CLERK_WEBHOOK_SECRET",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_ANON_KEY",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_MONTHLY_PRICE_ID",
+    "STRIPE_ANNUAL_PRICE_ID",
+    "GROQ_API_KEY",
+    "SENTRY_DSN",
+    "SENTRY_AUTH_TOKEN",
+    "APP_DOWNLOAD_SIGNING_KEY_OR_TOKEN",
+  ];
+
+  assert.match(clientConfig, /NEXT_PUBLIC_/);
+
+  for (const name of serverOnlyNames) {
+    assert.doesNotMatch(clientConfig, new RegExp(`\\b${name}\\b`));
+    assert.match(serverConfig, new RegExp(`\\b${name}\\b`));
+  }
+});
