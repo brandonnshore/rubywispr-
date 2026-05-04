@@ -108,6 +108,36 @@ test("Stripe webhook route acknowledges duplicate events without cache writes", 
   assert.equal(calls.some((call) => call.operation === "mark_processed"), false);
 });
 
+test("Stripe webhook route retries duplicate events previously marked failed", async () => {
+  const routeModule = await loadStripeWebhookRouteModule();
+  const { calls, handler } = createWebhookHandler(routeModule, {
+    claimEvent: async (input) => {
+      calls.push({ input, operation: "claim" });
+
+      return duplicateFailedClaimResult();
+    },
+  });
+  const response = await handler(webhookRequest());
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body, {
+    action: "processed",
+    ok: true,
+    received: true,
+  });
+  assert.deepEqual(
+    calls.map((call) => call.operation),
+    [
+      "verify",
+      "claim",
+      "resolve_billing_config",
+      "upsert_subscription_cache",
+      "mark_processed",
+    ],
+  );
+});
+
 test("Stripe webhook route ignores unsupported verified events safely", async () => {
   const routeModule = await loadStripeWebhookRouteModule();
   const { calls, handler } = createWebhookHandler(routeModule, {
@@ -237,6 +267,42 @@ test("Stripe webhook route marks cache write failures for retry", async () => {
     eventId,
   });
 });
+
+test("Stripe webhook route fails closed when failed-event status cannot be recorded", async () => {
+  const routeModule = await loadStripeWebhookRouteModule();
+  const { handler } = createWebhookHandler(routeModule, {
+    markEventFailed: async () => ({
+      action: "upsert_failed",
+      error: {
+        code: "supabase_stripe_webhook_event_update_failed",
+        message: "Unable to update Stripe webhook event metadata.",
+      },
+      ok: false,
+      status: "update_failed",
+    }),
+    upsertSubscriptionCache: async () => ({
+      action: "upsert_failed",
+      error: {
+        code: "supabase_subscription_cache_write_failed",
+        message: "Unable to write subscription cache metadata.",
+      },
+      ok: false,
+      status: "write_failed",
+    }),
+  });
+  const response = await handler(webhookRequest());
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(body, {
+    ok: false,
+    error: {
+      code: "supabase_stripe_webhook_event_update_failed",
+      message: "Stripe webhook event status could not be updated.",
+    },
+  });
+});
+
 
 test("Stripe webhook route source stays server-only and metadata-only", async () => {
   const source = await readFile(webhookRoutePath, "utf8");
@@ -486,6 +552,15 @@ function duplicateClaimResult() {
   return {
     action: "duplicate",
     event: webhookEventRow({ status: "processed" }),
+    ok: false,
+    status: "duplicate",
+  };
+}
+
+function duplicateFailedClaimResult() {
+  return {
+    action: "duplicate",
+    event: webhookEventRow({ status: "failed" }),
     ok: false,
     status: "duplicate",
   };

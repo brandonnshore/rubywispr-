@@ -95,8 +95,12 @@ export function createStripeWebhookRouteHandler(
       eventType: event.type,
       stripeCreatedAt: event.created,
     });
+    const retryingFailedEvent =
+      !claim.ok &&
+      claim.status === "duplicate" &&
+      claim.event.status === "failed";
 
-    if (!claim.ok) {
+    if (!claim.ok && !retryingFailedEvent) {
       if (claim.status === "duplicate") {
         return stripeWebhookAcknowledgedResponse("duplicate");
       }
@@ -123,10 +127,14 @@ export function createStripeWebhookRouteHandler(
     const configResult = dependencies.resolveBillingConfig();
 
     if (!configResult.ok) {
-      await dependencies.markEventFailed({
+      const markedFailed = await dependencies.markEventFailed({
         errorCode: configResult.error.code,
         eventId: event.id,
       });
+
+      if (!markedFailed.ok) {
+        return stripeWebhookProcessingFailureResponse(markedFailed);
+      }
 
       return stripeWebhookErrorResponse({
         code: "stripe_webhook_billing_config_unavailable",
@@ -141,10 +149,14 @@ export function createStripeWebhookRouteHandler(
     });
 
     if (!cacheResult.ok) {
-      await dependencies.markEventFailed({
+      const markedFailed = await dependencies.markEventFailed({
         errorCode: cacheResult.error.code,
         eventId: event.id,
       });
+
+      if (!markedFailed.ok) {
+        return stripeWebhookProcessingFailureResponse(markedFailed);
+      }
 
       return stripeWebhookErrorResponse({
         code:
