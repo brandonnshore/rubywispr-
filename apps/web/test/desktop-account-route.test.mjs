@@ -46,6 +46,36 @@ const forbiddenPrivateDesktopAccountFragments = [
 ];
 const forbiddenPrivateFixturePattern =
   /private transcript|private audio|private cleaned text|private context|private clipboard|private prompt|Bearer rw_synthetic_placeholder|rubywhisper\.env|\.env\.local/i;
+const desktopAccountSuccessPayloadAllowlist = [
+  "accountStatus",
+  "billingPortalAvailable",
+  "billingPortalUrl",
+  "canTranscribe",
+  "email",
+  "failureCode",
+  "isTrialExhausted",
+  "isTrialLow",
+  "lifetimeWordsUsed",
+  "monthlyPeriodStart",
+  "monthlyWordsUsed",
+  "ok",
+  "planState",
+  "preflightPolicy",
+  "termsAccepted",
+  "trialWordsLimit",
+  "trialWordsRemaining",
+  "trialWordsUsed",
+].sort();
+const desktopAccountActiveSuccessPayloadKeys =
+  desktopAccountSuccessPayloadAllowlist.filter((key) => key !== "failureCode");
+const desktopAccountErrorPayloadKeys = ["error", "ok"];
+const desktopAccountErrorMetadataKeys = [
+  "code",
+  "desktopState",
+  "message",
+  "recovery",
+  "retryable",
+];
 
 test("desktop account route returns shared signed_out error", async () => {
   const routeModule = await loadDesktopAccountRouteModule();
@@ -76,6 +106,7 @@ test("desktop account route returns shared signed_out error", async () => {
 
   assert.equal(response.status, 401);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assertDesktopAccountErrorPayloadContract(body);
   assert.deepEqual(body, {
     error: {
       code: "signed_out",
@@ -140,6 +171,10 @@ test("desktop account route returns signed-in account snapshot metadata only", a
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assertDesktopAccountSuccessPayloadContract(
+    body,
+    desktopAccountActiveSuccessPayloadKeys,
+  );
   assert.deepEqual(body, {
     ok: true,
     ...snapshot,
@@ -205,6 +240,7 @@ test("desktop account route maps metadata read failures to service_unavailable",
 
   assert.equal(response.status, 503);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assertDesktopAccountErrorPayloadContract(body);
   assert.equal(body.error.code, "service_unavailable");
   assert.equal(body.error.retryable, true);
 });
@@ -245,6 +281,8 @@ test("desktop account route maps snapshot invalid input to internal_error", asyn
   const body = await response.json();
 
   assert.equal(response.status, 500);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assertDesktopAccountErrorPayloadContract(body);
   assert.equal(body.error.code, "internal_error");
 });
 
@@ -506,6 +544,34 @@ function createApiErrorResponse(code) {
       status: descriptor.httpStatus,
     },
   );
+}
+
+function assertDesktopAccountSuccessPayloadContract(body, expectedKeys) {
+  const keys = Object.keys(body).sort();
+
+  assert.deepEqual(keys, expectedKeys);
+
+  for (const key of keys) {
+    assert.ok(
+      desktopAccountSuccessPayloadAllowlist.includes(key),
+      `desktop account success payload must not expose ${key}`,
+    );
+  }
+
+  const serialized = JSON.stringify(body);
+
+  assert.doesNotMatch(serialized, forbiddenPrivateFixturePattern);
+  assert.doesNotMatch(
+    serialized,
+    /\b(?:authorization|clerkUserId|customerId|providerRequestId|providerResponseId|sessionId|stripeCustomerId|stripeSubscriptionId|token|userId)\b/i,
+  );
+}
+
+function assertDesktopAccountErrorPayloadContract(body) {
+  assert.deepEqual(Object.keys(body).sort(), desktopAccountErrorPayloadKeys);
+  assert.equal(body.ok, false);
+  assert.deepEqual(Object.keys(body.error).sort(), desktopAccountErrorMetadataKeys);
+  assert.doesNotMatch(JSON.stringify(body), forbiddenPrivateFixturePattern);
 }
 
 function createAccountProfileClient({ readError = null, row = null } = {}) {
