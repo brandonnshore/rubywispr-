@@ -49,8 +49,9 @@ Backend validation uses the same root commands because RubyWhisper backend route
 `apps/web/.env.example` contains blank placeholder names only. Copy names into a private env file or provider secret store when an integration ticket requires real values.
 
 - Server config lives in `src/config/server.ts` and may read server-only names such as `CLERK_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `GROQ_API_KEY`, `SENTRY_AUTH_TOKEN`, and release-signing secrets.
-- Client config lives in `src/config/client.ts` and may read only `NEXT_PUBLIC_*` names. Do not add secret, webhook, service-role, provider API, or signing key names to client config.
+- Client config lives in `src/config/client.ts` and may read only `NEXT_PUBLIC_*` names. For Clerk, only `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` belongs there; keep `CLERK_SECRET_KEY` and `CLERK_WEBHOOK_SECRET` server-only.
 - Blank placeholders are intentional so `lint`, `typecheck`, `test`, and `build` can run before live services exist.
+- `@clerk/nextjs` is installed for future auth leaves. `<ClerkProvider>`, `clerkMiddleware()`/`proxy.ts`, and `auth()`/`currentUser()` server helpers wait for the route-protection leaf because this guardrail leaf keeps Clerk server env names out of client-facing source and generated client bundles.
 - Never print, inspect, summarize, commit, paste, or attach `.env.local` or any private env source file in workpads, PRs, docs, comments, logs, or chat. Only placeholder names belong in this repo.
 
 ## Supabase Server-Only Helpers
