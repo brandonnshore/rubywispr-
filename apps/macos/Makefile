@@ -26,7 +26,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-recording-duration-timer test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-secret-guardrails
+.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-duration-timer test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-secret-guardrails
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -204,6 +204,24 @@ test-hotkey-manager:
 		Tests/HotkeyManagerTests.swift
 	$(BUILD_DIR)/tests/HotkeyManagerTests
 
+test-hotkey-recording-gate:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-o $(BUILD_DIR)/tests/HotkeyRecordingGateTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Sources/DesktopSessionStore.swift \
+		Sources/RubyWhisperBackendAPIClient.swift \
+		Sources/DesktopLoginBridge.swift \
+		Sources/DesktopAuthStateOwner.swift \
+		Sources/ShortcutCore/ShortcutModels.swift \
+		Sources/RecordingDurationTimer.swift \
+		Sources/MicrophonePermissionGate.swift \
+		Sources/FirstRunOnboardingCoordinator.swift \
+		Sources/HotkeyRecordingGate.swift \
+		Tests/HotkeyRecordingGateTests.swift
+	$(BUILD_DIR)/tests/HotkeyRecordingGateTests
+
 test-recording-duration-timer:
 	@mkdir -p $(BUILD_DIR)/tests
 	swiftc \
@@ -278,4 +296,4 @@ test-secret-guardrails:
 		Tests/SourceGuardrailTests.swift
 	$(BUILD_DIR)/tests/SourceGuardrailTests
 
-test: test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-recording-duration-timer test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-secret-guardrails
+test: test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-duration-timer test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-secret-guardrails

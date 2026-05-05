@@ -570,7 +570,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let monitor = RecordingDurationMonitor()
         monitor.onSnapshot = { [weak self] snapshot in
             DispatchQueue.main.async {
-                self?.recordingDurationSnapshot = snapshot
+                guard let self else { return }
+                self.recordingDurationSnapshot = snapshot
+                self.handleRecordingDurationSnapshot(snapshot)
             }
         }
         return monitor
@@ -900,6 +902,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 guard let self else { return }
                 self.authCoordinatorState = state
                 self.refreshFirstRunOnboardingState()
+                self.handleAccountRegressionForActiveHotkeyIfNeeded(state)
             }
             .store(in: &authStateCancellables)
 
@@ -2114,45 +2117,88 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func validateShortcutStartGate(mode: RecordingTriggerMode) -> Bool {
-        guard validateAccountGateForDictationAttempt() else {
-            return false
-        }
-
         refreshFirstRunOnboardingState()
-        guard firstRunOnboardingStep.allowsNormalDictation else {
-            cancelPendingShortcutStart()
-            shortcutSessionController.reset()
-            activeRecordingTriggerMode = nil
-            currentSessionIntent = .dictation
-            statusText = "Complete onboarding"
-            debugStatusMessage = "Onboarding blocked: \(firstRunOnboardingStep.rawValue)"
-            NotificationCenter.default.post(name: .showSetup, object: nil)
-            return false
-        }
-
-        guard hasCompletedSetup else {
-            cancelPendingShortcutStart()
-            shortcutSessionController.reset()
-            activeRecordingTriggerMode = nil
-            currentSessionIntent = .dictation
-            statusText = "Complete setup first"
-            debugStatusMessage = "Onboarding required"
-            NotificationCenter.default.post(name: .showSetup, object: nil)
-            return false
-        }
-
-        guard !resolvedTranscriptionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            cancelPendingShortcutStart()
-            shortcutSessionController.reset()
-            activeRecordingTriggerMode = nil
-            currentSessionIntent = .dictation
-            statusText = "Add API key"
-            debugStatusMessage = "Authentication required"
-            NotificationCenter.default.post(name: .showSetup, object: nil)
+        let decision = HotkeyRecordingGate.evaluateStart(currentHotkeyRecordingGateSnapshot())
+        guard decision.allowsRecording else {
+            routeBlockedHotkeyStart(decision, mode: mode)
             return false
         }
 
         return true
+    }
+
+    private func currentHotkeyRecordingGateSnapshot() -> HotkeyRecordingGateSnapshot {
+        HotkeyRecordingGateSnapshot(
+            authState: authCoordinatorState,
+            onboardingStep: firstRunOnboardingStep,
+            hasCompletedSetup: hasCompletedSetup,
+            microphoneStatus: Self.firstRunMicrophonePermissionCategory(
+                from: AVCaptureDevice.authorizationStatus(for: .audio),
+                hasInputDevice: !AudioDevice.availableInputDevices().isEmpty
+            ),
+            accessibilityStatus: firstRunAccessibilityPermissionStatus,
+            isRecording: isRecording,
+            isTranscribing: isTranscribing,
+            hasPendingRecordingStart: pendingShortcutStartMode != nil,
+            hasActiveTransientRecordingArtifact: activeTransientRecordingArtifact != nil,
+            durationState: recordingDurationSnapshot.state
+        )
+    }
+
+    private func routeBlockedHotkeyStart(
+        _ decision: HotkeyRecordingGateDecision,
+        mode: RecordingTriggerMode
+    ) {
+        guard case .blocked(let reason) = decision else { return }
+        if !(reason == .recorderBusy && isRecording) {
+            resetBlockedHotkeyStartState(resetActiveSession: mode == .toggle)
+        }
+
+        switch reason {
+        case .signedOut, .signInInProgress, .accountRefreshing, .termsRequired,
+             .accountIneligible, .accountUnavailable:
+            blockDictationAttempt(for: authCoordinatorState.dictationAccountGateDecision, routeSignIn: true)
+        case .onboardingNotReady:
+            statusText = "Complete onboarding"
+            debugStatusMessage = "Hotkey blocked: \(reason.rawValue) step=\(firstRunOnboardingStep.rawValue)"
+            NotificationCenter.default.post(name: .showSetup, object: nil)
+        case .setupIncomplete:
+            statusText = "Complete setup first"
+            debugStatusMessage = "Hotkey blocked: \(reason.rawValue)"
+            NotificationCenter.default.post(name: .showSetup, object: nil)
+        case .microphoneUnavailable:
+            statusText = "No Microphone"
+            debugStatusMessage = "Hotkey blocked: \(reason.rawValue)"
+            NotificationCenter.default.post(name: .showSetup, object: nil)
+        case .accessibilityUnavailable:
+            statusText = "No Accessibility"
+            debugStatusMessage = "Hotkey blocked: \(reason.rawValue)"
+            NotificationCenter.default.post(name: .showSetup, object: nil)
+        case .recorderBusy:
+            statusText = isTranscribing ? "Transcribing..." : "Recording..."
+            debugStatusMessage = "Hotkey blocked: \(reason.rawValue)"
+        case .uploadAmbiguous:
+            activeTransientRecordingArtifact?.delete()
+            activeTransientRecordingArtifact = nil
+            statusText = "Record again"
+            debugStatusMessage = "Hotkey blocked: \(reason.rawValue)"
+            overlayManager.dismiss()
+        case .durationLimitReached:
+            statusText = "Duration limit"
+            debugStatusMessage = "Hotkey blocked: \(reason.rawValue)"
+            overlayManager.showFailureIndicator()
+        }
+    }
+
+    private func resetBlockedHotkeyStartState(resetActiveSession: Bool) {
+        cancelPendingShortcutStart()
+        if resetActiveSession {
+            shortcutSessionController.reset()
+        } else {
+            _ = shortcutSessionController.resetActiveSession()
+        }
+        activeRecordingTriggerMode = nil
+        currentSessionIntent = .dictation
     }
 
     private func validateAccountGateForDictationAttempt(routeSignIn: Bool = true) -> Bool {
@@ -2163,6 +2209,31 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
 
         return true
+    }
+
+    private func handleAccountRegressionForActiveHotkeyIfNeeded(_ state: DesktopAuthCoordinatorState) {
+        let decision = state.dictationAccountGateDecision
+        guard !decision.allowsDictation else { return }
+        guard pendingShortcutStartMode != nil || activeRecordingTriggerMode != nil || isRecording || isTranscribing else {
+            return
+        }
+
+        if isRecording {
+            stopRecordingWithoutTranscribing(for: decision)
+            return
+        }
+
+        if isTranscribing {
+            cancelTranscription()
+            blockDictationAttempt(for: decision, routeSignIn: false)
+            return
+        }
+
+        cancelPendingShortcutStart()
+        shortcutSessionController.reset()
+        activeRecordingTriggerMode = nil
+        currentSessionIntent = .dictation
+        blockDictationAttempt(for: decision, routeSignIn: false)
     }
 
     func validateFirstRunTestDictationAccountGate() -> Bool {
@@ -2453,8 +2524,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private func startRecording(triggerMode: RecordingTriggerMode) {
         let t0 = CFAbsoluteTimeGetCurrent()
         os_log(.info, log: recordingLog, "startRecording() entered")
-        guard !isRecording && !isTranscribing else { return }
-        guard validateAccountGateForDictationAttempt() else { return }
+        refreshFirstRunOnboardingState()
+        let gateDecision = HotkeyRecordingGate.evaluateStart(currentHotkeyRecordingGateSnapshot())
+        guard gateDecision.allowsRecording else {
+            routeBlockedHotkeyStart(gateDecision, mode: triggerMode)
+            return
+        }
         let scheduledSelectionSnapshot = pendingSelectionSnapshot
         let scheduledManualCommandInvocation = pendingManualCommandInvocation
         cancelPendingShortcutStart()
@@ -3222,6 +3297,48 @@ final class AppState: ObservableObject, @unchecked Sendable {
         audioRecorder.stopRecording { [weak self] artifact in
             guard let self else { return }
             artifact?.delete()
+            self.refreshAvailableMicrophonesIfNeeded()
+        }
+    }
+
+    private func handleRecordingDurationSnapshot(_ snapshot: RecordingDurationSnapshot) {
+        guard snapshot.state == .capReached, isRecording else { return }
+        stopRecordingForDurationLimitReached()
+    }
+
+    private func stopRecordingForDurationLimitReached() {
+        cancelPendingShortcutStart()
+        cancelRecordingInitializationTimer()
+        shortcutSessionController.reset()
+        activeRecordingTriggerMode = nil
+        currentSessionIntent = .dictation
+        audioRecorder.onRecordingReady = nil
+        audioRecorder.onRecordingFailure = nil
+        audioLevelCancellable?.cancel()
+        audioLevelCancellable = nil
+        contextCaptureTask?.cancel()
+        contextCaptureTask = nil
+        capturedContext = nil
+        tearDownRealtimeService()
+        restoreAudioInterruptionIfNeeded()
+        isRecording = false
+        isTranscribing = false
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+        activeTransientRecordingArtifact?.delete()
+        activeTransientRecordingArtifact = nil
+        stopRecordingDurationTimer()
+        endCriticalDictationActivity()
+        statusText = "Duration limit"
+        debugStatusMessage = "Hotkey blocked: \(HotkeyRecordingGateBlockReason.durationLimitReached.rawValue)"
+        errorMessage = "Recordings are limited to 10 minutes. Start a new whisper."
+        overlayManager.showFailureIndicator()
+        playAlertSound(named: "Basso")
+
+        audioRecorder.stopRecording { [weak self] artifact in
+            guard let self else { return }
+            artifact?.delete()
+            self.audioRecorder.cleanup()
             self.refreshAvailableMicrophonesIfNeeded()
         }
     }
