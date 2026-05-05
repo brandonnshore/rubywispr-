@@ -12,6 +12,7 @@ Source requirements:
 - `TECHNICAL_SPEC.md#Observability Rules`
 - `WEB_DESIGN_SPEC.md#Component States`
 - `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
+- `docs/RW_067_DURATION_CAP_CONTRACT.md`
 - `IMPLEMENTATION_PLAN.md` Wave 4 backend requirements
 
 ## Response Shape

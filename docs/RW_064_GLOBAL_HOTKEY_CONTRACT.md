@@ -10,6 +10,7 @@ implementation changes. It extends:
 - `TECHNICAL_SPEC.md#FR-010 Hotkeys`
 - `WEB_DESIGN_SPEC.md#Main App / Settings`
 - `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
+- `docs/RW_067_DURATION_CAP_CONTRACT.md`
 - `docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`
 - `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
@@ -216,10 +217,10 @@ Hotkey code must not:
 - Include key event data, application/window titles, selected text, clipboard
   content, transcript text, or cleaned text in upload metadata.
 
-The duration cap applies to both hold and toggle recordings. If the app can
-measure local elapsed time, it should warn around 9:30 and stop at 10:00. The
-backend remains authoritative for `duration_limit_reached` if local timing is
-wrong or unavailable.
+The duration cap applies to both hold and toggle recordings. The canonical
+constants, local warning/stop behavior, same-audio retry prohibition, backend
+`duration_limit_reached` fallback, and shortened-timer test seam are defined in
+`docs/RW_067_DURATION_CAP_CONTRACT.md`.
 
 ## Conflict And Failure States
 
