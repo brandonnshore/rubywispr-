@@ -182,6 +182,7 @@ test-onboarding-coordinator:
 		Sources/DesktopSessionStore.swift \
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Sources/DesktopAuthStateOwner.swift \
+		Sources/MicrophonePermissionGate.swift \
 		Sources/FirstRunOnboardingCoordinator.swift \
 		Tests/FirstRunOnboardingCoordinatorTests.swift
 	$(BUILD_DIR)/tests/FirstRunOnboardingCoordinatorTests
