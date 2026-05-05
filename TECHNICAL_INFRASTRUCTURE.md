@@ -398,7 +398,20 @@ Web/backend:
 
 Mac app:
 
-- PR/build checks remain a separate blocked leaf until the macOS app import, repo-local Xcode path, and runner/build-command decision are available.
+- Pull request checks: `.github/workflows/macos-ci.yml` runs on GitHub-hosted
+  `macos-latest` for macOS app changes and executes the repo-local Debug/ad hoc
+  build command:
+
+  ```bash
+  make -C apps/macos clean all CODESIGN_IDENTITY=-
+  ```
+
+  The workflow verifies `apps/macos/build/RubyWhisper.app`, the development
+  bundle identifier `com.rubyadvisory.rubywhisper.dev`, and an ad hoc code
+  signature (`Signature=adhoc`). This is a non-release validation gate only.
+- CI must not run `dmg`, `codesign-dmg`, `notarize`, or any command that needs
+  Apple signing/notarization credentials, release packaging secrets, production
+  provider keys, or private env files.
 - Release builds gated by manual approval.
 - Signing/notarization gated by Apple credential availability.
 - Release artifacts published only through approved release workflow.

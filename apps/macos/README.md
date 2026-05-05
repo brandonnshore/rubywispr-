@@ -75,4 +75,21 @@ approved production values.
 project, workspace, Swift package, or scheme under `apps/macos`; `xcodebuild -list`
 exits 66 in this directory.
 
+## CI Validation
+
+`.github/workflows/macos-ci.yml` runs the same Debug/ad hoc command on
+GitHub-hosted `macos-latest` for macOS source changes:
+
+```bash
+make -C apps/macos clean all CODESIGN_IDENTITY=-
+```
+
+The workflow verifies that `apps/macos/build/RubyWhisper.app` exists, keeps the
+development bundle identifier `com.rubyadvisory.rubywhisper.dev`, and is signed
+with an ad hoc signature. It is only a non-release build gate.
+
+Release packaging, DMG creation, Apple Developer ID signing, notarization,
+provider keys, production secrets, and private env files are intentionally out
+of this CI path.
+
 The imported upstream source is still a FreeFlow harness. It includes direct provider, updater, local settings, and local history behavior that must be refactored before RubyWhisper beta use.
