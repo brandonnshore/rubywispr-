@@ -176,6 +176,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func completeSetup() {
+        guard appState.canCompleteFirstRunSetup else {
+            appState.statusText = "Complete onboarding"
+            appState.debugStatusMessage = "Setup completion blocked: \(appState.firstRunOnboardingStep.rawValue)"
+            setupWindow?.makeKeyAndOrderFront(nil)
+            return
+        }
+
         appState.hasCompletedSetup = true
         setupWindow?.close()
         setupWindow = nil

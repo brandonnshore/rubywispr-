@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AVFoundation
 import Combine
 import Foundation
@@ -72,7 +73,7 @@ struct SetupView: View {
 
     @State private var currentStep = SetupStep.welcome
     @State private var micPermissionStatus: FirstRunOnboardingPermissionCategory = .unknown
-    @State private var accessibilityGranted = false
+    @State private var accessibilityStatus: FirstRunOnboardingPermissionCategory = .notDetermined
     @State private var apiKeyInput: String = ""
     @State private var apiBaseURLInput: String = ""
     @State private var transcriptionAPIURLInput: String = ""
@@ -148,15 +149,6 @@ struct SetupView: View {
                                 .keyboardShortcut(.defaultAction)
                             } else if currentStep == .testTranscription {
                                 HStack(spacing: 10) {
-                                    Button("Skip") {
-                                        stopTestHotkeyMonitoring()
-                                        withAnimation {
-                                            currentStep = nextStep(currentStep)
-                                        }
-                                    }
-                                    .buttonStyle(.plain)
-                                    .foregroundStyle(.secondary)
-
                                     Button("Continue") {
                                         stopTestHotkeyMonitoring()
                                         withAnimation {
@@ -180,7 +172,7 @@ struct SetupView: View {
                                 onComplete()
                             }
                             .keyboardShortcut(.defaultAction)
-                            .disabled(!appState.isHotkeyReadyForDictation)
+                            .disabled(!canFinishSetup)
                         }
                     }
                 }
@@ -200,7 +192,12 @@ struct SetupView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             checkMicPermission()
-            checkAccessibility()
+            if currentStep == .accessibility {
+                appState.markAccessibilityRecoveryIfStillMissing()
+                syncAccessibilityStatus()
+            } else {
+                checkAccessibility()
+            }
         }
         .onDisappear {
             accessibilityTimer?.invalidate()
@@ -486,10 +483,20 @@ struct SetupView: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("\(AppName.displayName) needs Accessibility access to paste transcribed text into your apps.")
+            Text("\(AppName.displayName) needs Accessibility access to type finished dictation where your cursor already is. The permission check only asks macOS whether RubyWhisper is trusted; it does not read surrounding app content.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 8) {
+                instructionRow(number: "1", text: "Open System Settings when prompted.")
+                instructionRow(number: "2", text: "Go to Privacy & Security > Accessibility.")
+                instructionRow(number: "3", text: "Turn on RubyWhisper, then return here.")
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.blue.opacity(0.06))
+            .cornerRadius(10)
 
             HStack {
                 Image(systemName: "hand.raised.fill")
@@ -497,14 +504,33 @@ struct SetupView: View {
                     .foregroundStyle(.blue)
                 Text("Accessibility")
                 Spacer()
-                if accessibilityGranted {
+                if accessibilityStatus == .granted {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                     Text("Granted")
                         .foregroundStyle(.green)
+                } else if accessibilityStatus == .requesting {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Waiting")
+                        .foregroundStyle(.secondary)
+                    Button("Retry") {
+                        checkAccessibility(recoveryWhenMissing: true)
+                    }
                 } else {
-                    Button("Open Settings") {
+                    if accessibilityStatus.blocksInRecovery {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .foregroundStyle(.orange)
+                        Text("Not Enabled")
+                            .foregroundStyle(.orange)
+                    }
+                    Button(accessibilityStatus.blocksInRecovery ? "Open Settings" : "Request Access") {
                         requestAccessibility()
+                    }
+                    if accessibilityStatus.blocksInRecovery {
+                        Button("Retry") {
+                            checkAccessibility(recoveryWhenMissing: true)
+                        }
                     }
                 }
             }
@@ -512,8 +538,23 @@ struct SetupView: View {
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(8)
 
+            if accessibilityStatus.blocksInRecovery {
+                Label(
+                    "If access was denied or left off, enable RubyWhisper in Accessibility and use Retry. Dictation stays blocked until macOS reports Accessibility as granted.",
+                    systemImage: "arrow.clockwise.circle"
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.08))
+                .cornerRadius(10)
+            }
+
         }
         .onAppear {
+            checkAccessibility()
             startAccessibilityPolling()
         }
         .onDisappear {
@@ -837,6 +878,17 @@ struct SetupView: View {
                         Text("Say anything — a sentence or two is perfect.")
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
+
+                        if appState.firstRunOnboardingStep == .accessibilityRecovery ||
+                            appState.firstRunOnboardingStep == .accessibilityRequired ||
+                            appState.firstRunOnboardingStep == .accessibilityRequesting {
+                            Label(
+                                "Accessibility must be granted before the test whisper can complete.",
+                                systemImage: "hand.raised.fill"
+                            )
+                            .font(.callout)
+                            .foregroundStyle(.orange)
+                        }
                     }
 
                 case .recording:
@@ -928,7 +980,7 @@ struct SetupView: View {
             checkAccessibility()
             appState.refreshAvailableMicrophones()
             testMicPulsing = true
-            if micPermissionStatus == .granted && accessibilityGranted {
+            if micPermissionStatus == .granted && accessibilityStatus == .granted {
                 startTestHotkeyMonitoring()
             } else {
                 testError = firstRunTestLocalGateError()
@@ -956,7 +1008,7 @@ struct SetupView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
-            if appState.isHotkeyReadyForDictation {
+            if canFinishSetup {
                 VStack(alignment: .leading, spacing: 12) {
                     if appState.hasEnabledHoldShortcut {
                         HowToRow(icon: "keyboard", text: "Hold \(appState.holdShortcut.displayName) to record")
@@ -983,9 +1035,13 @@ struct SetupView: View {
                 .padding(.top, 10)
             } else {
                 hotkeyRecoveryBox(
-                    title: appState.hotkeyRecoveryTitle,
-                    message: appState.hotkeyRecoveryMessage,
-                    diagnostic: appState.hotkeyDiagnosticCategory
+                    title: appState.firstRunOnboardingStep == .ready ? appState.hotkeyRecoveryTitle : "Onboarding Not Complete",
+                    message: appState.firstRunOnboardingStep == .ready
+                        ? appState.hotkeyRecoveryMessage
+                        : "Finish the required permission and test whisper steps before starting dictation.",
+                    diagnostic: appState.firstRunOnboardingStep == .ready
+                        ? appState.hotkeyDiagnosticCategory
+                        : "step=\(appState.firstRunOnboardingStep.rawValue)"
                 )
             }
 
@@ -1007,7 +1063,7 @@ struct SetupView: View {
         case .micPermission:
             return MicrophonePermissionGate.presentation(for: micPermissionStatus).canProceed
         case .accessibility:
-            return accessibilityGranted
+            return accessibilityStatus == .granted
         case .screenRecording:
             return appState.hasScreenRecordingPermission
         case .testTranscription:
@@ -1034,6 +1090,11 @@ struct SetupView: View {
         "\(testShortcutPrompt) to try again"
     }
 
+    private var canFinishSetup: Bool {
+        appState.isHotkeyReadyForDictation &&
+            appState.firstRunOnboardingStep == .ready
+    }
+
     private func firstRunTestLocalGateError() -> String {
         if micPermissionStatus != .granted {
             let presentation = MicrophonePermissionGate.presentation(for: micPermissionStatus)
@@ -1043,7 +1104,7 @@ struct SetupView: View {
             return presentation.message
         }
 
-        if !accessibilityGranted {
+        if accessibilityStatus != .granted {
             return "Accessibility access is required before the test whisper. Go back and enable RubyWhisper in System Settings > Privacy & Security > Accessibility."
         }
 
@@ -1198,8 +1259,9 @@ struct SetupView: View {
         }
     }
 
-    func checkAccessibility() {
-        accessibilityGranted = AXIsProcessTrusted()
+    func checkAccessibility(recoveryWhenMissing: Bool = false) {
+        _ = appState.refreshAccessibilityTrustStatus(recoveryWhenMissing: recoveryWhenMissing)
+        syncAccessibilityStatus()
     }
 
     func startAccessibilityPolling() {
@@ -1212,7 +1274,12 @@ struct SetupView: View {
     }
 
     func requestAccessibility() {
-        appState.openAccessibilitySettings()
+        accessibilityStatus = .requesting
+        appState.requestAccessibilityTrust()
+    }
+
+    private func syncAccessibilityStatus() {
+        accessibilityStatus = appState.firstRunAccessibilityPermissionStatus
     }
 
     func startScreenRecordingPolling() {
@@ -1231,19 +1298,8 @@ struct SetupView: View {
             switch action {
             case .start:
                 guard testPhase == .idle || testPhase == .done else { return }
-                checkMicPermission()
-                checkAccessibility()
-                guard appState.validateFirstRunTestDictationAccountGate() else {
+                guard canStartFirstRunTestWhisper() else {
                     testHotkeyHarness.resetSession()
-                    testError = appState.authStateTitle
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        testPhase = .done
-                    }
-                    return
-                }
-                guard micPermissionStatus == .granted, accessibilityGranted else {
-                    testHotkeyHarness.resetSession()
-                    testError = firstRunTestLocalGateError()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         testPhase = .done
                     }
@@ -1293,10 +1349,9 @@ struct SetupView: View {
                 testAudioLevelCancellable?.cancel()
                 testAudioLevelCancellable = nil
                 testAudioLevel = 0.0
-                guard appState.validateFirstRunTestDictationAccountGate() else {
+                guard canStartFirstRunTestWhisper() else {
                     testHotkeyHarness.isTranscribing = false
                     testAudioRecorder = nil
-                    testError = appState.authStateTitle
                     testHotkeyHarness.resetSession()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         testPhase = .done
@@ -1370,6 +1425,38 @@ struct SetupView: View {
             testError = error.localizedDescription
             testPhase = .done
         }
+    }
+
+    private func canStartFirstRunTestWhisper() -> Bool {
+        checkMicPermission()
+        checkAccessibility()
+
+        guard appState.validateFirstRunTestDictationAccountGate() else {
+            testError = appState.authStateTitle
+            return false
+        }
+
+        guard micPermissionStatus == .granted else {
+            testError = firstRunTestLocalGateError()
+            if micPermissionStatus == .notDetermined {
+                requestMicPermission()
+            }
+            return false
+        }
+
+        guard appState.refreshAccessibilityTrustStatus(recoveryWhenMissing: true) else {
+            syncAccessibilityStatus()
+            testError = firstRunTestLocalGateError()
+            currentStep = .accessibility
+            return false
+        }
+
+        syncAccessibilityStatus()
+        return FirstRunOnboardingCoordinator.canStartTestWhisper(from: FirstRunOnboardingGateSnapshot(
+            authState: appState.authCoordinatorState,
+            microphoneStatus: micPermissionStatus,
+            accessibilityStatus: accessibilityStatus
+        ))
     }
 
     private func stopTestHotkeyMonitoring() {

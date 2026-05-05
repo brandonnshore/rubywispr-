@@ -523,6 +523,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
             refreshFirstRunOnboardingState()
         }
     }
+    @Published private(set) var firstRunAccessibilityPermissionStatus: FirstRunOnboardingPermissionCategory
     @Published var hotkeyMonitoringErrorMessage: String?
     @Published var hotkeyRegistrationState = HotkeyRegistrationState.unregistered
     @Published private(set) var recordingDurationSnapshot = RecordingDurationSnapshot.inactive(policy: .production)
@@ -776,6 +777,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.firstRunOnboardingCoordinator = firstRunOnboardingCoordinator
         self.authCoordinatorState = authStateOwner.coordinatorState
         self.authAccountSnapshot = authStateOwner.accountSnapshot
+        self.firstRunAccessibilityPermissionStatus = initialAccessibility ? .granted : .notDetermined
         self.firstRunOnboardingStep = initialFirstRunStep
         self.hasAccessibility = initialAccessibility
         self.hasScreenRecordingPermission = initialScreenCapturePermission
@@ -912,7 +914,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 from: AVCaptureDevice.authorizationStatus(for: .audio),
                 hasInputDevice: !AudioDevice.availableInputDevices().isEmpty
             ),
-            accessibilityStatus: hasAccessibility ? .granted : .notDetermined,
+            accessibilityStatus: firstRunAccessibilityPermissionStatus,
             testWhisperStatus: testWhisperStatus
         ))
     }
@@ -928,9 +930,45 @@ final class AppState: ObservableObject, @unchecked Sendable {
         refreshFirstRunOnboardingState(testWhisperStatus: .succeeded)
     }
 
+    var canCompleteFirstRunSetup: Bool {
+        _ = refreshAccessibilityTrustStatus(recoveryWhenMissing: true)
+        refreshFirstRunOnboardingState()
+        return firstRunOnboardingStep == .ready
+    }
+
+    func refreshAccessibilityTrustStatus(recoveryWhenMissing: Bool = false) -> Bool {
+        let trusted = AXIsProcessTrusted()
+        let nextStatus: FirstRunOnboardingPermissionCategory
+        if trusted {
+            nextStatus = .granted
+        } else if recoveryWhenMissing {
+            nextStatus = .denied
+        } else if firstRunAccessibilityPermissionStatus == .requesting {
+            nextStatus = .requesting
+        } else {
+            nextStatus = .notDetermined
+        }
+
+        firstRunAccessibilityPermissionStatus = nextStatus
+        hasAccessibility = trusted
+        refreshFirstRunOnboardingState()
+        return trusted
+    }
+
+    func requestAccessibilityTrust() {
+        firstRunAccessibilityPermissionStatus = .requesting
+        refreshFirstRunOnboardingState()
+        openAccessibilitySettings()
+    }
+
+    func markAccessibilityRecoveryIfStillMissing() {
+        _ = refreshAccessibilityTrustStatus(recoveryWhenMissing: true)
+    }
+
     func resetFirstRunOnboardingForQA() {
         firstRunOnboardingCoordinator.resetForQA()
         hasCompletedSetup = false
+        firstRunAccessibilityPermissionStatus = hasAccessibility ? .granted : .notDetermined
         refreshFirstRunOnboardingState(testWhisperStatus: .notStarted)
         restartHotkeyMonitoring()
     }
@@ -1528,14 +1566,13 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     func startAccessibilityPolling() {
         accessibilityTimer?.invalidate()
-        hasAccessibility = AXIsProcessTrusted()
+        _ = refreshAccessibilityTrustStatus()
         hasScreenRecordingPermission = hasScreenCapturePermission()
         accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
                 guard let self else { return }
-                self.hasAccessibility = AXIsProcessTrusted()
+                _ = self.refreshAccessibilityTrustStatus()
                 self.hasScreenRecordingPermission = self.hasScreenCapturePermission()
-                self.refreshFirstRunOnboardingState()
             }
         }
     }
