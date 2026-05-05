@@ -5,7 +5,7 @@ This directory is a repo-local Supabase CLI scaffold for product metadata migrat
 Current scope:
 
 - `config.toml` is configured for local database and migration work only.
-- `migrations/` is intentionally empty until a later schema ticket creates the first SQL migration.
+- `migrations/` contains product metadata migrations only.
 - This scaffold does not link a Supabase project, apply remote migrations, or configure staging or production.
 
 Privacy boundary:
