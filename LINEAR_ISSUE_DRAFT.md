@@ -2080,6 +2080,8 @@ If the cursor was not in a text box, RubyWhisper should show "Click a text box f
 - Preserve/restore previous clipboard where technically possible.
 - Add copy action for last/failed whisper.
 - Ensure clipboard contents are never sent to backend.
+- Follow `docs/RW_070_RECENT_WISPRS_CONTRACT.md` for failed-insertion
+  Recent Wisprs inclusion, copy recovery, and no-backend-sync assertions.
 
 ## Out of Scope
 - Server-side clipboard history.
@@ -2105,7 +2107,7 @@ If the cursor was not in a text box, RubyWhisper should show "Click a text box f
 - Likely files/areas: clipboard manager, insertion recovery UI, Recent Wisprs store.
 - Risk level: High.
 - Handoff expectation: PR ready.
-- Source references: `TECHNICAL_SPEC.md#Insertion Failure`, `WEB_DESIGN_SPEC.md#Recent Wisprs`.
+- Source references: `TECHNICAL_SPEC.md#Insertion Failure`, `WEB_DESIGN_SPEC.md#Recent Wisprs`, `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 
 ## RW-070: Implement local Recent Wisprs history
 
@@ -2124,6 +2126,9 @@ Recent Wisprs is required on day one. Only final cleaned text is stored locally 
 - Include successful and failed insertions.
 - Add 7-day retention cleanup.
 - Add clear history and disable local history setting if supported by settings UI.
+- Follow `docs/RW_070_RECENT_WISPRS_CONTRACT.md` for data model,
+  retention, clear/disable behavior, insertion statuses, evidence rules, and
+  no-sync test seams.
 
 ## Out of Scope
 - Raw transcript storage.
@@ -2134,10 +2139,12 @@ Recent Wisprs is required on day one. Only final cleaned text is stored locally 
 - [ ] Done means recent successful and failed wisprs appear locally.
 - [ ] Items expire after 7 days by default.
 - [ ] Clearing history removes local items.
+- [ ] Disabled history prevents new persistent Recent Wisprs writes.
 - [ ] No Recent Wisprs data is sent to Supabase/backend.
 
 ## Validation
 - [ ] Run local retention tests.
+- [ ] Run clear-history, disabled-history, and no-backend-sync tests.
 - [ ] Manual successful and failed insertion history test.
 - [ ] Inspect backend calls to confirm history is not synced.
 
@@ -2150,7 +2157,7 @@ Recent Wisprs is required on day one. Only final cleaned text is stored locally 
 - Likely files/areas: local persistence, history view, retention job.
 - Risk level: High.
 - Handoff expectation: PR ready.
-- Source references: `WEB_DESIGN_SPEC.md#Recent Wisprs`, `TECHNICAL_SPEC.md#Privacy Requirements`.
+- Source references: `WEB_DESIGN_SPEC.md#Recent Wisprs`, `TECHNICAL_SPEC.md#Privacy Requirements`, `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 
 ## RW-071: Implement local personal dictionary
 
@@ -2215,6 +2222,8 @@ The user wants word count visible in the app, not the normal island. Settings al
 - Show plan/trial word usage and billing portal link.
 - Include dictionary, hotkeys, appearance, cleanup/context toggles, local history controls.
 - Connect to desktop account API.
+- Keep Recent Wisprs clear/disable controls local-only per
+  `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 
 ## Out of Scope
 - Website account page.
@@ -2225,6 +2234,8 @@ The user wants word count visible in the app, not the normal island. Settings al
 - [ ] Done means all required settings sections exist.
 - [ ] Plan view shows trial words used/remaining and paid/Friend state.
 - [ ] Advanced settings can disable cleanup/context-aware cleanup/local history.
+- [ ] Recent Wisprs clear/disable controls do not write history content to
+  backend or Supabase.
 - [ ] Billing management opens Stripe customer portal.
 
 ## Validation
@@ -2673,6 +2684,8 @@ The server must not store audio, raw transcript, cleaned text, context, clipboar
 - Audit crash/error reporting config.
 - Audit Mac local storage boundaries.
 - Audit admin dashboard for content absence.
+- Use `docs/RW_070_RECENT_WISPRS_CONTRACT.md` as the Recent Wisprs local
+  storage/no-sync audit baseline.
 
 ## Out of Scope
 - Legal review of Privacy policy.
@@ -2681,6 +2694,8 @@ The server must not store audio, raw transcript, cleaned text, context, clipboar
 ## Acceptance Criteria
 - [ ] Done means no server storage/logging path contains forbidden content.
 - [ ] Local Recent Wisprs store final cleaned text only.
+- [ ] Recent Wisprs retention, clear, disable, and insertion status behavior
+  match `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 - [ ] Personal dictionary remains local-only in v0.1.
 - [ ] Any privacy gap is fixed or blocks launch.
 

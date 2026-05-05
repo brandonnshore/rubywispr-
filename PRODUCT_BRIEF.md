@@ -88,13 +88,17 @@ The app should include a history view for recent dictations.
 
 Each recent Wispr should include:
 
-- Raw transcript if available.
-- Cleaned output.
+- Final cleaned output only, per `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 - Timestamp.
-- Destination app if available.
+- Destination app if available without storing document, window, URL, selected,
+  focused-field, or clipboard content.
 - Copy action.
-- Retry cleanup or retranscription action if feasible.
-- Local-only storage behavior.
+- Retry insertion or copy recovery action if feasible, without retranscribing.
+- Local-only storage behavior with 7-day default expiry, clear history, and
+  disable history controls.
+
+Recent Wisprs must not store raw transcripts, audio, cleanup prompts, app
+context, clipboard content, screenshots, or server-side history.
 
 ## Transcription Strategy
 
