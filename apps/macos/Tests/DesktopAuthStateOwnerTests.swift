@@ -86,6 +86,7 @@ private struct DesktopAuthStateOwnerTests {
         await testLoginHandoffFailureClearsSessionAndUsesStableState()
         await testLoginBridgeShellStatesUseContractNames()
         await testAccountSnapshotsMapToCoordinatorStates()
+        await testDictationAccountGateKeepsRecoveryStatesDistinct()
         await testAccountRefreshFailureIsDistinctFromSignedOut()
         await testDiagnosticsDoNotExposeAuthMaterial()
         print("DesktopAuthStateOwnerTests passed")
@@ -241,6 +242,7 @@ private struct DesktopAuthStateOwnerTests {
         let cases: [(name: String, snapshot: RubyWhisperDesktopAccountSnapshot, state: DesktopAuthCoordinatorState)] = [
             ("terms required", termsRequiredSnapshot, .signedInTermsRequired),
             ("trial active", activeSnapshot, .trialActive),
+            ("trial exhausted", trialExhaustedSnapshot, .trialExhausted),
             ("paid active", paidActiveSnapshot, .paidActive),
             ("blocked", blockedSnapshot, .blocked),
             ("payment failed", paymentFailedSnapshot, .paymentFailed),
@@ -261,6 +263,46 @@ private struct DesktopAuthStateOwnerTests {
             expect(owner.coordinatorState.rawValue == testCase.state.rawValue, "\(testCase.name) should keep stable raw state")
             expect(owner.coordinatorState.canTranscribe == testCase.snapshot.canTranscribe, "\(testCase.name) should mirror dictation eligibility")
         }
+    }
+
+    private static func testDictationAccountGateKeepsRecoveryStatesDistinct() async {
+        let cases: [(state: DesktopAuthCoordinatorState, decision: DesktopDictationAccountGateDecision)] = [
+            (.signedOut, .signInRequired),
+            (.canceled, .signInRequired),
+            (.loginLaunching, .signInInProgress),
+            (.browserPending, .signInInProgress),
+            (.handoffPending, .signInInProgress),
+            (.sessionExchanging, .signInInProgress),
+            (.accountRefreshing, .accountRefreshing),
+            (.signedInTermsRequired, .termsRequired),
+            (.trialActive, .allowed),
+            (.paidActive, .allowed),
+            (.friendOfRubyActive, .allowed),
+            (.trialExhausted, .trialExhausted),
+            (.paymentFailed, .paymentFailed),
+            (.blocked, .blocked),
+            (.error, .accountUnavailable),
+            (.unknown("future_account_state"), .accountUnavailable),
+        ]
+
+        for testCase in cases {
+            let decision = testCase.state.dictationAccountGateDecision
+            expect(decision == testCase.decision, "\(testCase.state.rawValue) should map to \(testCase.decision.debugReason)")
+            expect(
+                decision.allowsDictation == testCase.state.canTranscribe,
+                "\(testCase.state.rawValue) dictation gate should mirror coordinator transcription eligibility"
+            )
+        }
+
+        let distinctBlockedStates: [DesktopAuthCoordinatorState] = [
+            .signedInTermsRequired,
+            .trialExhausted,
+            .paymentFailed,
+            .blocked,
+        ]
+        let decisions = Set(distinctBlockedStates.map(\.dictationAccountGateDecision))
+        expect(decisions.count == distinctBlockedStates.count, "terms, trial, payment, and blocked states must remain distinct")
+        expect(!decisions.contains(.signInRequired), "signed-in recovery states must not collapse to sign-in")
     }
 
     private static func testAccountRefreshFailureIsDistinctFromSignedOut() async {
@@ -324,6 +366,21 @@ private struct DesktopAuthStateOwnerTests {
             planState: .trialActive,
             billingPortalAvailable: false,
             failureCode: .termsRequired
+        )
+    }
+
+    private static var trialExhaustedSnapshot: RubyWhisperDesktopAccountSnapshot {
+        RubyWhisperDesktopAccountSnapshot(
+            state: .trialExhausted,
+            canTranscribe: false,
+            recovery: .openCheckout,
+            retryable: false,
+            email: "user@example.test",
+            termsAccepted: true,
+            accountStatus: .active,
+            planState: .trialExhausted,
+            billingPortalAvailable: false,
+            failureCode: .trialExhausted
         )
     }
 

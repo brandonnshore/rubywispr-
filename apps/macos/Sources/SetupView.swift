@@ -1140,6 +1140,14 @@ struct SetupView: View {
             switch action {
             case .start:
                 guard testPhase == .idle || testPhase == .done else { return }
+                guard appState.validateFirstRunTestDictationAccountGate() else {
+                    testHotkeyHarness.resetSession()
+                    testError = appState.authStateTitle
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        testPhase = .done
+                    }
+                    return
+                }
                 if testPhase == .done {
                     resetTest()
                 }
@@ -1184,6 +1192,19 @@ struct SetupView: View {
                 testAudioLevelCancellable?.cancel()
                 testAudioLevelCancellable = nil
                 testAudioLevel = 0.0
+                guard appState.validateFirstRunTestDictationAccountGate() else {
+                    testHotkeyHarness.isTranscribing = false
+                    testAudioRecorder = nil
+                    testError = appState.authStateTitle
+                    testHotkeyHarness.resetSession()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        testPhase = .done
+                    }
+                    recorder.stopRecording { _ in
+                        recorder.cleanup()
+                    }
+                    return
+                }
                 testHotkeyHarness.isTranscribing = true
 
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
