@@ -13,6 +13,7 @@ It extends:
 - `TECHNICAL_SPEC.md#POST /api/desktop/transcribe`
 - `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
 - `docs/RW_064_GLOBAL_HOTKEY_CONTRACT.md`
+- `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`
 - `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md#post-apidesktoptranscribe`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
 - `docs/USAGE_QUOTA_CONTRACT.md`
@@ -186,7 +187,9 @@ contract's auth, Terms, account, microphone, and Accessibility gates pass.
 
 The recording island must not show transcript content. It may show short
 recoverable state copy and actions. Local recovery surfaces may show cleaned
-text only under the approved Recent Wisprs/recovery policy.
+text only under the approved Recent Wisprs/recovery policy. Island state names,
+copy/action boundaries, and visual proof rules are defined in
+`docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`.
 
 ## Retry And Duplicate-Billing Boundary
 

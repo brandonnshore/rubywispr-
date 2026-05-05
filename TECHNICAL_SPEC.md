@@ -90,6 +90,10 @@ FR-011 Recording island: The app must show a floating, draggable recording islan
 - Validate by running: manual app QA.
 - Required tests: state mapping tests where UI architecture allows.
 - Security/privacy: island must not display private transcript content unless user explicitly opens recovery/history UI.
+- Contract: `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md` defines
+  island state names, transitions, compact/non-focus-stealing behavior,
+  recovery actions, and privacy-safe visual proof rules for RW-066
+  implementation leaves.
 
 FR-012 Visualizer: The island must show live voice pickup while recording.
 
@@ -97,6 +101,8 @@ FR-012 Visualizer: The island must show live voice pickup while recording.
 - Validate by running: manual microphone test.
 - Required tests: audio-meter logic tests if separated.
 - Security/privacy: meter data is ephemeral.
+- Contract: `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md#visualizer-contract`
+  defines ephemeral meter handling and reduced-motion behavior.
 
 FR-013 Duration cap: A single whisper must be capped at 10 minutes.
 
@@ -410,6 +416,9 @@ typed RubyWhisper backend API client contract live in
 `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`. First-run onboarding order,
 permission gates, test whisper, and local completion metadata are defined in
 `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`.
+Recording island state naming, recovery actions, visualizer behavior, and
+privacy-safe proof rules are defined in
+`docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`.
 
 ## API Contracts
 

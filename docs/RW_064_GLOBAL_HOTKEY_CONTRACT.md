@@ -11,6 +11,7 @@ implementation changes. It extends:
 - `WEB_DESIGN_SPEC.md#Main App / Settings`
 - `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
 - `docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`
+- `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
 - `docs/FREEFLOW_AUDIT_RUB_24.md`
 
@@ -192,6 +193,10 @@ The recording island is the user-visible recording authority:
 - It shows recoverable errors for permission, account, network, provider,
   insertion, duration, and hotkey capture states.
 - It must not display private transcript content during recording or processing.
+
+State names, stable compact dimensions, recovery actions, visualizer behavior,
+and privacy-safe visual proof rules live in
+`docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`.
 
 When a hotkey activation is blocked, the island or onboarding/account surface
 should show the recovery state instead of failing silently. If the island is not
