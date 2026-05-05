@@ -16,6 +16,10 @@
     <string>APPL</string>
     <key>CFBundleExecutable</key>
     <string>RubyWhisper</string>
+    <key>RubyWhisperBackendBaseURL</key>
+    <string>https://rubywhisper.invalid</string>
+    <key>RubyWhisperAppChannel</key>
+    <string>development</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>

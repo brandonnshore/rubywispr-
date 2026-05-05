@@ -26,7 +26,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize test-session-store
+.PHONY: all clean run icon dmg codesign-dmg notarize test-session-store test-backend-client
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -135,3 +135,14 @@ test-session-store:
 		Sources/DesktopSessionStore.swift \
 		Tests/DesktopSessionStoreTests.swift
 	$(BUILD_DIR)/tests/DesktopSessionStoreTests
+
+test-backend-client:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-o $(BUILD_DIR)/tests/RubyWhisperBackendAPIClientTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Sources/DesktopSessionStore.swift \
+		Sources/RubyWhisperBackendAPIClient.swift \
+		Tests/RubyWhisperBackendAPIClientTests.swift
+	$(BUILD_DIR)/tests/RubyWhisperBackendAPIClientTests
