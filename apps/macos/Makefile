@@ -26,7 +26,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-secret-guardrails
+.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-personal-dictionary-store test-secret-guardrails
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -203,6 +203,16 @@ test-hotkey-manager:
 		Tests/HotkeyManagerTests.swift
 	$(BUILD_DIR)/tests/HotkeyManagerTests
 
+test-personal-dictionary-store:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-o $(BUILD_DIR)/tests/PersonalDictionaryStoreTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Sources/PersonalDictionaryStore.swift \
+		Tests/PersonalDictionaryStoreTests.swift
+	$(BUILD_DIR)/tests/PersonalDictionaryStoreTests
+
 test-secret-guardrails:
 	@mkdir -p $(BUILD_DIR)/tests
 	swiftc \
@@ -213,4 +223,4 @@ test-secret-guardrails:
 		Tests/SourceGuardrailTests.swift
 	$(BUILD_DIR)/tests/SourceGuardrailTests
 
-test: test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-secret-guardrails
+test: test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-personal-dictionary-store test-secret-guardrails
