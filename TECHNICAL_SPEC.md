@@ -36,6 +36,7 @@ FR-002 Magic link: The system must support email magic-link sign-in through the 
 - Required tests: login callback/session handoff tests where feasible.
 - Security/privacy: do not log magic links or tokens.
 - Implementation contract: `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`.
+- Session/API client contract: `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`.
 
 FR-003 Terms/Privacy: The system must require Terms/Privacy acceptance before trial dictation.
 
@@ -323,8 +324,8 @@ NFR-007 Cost:
 ### Transcription Request
 
 ```text
-Desktop app -> backend /api/transcribe
-  includes auth token, audio, app version, OS version, settings flags
+Desktop app -> backend /api/desktop/transcribe
+  includes authenticated session context, audio, app version, OS version, settings flags
 
 Backend:
   verify Clerk session
@@ -401,13 +402,17 @@ signed_out
 ```
 
 The desktop browser login bridge state machine and account handoff mapping live
-in `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`.
+in `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`. Keychain session storage and the
+typed RubyWhisper backend API client contract live in
+`docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`.
 
 ## API Contracts
 
 Exact endpoints are provisional.
 
 ### `POST /api/desktop/transcribe`
+
+Client contract: `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md#post-apidesktoptranscribe`.
 
 Auth:
 
@@ -453,6 +458,8 @@ Response error:
 Server must not persist request `audio`, `context`, raw transcript, or `cleanedText`.
 
 ### `GET /api/desktop/account`
+
+Client contract: `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md#get-apidesktopaccount`.
 
 Returns:
 
@@ -569,6 +576,7 @@ WHEN an admin page is requested, THE SYSTEM SHALL verify admin role server-side 
 
 - Clerk session verification on all protected API routes.
 - Auth tokens stored in Keychain on macOS.
+- Keychain/session/API client behavior is defined in `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`.
 - Stripe webhook signature verification.
 - Server-side admin role checks.
 - Rate limiting and abuse detection on transcription.
