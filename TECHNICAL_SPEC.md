@@ -110,6 +110,10 @@ FR-013 Duration cap: A single whisper must be capped at 10 minutes.
 - Validate by running: shortened timer test and manual long-session test.
 - Required tests: timer/cap unit tests.
 - Security/privacy: cap reduces meeting-transcription abuse.
+- Contract: `docs/RW_067_DURATION_CAP_CONTRACT.md` defines the 600,000 ms cap,
+  570,000 ms warning threshold, local timer authority, backend
+  `duration_limit_reached` authority, shortened test seams, upload cleanup
+  behavior, and metadata-only evidence rules for RW-067 implementation leaves.
 
 FR-014 Transcription: The desktop app must send recorded audio only to RubyWhisper backend, never directly to Groq.
 
@@ -429,6 +433,7 @@ Exact endpoints are provisional.
 Client contract: `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md#post-apidesktoptranscribe`.
 Recording upload flow contract:
 `docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`.
+Duration cap contract: `docs/RW_067_DURATION_CAP_CONTRACT.md`.
 
 Auth:
 

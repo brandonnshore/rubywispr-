@@ -13,6 +13,7 @@ It extends:
 - `TECHNICAL_SPEC.md#POST /api/desktop/transcribe`
 - `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
 - `docs/RW_064_GLOBAL_HOTKEY_CONTRACT.md`
+- `docs/RW_067_DURATION_CAP_CONTRACT.md`
 - `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`
 - `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md#post-apidesktoptranscribe`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
@@ -59,8 +60,9 @@ Required sequence:
 1. Stop recording and close the local recorder handle before upload begins.
 2. Compute `audioDurationMs` from trusted local recording timing or media
    duration metadata; do not derive duration from transcript or provider output.
-3. Reject or stop over-limit recordings locally when possible. The backend still
-   remains the authority for `duration_limit_reached`.
+3. Reject or stop over-limit recordings locally when possible under
+   `docs/RW_067_DURATION_CAP_CONTRACT.md`. The backend still remains the final
+   authority for `duration_limit_reached`.
 4. Assemble one typed RubyWhisper transcription request through the API client
    from `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`; feature code must not
    construct arbitrary network calls.

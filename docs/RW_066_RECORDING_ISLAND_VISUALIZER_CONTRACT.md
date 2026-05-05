@@ -14,6 +14,7 @@ implementation. It extends:
 - `WEB_DESIGN_SPEC.md#Recording Island`
 - `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
 - `docs/RW_064_GLOBAL_HOTKEY_CONTRACT.md`
+- `docs/RW_067_DURATION_CAP_CONTRACT.md`
 - `docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
 
@@ -91,8 +92,8 @@ or add a reviewed extension to this contract before shipping.
 | `recorder_busy` | Hotkey activation occurs while recording, upload, processing, insertion, or unsafe retry recovery is active. | Existing island state remains authoritative; optional compact pulse. | Continue current state action. | No second recording starts and no duplicate upload is created. |
 | `recording_hold` | `Fn` hold starts after all gates pass. | Compact active recording state; shows hold mode, elapsed time, stop affordance if available, and live visualizer. | Release `Fn` or `stop_recording`. | Meter data is ephemeral; do not show or log speech content. |
 | `recording_toggle` | `Command+Fn` starts after all gates pass. | Compact active recording state; shows toggle mode, elapsed time, stop control, and live visualizer. | `stop_recording`. | Same as `recording_hold`; no content in state labels, logs, filenames, or analytics. |
-| `nearing_duration_limit` | Recording reaches the warning threshold around 9:30 for the 10-minute cap. | Same compact size as recording, with visible warning not based on color alone. | `stop_recording`. | Duration bucket/elapsed metadata only; no transcript or audio diagnostics. |
-| `duration_limit_reached` | Local cap stops recording or backend returns `duration_limit_reached`. | Recovery says recordings are limited to 10 minutes. | `start_new_whisper`. | Delete over-limit transient audio per upload contract; same audio is not retried. |
+| `nearing_duration_limit` | Recording reaches the 570,000 ms warning threshold for the 600,000 ms cap defined in `docs/RW_067_DURATION_CAP_CONTRACT.md`. | Same compact size as recording, with visible warning not based on color alone. | `stop_recording`. | Duration bucket/elapsed metadata only; no transcript or audio diagnostics. |
+| `duration_limit_reached` | Local cap stops recording or backend returns `duration_limit_reached` under the RW-067 contract. | Recovery says recordings are limited to 10 minutes. | `start_new_whisper`. | Delete over-limit transient audio per upload contract; same audio is not retried. |
 | `processing_uploading` | Recording stopped and upload/transcription is in progress. | Compact processing state appears immediately after stop. | `cancel_if_safe` only before request acceptance ambiguity; otherwise wait. | Do not show transcript, partial transcript, provider payloads, request body, or filenames. |
 | `inserting` | Backend success returned `cleanedText` and the app is inserting into the focused field. | Compact insertion progress state. | Wait. | Cleaned text is used only for insertion/local recovery; it is not displayed in the island. |
 | `success` | Text inserted successfully or test whisper completed successfully. | Brief subtle acknowledgement, then hide or return to onboarding ready state. | None, or `open_recent_wisprs` only outside compact acknowledgement. | No transcript/cleaned text in success copy, screenshots, analytics, or support evidence. |
