@@ -3,12 +3,9 @@ import os.log
 
 private let hotkeyLifecycleLog = OSLog(subsystem: "com.rubyadvisory.rubywhisper", category: "HotkeyLifecycle")
 
-protocol HotkeyBackending: AnyObject {
-    var onInputEvent: ((ShortcutInputEvent) -> ShortcutConsumeDecision)? { get set }
-    var onEscapeKeyPressed: (() -> Bool)? { get set }
-
-    func start() throws
-    func stop()
+enum HotkeyBackendCaptureFailure: String, Equatable {
+    case eventTapDisabledByTimeout
+    case eventTapDisabledByUserInput
 }
 
 enum HotkeyRegistrationPhase: String, Equatable {
@@ -33,6 +30,8 @@ enum HotkeyRegistrationReason: String, Equatable {
     case toggleBindingDisabled
     case eventTapUnavailable
     case eventTapRunLoopSourceUnavailable
+    case eventTapDisabledByTimeout
+    case eventTapDisabledByUserInput
     case unknown
 }
 
@@ -44,6 +43,15 @@ enum HotkeyLifecyclePauseReason: String, Equatable, Hashable {
     case logout
     case backendMigration
     case registrationFailureRecovery
+}
+
+protocol HotkeyBackending: AnyObject {
+    var onInputEvent: ((ShortcutInputEvent) -> ShortcutConsumeDecision)? { get set }
+    var onEscapeKeyPressed: (() -> Bool)? { get set }
+    var onCaptureFailure: ((HotkeyBackendCaptureFailure) -> Void)? { get set }
+
+    func start() throws
+    func stop()
 }
 
 struct HotkeyRegistrationState: Equatable {
@@ -130,12 +138,16 @@ final class HotkeyManager {
         backend.onEscapeKeyPressed = { [weak self] in
             self?.onEscapeKeyPressed?() ?? false
         }
+        backend.onCaptureFailure = { [weak self] failure in
+            self?.handleCaptureFailure(failure)
+        }
         do {
             try backend.start()
             registrationState = validatedState
         } catch {
             backend.onInputEvent = nil
             backend.onEscapeKeyPressed = nil
+            backend.onCaptureFailure = nil
             inputState = ShortcutInputState()
             registrationState = failedRegistrationState(for: error)
             throw error
@@ -153,6 +165,7 @@ final class HotkeyManager {
         backend.stop()
         backend.onInputEvent = nil
         backend.onEscapeKeyPressed = nil
+        backend.onCaptureFailure = nil
         inputState = ShortcutInputState()
         registrationState = HotkeyRegistrationState(
             phase: reason == nil ? .unregistered : .disabled,
@@ -197,6 +210,21 @@ final class HotkeyManager {
             onShortcutEvent?(event)
         }
         return result.consumeDecision
+    }
+
+    private func handleCaptureFailure(_ failure: HotkeyBackendCaptureFailure) {
+        backend.onInputEvent = nil
+        backend.onEscapeKeyPressed = nil
+        backend.onCaptureFailure = nil
+        inputState = ShortcutInputState()
+        pauseReasons.insert(.registrationFailureRecovery)
+
+        registrationState = HotkeyRegistrationState(
+            phase: .disabled,
+            reason: registrationReason(for: failure),
+            affectedBinding: .both,
+            isRecoverable: true
+        )
     }
 
     private func registrationState(forValidated configuration: ShortcutConfiguration) -> HotkeyRegistrationState {
@@ -250,5 +278,14 @@ final class HotkeyManager {
             affectedBinding: .both,
             isRecoverable: true
         )
+    }
+
+    private func registrationReason(for failure: HotkeyBackendCaptureFailure) -> HotkeyRegistrationReason {
+        switch failure {
+        case .eventTapDisabledByTimeout:
+            return .eventTapDisabledByTimeout
+        case .eventTapDisabledByUserInput:
+            return .eventTapDisabledByUserInput
+        }
     }
 }

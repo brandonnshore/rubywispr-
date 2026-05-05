@@ -32,6 +32,60 @@ private struct SettingsCard<Content: View>: View {
     }
 }
 
+private struct HotkeyAvailabilityStatusView: View {
+    @EnvironmentObject var appState: AppState
+
+    private var iconName: String {
+        appState.isHotkeyReadyForDictation ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+    }
+
+    private var iconColor: Color {
+        appState.isHotkeyReadyForDictation ? .green : .orange
+    }
+
+    private var showsRecoveryActions: Bool {
+        appState.hasRecoverableHotkeyFailure
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: iconName)
+                    .foregroundStyle(iconColor)
+                Text(appState.hotkeyRecoveryTitle)
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                Text(appState.hotkeyDiagnosticCategory)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(appState.hotkeyRecoveryMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if showsRecoveryActions {
+                HStack(spacing: 8) {
+                    Button("Retry") {
+                        appState.retryHotkeyRegistration()
+                    }
+                    Button("Keyboard Settings") {
+                        appState.openKeyboardSettings()
+                    }
+                    if appState.hotkeyRegistrationState.reason == .eventTapUnavailable {
+                        Button("Accessibility") {
+                            appState.openAccessibilitySettings()
+                        }
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+}
+
 private let iso8601DayFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd"
@@ -1013,6 +1067,10 @@ struct GeneralSettingsView: View {
 
     private var hotkeySection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HotkeyAvailabilityStatusView()
+
+            Divider()
+
             DictationShortcutEditor { isCapturing in
                 if isCapturing {
                     appState.suspendHotkeyMonitoringForShortcutCapture()

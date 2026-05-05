@@ -180,6 +180,7 @@ struct SetupView: View {
                                 onComplete()
                             }
                             .keyboardShortcut(.defaultAction)
+                            .disabled(!appState.isHotkeyReadyForDictation)
                         }
                     }
                 }
@@ -792,12 +793,20 @@ struct SetupView: View {
                             .font(.title)
                             .fontWeight(.bold)
 
-                        Text(testShortcutPrompt)
-                            .font(.headline)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(10)
+                        if let hotkeyError = testHotkeyHarness.registrationErrorMessage {
+                            hotkeyRecoveryBox(
+                                title: "Global Shortcuts Unavailable",
+                                message: hotkeyError,
+                                diagnostic: "reason=\(testHotkeyHarness.registrationState.reason.rawValue)"
+                            )
+                        } else {
+                            Text(testShortcutPrompt)
+                                .font(.headline)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(Color.blue.opacity(0.1))
+                                .cornerRadius(10)
+                        }
 
                         Text("Say anything — a sentence or two is perfect.")
                             .foregroundStyle(.secondary)
@@ -900,42 +909,52 @@ struct SetupView: View {
 
     var readyStep: some View {
         VStack(spacing: 20) {
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: appState.isHotkeyReadyForDictation ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.system(size: 60))
-                .foregroundStyle(.green)
+                .foregroundStyle(appState.isHotkeyReadyForDictation ? .green : .orange)
 
-            Text("You're All Set!")
+            Text(appState.isHotkeyReadyForDictation ? "You're All Set!" : "Hotkeys Need Attention")
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("\(AppName.displayName) lives in your menu bar.")
+            Text(appState.isHotkeyReadyForDictation
+                ? "\(AppName.displayName) lives in your menu bar."
+                : "Fix global shortcuts before finishing setup.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
-            VStack(alignment: .leading, spacing: 12) {
-                if appState.hasEnabledHoldShortcut {
-                    HowToRow(icon: "keyboard", text: "Hold \(appState.holdShortcut.displayName) to record")
-                }
-                if appState.hasEnabledToggleShortcut {
-                    HowToRow(icon: "switch.2", text: "Tap \(appState.toggleShortcut.displayName) to start and stop")
-                }
-                if appState.hasEnabledHoldShortcut && appState.hasEnabledToggleShortcut {
-                    HowToRow(icon: "arrow.triangle.branch", text: "While holding, press the toggle shortcut to latch on")
-                }
-                if appState.isCommandModeEnabled {
-                    switch appState.commandModeStyle {
-                    case .automatic:
-                        HowToRow(icon: "wand.and.stars", text: "With text selected, your normal shortcut transforms the selection")
-                    case .manual:
-                        HowToRow(
-                            icon: "wand.and.stars",
-                            text: "Hold \(appState.commandModeManualModifier.title) with your normal shortcut to transform selected text"
-                        )
+            if appState.isHotkeyReadyForDictation {
+                VStack(alignment: .leading, spacing: 12) {
+                    if appState.hasEnabledHoldShortcut {
+                        HowToRow(icon: "keyboard", text: "Hold \(appState.holdShortcut.displayName) to record")
                     }
+                    if appState.hasEnabledToggleShortcut {
+                        HowToRow(icon: "switch.2", text: "Tap \(appState.toggleShortcut.displayName) to start and stop")
+                    }
+                    if appState.hasEnabledHoldShortcut && appState.hasEnabledToggleShortcut {
+                        HowToRow(icon: "arrow.triangle.branch", text: "While holding, press the toggle shortcut to latch on")
+                    }
+                    if appState.isCommandModeEnabled {
+                        switch appState.commandModeStyle {
+                        case .automatic:
+                            HowToRow(icon: "wand.and.stars", text: "With text selected, your normal shortcut transforms the selection")
+                        case .manual:
+                            HowToRow(
+                                icon: "wand.and.stars",
+                                text: "Hold \(appState.commandModeManualModifier.title) with your normal shortcut to transform selected text"
+                            )
+                        }
+                    }
+                    HowToRow(icon: "doc.on.clipboard", text: "Text is typed at your cursor & copied")
                 }
-                HowToRow(icon: "doc.on.clipboard", text: "Text is typed at your cursor & copied")
+                .padding(.top, 10)
+            } else {
+                hotkeyRecoveryBox(
+                    title: appState.hotkeyRecoveryTitle,
+                    message: appState.hotkeyRecoveryMessage,
+                    diagnostic: appState.hotkeyDiagnosticCategory
+                )
             }
-            .padding(.top, 10)
 
         }
     }
@@ -980,6 +999,40 @@ struct SetupView: View {
 
     private var retryShortcutPrompt: String {
         "\(testShortcutPrompt) to try again"
+    }
+
+    private func hotkeyRecoveryBox(title: String, message: String, diagnostic: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: "keyboard.badge.exclamationmark")
+                .font(.headline)
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(diagnostic)
+                .font(.caption2.monospaced())
+                .foregroundStyle(.tertiary)
+            HStack(spacing: 8) {
+                Button("Retry") {
+                    appState.retryHotkeyRegistration()
+                    if currentStep == .testTranscription {
+                        startTestHotkeyMonitoring()
+                    }
+                }
+                Button("Keyboard Settings") {
+                    appState.openKeyboardSettings()
+                }
+                Button("Hotkey Settings") {
+                    appState.openHotkeySettings()
+                }
+            }
+            .controlSize(.small)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(10)
     }
 
     // MARK: - Helpers

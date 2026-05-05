@@ -12,6 +12,7 @@ private func expect(_ condition: @autoclosure () -> Bool, _ message: String) -> 
 private final class MockHotkeyBackend: HotkeyBackending {
     var onInputEvent: ((ShortcutInputEvent) -> ShortcutConsumeDecision)?
     var onEscapeKeyPressed: (() -> Bool)?
+    var onCaptureFailure: ((HotkeyBackendCaptureFailure) -> Void)?
     var startError: Error?
     var startCount = 0
     var stopCount = 0
@@ -31,6 +32,10 @@ private final class MockHotkeyBackend: HotkeyBackending {
     func send(_ event: ShortcutInputEvent) {
         _ = onInputEvent?(event)
     }
+
+    func sendCaptureFailure(_ failure: HotkeyBackendCaptureFailure) {
+        onCaptureFailure?(failure)
+    }
 }
 
 @main
@@ -38,6 +43,7 @@ private struct HotkeyManagerTests {
     static func main() throws {
         try registersDefaultHoldAndToggle()
         try exposesRecoverableRegistrationFailureAndRetry()
+        try runtimeCaptureFailureBecomesRecoverableUnavailableState()
         try pauseReleasesActiveShortcutState()
         try disabledConfigurationDoesNotStartBackend()
         holdSessionStartsAndStopsOnlyWhileHeld()
@@ -79,6 +85,27 @@ private struct HotkeyManagerTests {
 
         expect(backend.startCount == 2, "retry should re-run backend start")
         expect(manager.registrationState.phase == .registered, "retry should recover registration")
+    }
+
+    private static func runtimeCaptureFailureBecomesRecoverableUnavailableState() throws {
+        let backend = MockHotkeyBackend()
+        let manager = HotkeyManager(backend: backend)
+
+        try manager.register(configuration: ShortcutConfiguration(hold: .defaultHold, toggle: .defaultToggle))
+        backend.sendCaptureFailure(.eventTapDisabledByUserInput)
+
+        expect(manager.registrationState.phase == .disabled, "runtime capture failure should disable hotkeys")
+        expect(
+            manager.registrationState.reason == .eventTapDisabledByUserInput,
+            "runtime capture failure should use a categorical reason"
+        )
+        expect(manager.registrationState.affectedBinding == .both, "runtime capture failure should affect both bindings")
+        expect(manager.registrationState.isRecoverable, "runtime capture failure should be recoverable")
+
+        try manager.retryRegistration()
+
+        expect(backend.startCount == 2, "runtime capture failure retry should re-run backend start")
+        expect(manager.registrationState.phase == .registered, "runtime capture failure retry should recover registration")
     }
 
     private static func pauseReleasesActiveShortcutState() throws {

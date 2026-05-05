@@ -118,13 +118,16 @@ struct MenuBarView: View {
             }
             .disabled(appState.isTranscribing)
 
-            if let hotkeyError = appState.hotkeyMonitoringErrorMessage {
+            if appState.hasRecoverableHotkeyFailure {
                 Divider()
-                Text(hotkeyError)
+                Text(appState.hotkeyRecoveryMessage)
                     .foregroundStyle(.red)
                     .font(.caption)
                     .padding(.horizontal, 16)
                     .lineLimit(3)
+                Button("Open Hotkey Settings") {
+                    appState.openHotkeySettings()
+                }
                 Button("Retry Global Shortcuts") {
                     appState.retryHotkeyRegistration()
                 }

@@ -24,6 +24,7 @@ final class GlobalShortcutBackend: HotkeyBackending {
 
     var onInputEvent: ((ShortcutInputEvent) -> ShortcutConsumeDecision)?
     var onEscapeKeyPressed: (() -> Bool)?
+    var onCaptureFailure: ((HotkeyBackendCaptureFailure) -> Void)?
 
     func start() throws {
         stop()
@@ -101,12 +102,18 @@ final class GlobalShortcutBackend: HotkeyBackending {
 
     private func handleEventTap(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         switch type {
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+        case .tapDisabledByTimeout:
             notifyBackendReset()
-            if let tap = eventTap {
-                CGEvent.tapEnable(tap: tap, enable: true)
-                fnKeyIsDown = ModifierKeyEventState.currentFunctionKeyIsDown()
-            }
+            os_log(.error, log: shortcutLog, "Global shortcut event tap disabled reason=%{public}@", "timeout")
+            onCaptureFailure?(.eventTapDisabledByTimeout)
+            tearDownEventTap()
+            return Unmanaged.passUnretained(event)
+
+        case .tapDisabledByUserInput:
+            notifyBackendReset()
+            os_log(.error, log: shortcutLog, "Global shortcut event tap disabled reason=%{public}@", "user_input")
+            onCaptureFailure?(.eventTapDisabledByUserInput)
+            tearDownEventTap()
             return Unmanaged.passUnretained(event)
 
         case .flagsChanged, .keyDown, .keyUp:
