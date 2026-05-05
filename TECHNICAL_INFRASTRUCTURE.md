@@ -391,27 +391,35 @@ The operator can mark RW-020 (`RUB-31`) complete only when all of these are true
 
 Web/backend:
 
-- Pull request checks: `.github/workflows/web-ci.yml` runs `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build` from the root npm workspace.
+- Local command contract: agents must run `npm ci`, `npm run lint`,
+  `npm run typecheck`, `npm run test`, and `npm run build` from the root npm
+  workspace for web/backend changes.
+- Pull request checks: `.github/workflows/web-ci.yml` enforces the same root
+  npm workspace contract on PRs to `main`.
 - Preview deployments for branches.
 - Production deploy only from approved branch/tag.
 - Stripe webhook tests should run with mocked signatures.
 
 Mac app:
 
-- Pull request checks: `.github/workflows/macos-ci.yml` runs on GitHub-hosted
-  `macos-latest` for macOS app changes and executes the repo-local Debug/ad hoc
-  build command:
+- Local command contract: agents must run the repo-local Debug/ad hoc build
+  command for macOS app changes:
 
   ```bash
   make -C apps/macos clean all CODESIGN_IDENTITY=-
   ```
 
+- Pull request checks: `.github/workflows/macos-ci.yml` runs on GitHub-hosted
+  `macos-latest` for macOS app changes and executes the repo-local Debug/ad hoc
+  build command.
+
   The workflow verifies `apps/macos/build/RubyWhisper.app`, the development
   bundle identifier `com.rubyadvisory.rubywhisper.dev`, and an ad hoc code
   signature (`Signature=adhoc`). This is a non-release validation gate only.
 - CI must not run `dmg`, `codesign-dmg`, `notarize`, or any command that needs
-  Apple signing/notarization credentials, release packaging secrets, production
-  provider keys, or private env files.
+  provider secrets, production secrets, Apple signing/notarization credentials,
+  billing secrets, database secrets, release packaging secrets, or private env
+  files.
 - Release builds gated by manual approval.
 - Signing/notarization gated by Apple credential availability.
 - Release artifacts published only through approved release workflow.
