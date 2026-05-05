@@ -380,6 +380,9 @@ Website/backend:
 
 - Deploy Next.js app to Vercel.
 - Use production env vars only in Vercel project settings.
+- Use `docs/PRODUCTION_DEPLOYMENT_RUNBOOK.md` for the production deployment,
+  preview/staging smoke, rollback, Stripe webhook switch, and emergency-disable
+  checklist.
 
 Mac app:
 
@@ -521,6 +524,8 @@ Backend:
 - Roll back Vercel deployment.
 - Disable problematic feature via flag where possible.
 - Temporarily disable transcription endpoint if provider abuse/cost spike occurs.
+- Follow `docs/PRODUCTION_DEPLOYMENT_RUNBOOK.md` for the human-gated rollback,
+  emergency-disable, and sanitized incident evidence steps.
 
 Mac app:
 
