@@ -206,6 +206,10 @@ Requirements:
 
 Do not show normal word count in the island. Only show low-limit/exhausted states when relevant.
 
+The implementation contract for state names, stable dimensions, visualizer
+behavior, reduced motion, recovery actions, and privacy-safe proof rules lives
+in `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`.
+
 ### Main App / Settings
 
 Sections:
@@ -316,6 +320,9 @@ Recording island:
 - Trial exhausted.
 - Insertion failed.
 - Permission denied.
+
+Implementation state mapping must follow
+`docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md#state-table`.
 
 Recent Wispr row:
 

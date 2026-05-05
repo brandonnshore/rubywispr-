@@ -15,6 +15,7 @@ RubyWhisper desktop user from signed out to ready for dictation. It extends:
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
 - `docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`
 - `docs/RW_064_GLOBAL_HOTKEY_CONTRACT.md`
+- `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`
 
 ## Ownership Boundary
 
@@ -186,7 +187,8 @@ Recommended beta behavior:
 - Use a RubyWhisper-owned test text field or explicit user-selected destination
   so the user can verify insertion without exposing private app content.
 - Keep the island/onboarding UI stable through recording, processing, success,
-  and recoverable error states.
+  and recoverable error states according to
+  `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`.
 - If insertion fails, preserve only final cleaned text in local recovery UI or
   Recent Wisprs and keep the user in `test_whisper_required`.
 - If the backend returns `signed_out`, `terms_required`, `trial_exhausted`,
