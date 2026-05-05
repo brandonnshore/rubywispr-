@@ -1470,12 +1470,11 @@ struct SetupView: View {
                             artifact.delete()
                         }
                         do {
-                            let service = try appState.makeTranscriptionService()
-                            let transcript = try await service.transcribe(fileURL: artifact.fileURL)
+                            let result = try await appState.transcribeTransientRecordingArtifact(artifact)
                             await MainActor.run {
                                 testHotkeyHarness.isTranscribing = false
                                 testAudioRecorder = nil
-                                testTranscript = transcript
+                                testTranscript = result.cleanedText
                                 appState.markFirstRunTestWhisperCompleted()
                                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                                     testPhase = .done
@@ -1485,7 +1484,11 @@ struct SetupView: View {
                             await MainActor.run {
                                 testHotkeyHarness.isTranscribing = false
                                 testAudioRecorder = nil
-                                testError = error.localizedDescription
+                                if let failure = error as? RubyWhisperDesktopTranscriptionFailure {
+                                    testError = failure.message
+                                } else {
+                                    testError = error.localizedDescription
+                                }
                                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                                     testPhase = .done
                                 }

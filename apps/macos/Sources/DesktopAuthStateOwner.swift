@@ -297,6 +297,10 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
     private var refreshTask: Task<Void, Never>?
     private var sessionGeneration = 0
 
+    var authenticatedRequestGeneration: Int {
+        sessionGeneration
+    }
+
     init(
         sessionStore: DesktopSessionStoring = DesktopSessionKeychainStore(),
         initialSnapshot: RubyWhisperDesktopAccountSnapshot = .signedOut,
@@ -448,6 +452,75 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
         refreshTask = Task { [weak self] in
             _ = await self?.refreshAccountSnapshot()
         }
+    }
+
+    func applyTranscriptionUsageMetadata(
+        _ metadata: RubyWhisperDesktopTranscriptionUsageMetadata
+    ) {
+        var snapshot = accountSnapshot
+        snapshot.trialWordsRemaining = metadata.trialWordsRemaining ?? snapshot.trialWordsRemaining
+        snapshot.trialWordsUsed = metadata.trialWordsUsed ?? snapshot.trialWordsUsed
+        snapshot.trialWordsLimit = metadata.trialWordsLimit ?? snapshot.trialWordsLimit
+        snapshot.planState = metadata.planState ?? snapshot.planState
+
+        if let planState = metadata.planState {
+            switch planState {
+            case .trialActive, .paidActive, .friendOfRubyActive:
+                snapshot.state = RubyWhisperDesktopState(rawValue: planState.rawValue)
+                snapshot.canTranscribe = true
+                snapshot.recovery = nil
+                snapshot.retryable = false
+                snapshot.failureCode = nil
+            case .trialExhausted:
+                snapshot.state = .trialExhausted
+                snapshot.canTranscribe = false
+                snapshot.recovery = .openCheckout
+                snapshot.retryable = false
+                snapshot.failureCode = .trialExhausted
+            case .paymentFailed:
+                snapshot.state = .paymentFailed
+                snapshot.canTranscribe = false
+                snapshot.recovery = .openBilling
+                snapshot.retryable = false
+                snapshot.failureCode = .paymentFailed
+            case .blocked:
+                snapshot.state = .blocked
+                snapshot.canTranscribe = false
+                snapshot.recovery = .openAccount
+                snapshot.retryable = false
+                snapshot.failureCode = .accountBlocked
+            case .unknown:
+                break
+            }
+        }
+
+        if let remaining = metadata.trialWordsRemaining {
+            snapshot.isTrialExhausted = remaining <= 0
+        }
+
+        accountSnapshot = snapshot
+        coordinatorState = DesktopAuthCoordinatorState.accountState(for: snapshot)
+    }
+
+    @discardableResult
+    func applyTranscriptionBackendError(
+        _ error: RubyWhisperBackendError
+    ) -> RubyWhisperDesktopAccountSnapshot {
+        if error.code == .signedOut {
+            return clearSession(reason: .signedOutResponse)
+        }
+
+        let snapshot = RubyWhisperDesktopAccountSnapshot(error: error)
+        switch snapshot.state {
+        case .signedInTermsRequired, .trialExhausted, .paymentFailed, .blocked:
+            accountSnapshot = snapshot
+            coordinatorState = DesktopAuthCoordinatorState.accountState(for: snapshot)
+            lastClearResult = nil
+        case .signedOut, .trialActive, .paidActive, .friendOfRubyActive,
+             .durationLimitReached, .providerError, .networkError, .error, .unknown:
+            break
+        }
+        return snapshot
     }
 
     @discardableResult
