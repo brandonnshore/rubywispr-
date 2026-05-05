@@ -72,6 +72,7 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testAccountRequestUsesSessionAuthMetadataAndNoStore()
             try await testAccountSnapshotMapsDocumentedSuccessStates()
             try await testAccountSnapshotMapsFailureResponsesFailClosed()
+            try await testExpiredSessionRefreshClearsLocalSession()
             try await testBackendErrorMappingRedactsDiagnostics()
             try await testSignedOutDoesNotCallTransport()
             try await testTransportFailureMapsToNetworkError()
@@ -288,6 +289,27 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(blockedSnapshot.state == .blocked, "403 account_blocked should remain distinct from terms_required")
         expect(blockedSnapshot.canTranscribe == false, "account_blocked should disable dictation")
         expect(blockedSnapshot.recovery == .openAccount, "account_blocked should recover through account surface")
+    }
+
+    private static func testExpiredSessionRefreshClearsLocalSession() async throws {
+        let store = MemorySessionStore(
+            session: DesktopSessionMaterial(
+                accessToken: "session_placeholder_redacted_expired",
+                refreshToken: "refresh_placeholder_redacted",
+                expiresAt: Date(timeIntervalSince1970: 1_700_000_000),
+                accountID: "acct_test"
+            )
+        )
+        let transport = CapturingTransport(stubs: [])
+        let client = try makeClient(sessionStore: store, transport: transport)
+
+        let snapshot = await client.refreshAccountSnapshot()
+
+        expect(snapshot.state == .signedOut, "expired session should fail closed to signed_out")
+        expect(snapshot.canTranscribe == false, "expired session should disable dictation")
+        expect(snapshot.recovery == .openSignIn, "expired session should recover through sign-in")
+        expect(store.read() == nil, "expired session refresh should clear local session material")
+        expect(transport.requests.isEmpty, "expired session should not call transport")
     }
 
     private static func testBackendErrorMappingRedactsDiagnostics() async throws {
