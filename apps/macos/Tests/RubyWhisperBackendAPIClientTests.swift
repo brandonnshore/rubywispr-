@@ -77,6 +77,8 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testTransportFailureMapsToNetworkError()
             try await testBinaryTranscriptionRequestMapping()
             try await testMultipartTranscriptionRequestMapping()
+            try await testMultipartTranscriptionOmitsDisabledContextAndDictionary()
+            try await testTranscriptionBackendErrorMappingUsesStableRecovery()
             print("RubyWhisperBackendAPIClientTests passed")
         } catch {
             FileHandle.standardError.write(Data("FAIL: \(error)\n".utf8))
@@ -413,6 +415,9 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(captured.request.url?.absoluteString == "https://backend.example.test/api/desktop/transcribe", "transcription request URL should target RubyWhisper backend transcribe route")
         expect(captured.request.value(forHTTPHeaderField: "Authorization") == "Bearer \(token)", "transcription request should attach session auth")
         expect(captured.request.value(forHTTPHeaderField: "Content-Type") == "audio/wav", "binary transcription content type should be audio MIME")
+        expect(captured.request.value(forHTTPHeaderField: "X-RubyWhisper-App-Version") == "0.1.0-test", "transcription request should include app version metadata")
+        expect(captured.request.value(forHTTPHeaderField: "X-RubyWhisper-OS-Version") == "macOS synthetic", "transcription request should include OS metadata")
+        expect(captured.request.value(forHTTPHeaderField: "X-RubyWhisper-Platform") == "macos", "transcription request should include platform metadata")
         expect(captured.request.value(forHTTPHeaderField: "X-RubyWhisper-Audio-Duration-Ms") == "1234", "binary transcription should include duration metadata")
         expect(captured.request.value(forHTTPHeaderField: "X-RubyWhisper-Cleanup-Enabled") == "true", "binary transcription should include cleanup flag")
         expect(captured.request.value(forHTTPHeaderField: "X-RubyWhisper-Context-Aware-Cleanup-Enabled") == "false", "binary transcription should include context cleanup flag")
@@ -458,6 +463,128 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(body.contains("2345"), "multipart body should include duration value")
         expect(body.contains("name=\"context\""), "multipart body should include optional context field")
         expect(body.contains("name=\"dictionaryTerms\""), "multipart body should include dictionary terms")
+    }
+
+    private static func testMultipartTranscriptionOmitsDisabledContextAndDictionary() async throws {
+        let audio = Data([0x52, 0x57, 0x03])
+        let transport = CapturingTransport(stubs: [
+            .init(
+                statusCode: 200,
+                headers: ["Cache-Control": "no-store"],
+                body: Data("""
+                {
+                  "ok": true,
+                  "requestId": "req_test_disabled_payload",
+                  "cleanedText": "Synthetic disabled payload text.",
+                  "cleanedWordCount": 4
+                }
+                """.utf8)
+            ),
+            .init(
+                statusCode: 200,
+                headers: ["Cache-Control": "no-store"],
+                body: Data("""
+                {
+                  "ok": true,
+                  "requestId": "req_test_context_disabled_payload",
+                  "cleanedText": "Synthetic context disabled text.",
+                  "cleanedWordCount": 4
+                }
+                """.utf8)
+            ),
+        ])
+        let client = try makeClient(token: "session_placeholder_redacted_disabled_payload", transport: transport)
+
+        _ = try await client.transcribe(
+            RubyWhisperDesktopTranscriptionRequest(
+                body: .multipart(
+                    audio: audio,
+                    filename: "recording.wav",
+                    context: "context_placeholder_omitted",
+                    dictionaryTerms: ["term_placeholder_omitted"]
+                ),
+                audioMimeType: "audio/wav",
+                audioDurationMs: 3456,
+                cleanupEnabled: false,
+                contextAwareCleanupEnabled: true
+            )
+        )
+
+        let body = String(data: transport.requests[0].body ?? Data(), encoding: .utf8) ?? ""
+        expect(body.contains("name=\"cleanupEnabled\""), "multipart body should include cleanup flag")
+        expect(body.contains("false"), "multipart body should include disabled cleanup value")
+        expect(!body.contains("name=\"context\""), "multipart body should omit context when cleanup is disabled")
+        expect(!body.contains("name=\"dictionaryTerms\""), "multipart body should omit dictionary terms when cleanup is disabled")
+        expect(!body.contains("context_placeholder_omitted"), "multipart body should omit context content")
+        expect(!body.contains("term_placeholder_omitted"), "multipart body should omit dictionary content")
+
+        _ = try await client.transcribe(
+            RubyWhisperDesktopTranscriptionRequest(
+                body: .multipart(
+                    audio: audio,
+                    filename: "recording.wav",
+                    context: "context_placeholder_context_disabled",
+                    dictionaryTerms: ["term_placeholder_context_disabled"]
+                ),
+                audioMimeType: "audio/wav",
+                audioDurationMs: 3456,
+                cleanupEnabled: true,
+                contextAwareCleanupEnabled: false
+            )
+        )
+
+        let contextDisabledBody = String(data: transport.requests[1].body ?? Data(), encoding: .utf8) ?? ""
+        expect(contextDisabledBody.contains("name=\"contextAwareCleanupEnabled\""), "multipart body should include context cleanup flag")
+        expect(!contextDisabledBody.contains("name=\"context\""), "multipart body should omit context when context-aware cleanup is disabled")
+        expect(!contextDisabledBody.contains("context_placeholder_context_disabled"), "multipart body should omit disabled context content")
+        expect(contextDisabledBody.contains("name=\"dictionaryTerms\""), "multipart body may include dictionary terms when cleanup remains enabled")
+    }
+
+    private static func testTranscriptionBackendErrorMappingUsesStableRecovery() async throws {
+        let cases: [(name: String, statusCode: Int, code: String, state: RubyWhisperDesktopState, recovery: RubyWhisperDesktopRecoveryAction, retryable: Bool)] = [
+            ("rate limited", 429, "rate_limited", .error, .retryAfter, true),
+            ("duration limit", 413, "duration_limit_reached", .durationLimitReached, .startNewWhisper, false),
+            ("invalid audio", 422, "invalid_audio", .error, .recordAgain, false),
+            ("provider error", 503, "provider_error", .providerError, .retry, true),
+        ]
+
+        for testCase in cases {
+            let transport = CapturingTransport(stubs: [
+                .init(
+                    statusCode: testCase.statusCode,
+                    headers: ["Cache-Control": "no-store"],
+                    body: Data("""
+                    {
+                      "ok": false,
+                      "requestId": "req_test_transcription_error",
+                      "errorCode": "\(testCase.code)"
+                    }
+                    """.utf8)
+                ),
+            ])
+            let client = try makeClient(token: "session_placeholder_redacted_error_\(testCase.code)", transport: transport)
+
+            do {
+                _ = try await client.transcribe(
+                    RubyWhisperDesktopTranscriptionRequest(
+                        body: .binary(Data([0x52, 0x57, 0x04])),
+                        audioMimeType: "audio/wav",
+                        audioDurationMs: 4567
+                    )
+                )
+                expect(false, "\(testCase.name) should throw backend error")
+            } catch RubyWhisperBackendClientError.backend(let error) {
+                expect(error.code.rawValue == testCase.code, "\(testCase.name) should preserve canonical code")
+                expect(error.desktopState == testCase.state, "\(testCase.name) should map desktop state")
+                expect(error.recovery == testCase.recovery, "\(testCase.name) should map recovery")
+                expect(error.retryable == testCase.retryable, "\(testCase.name) should map retryability")
+
+                let description = String(describing: RubyWhisperBackendClientError.backend(error))
+                expect(!description.contains("Synthetic disabled payload text."), "\(testCase.name) diagnostics should not include cleaned text")
+                expect(!description.contains("Authorization"), "\(testCase.name) diagnostics should not include auth headers")
+                expect(!description.contains("Bearer"), "\(testCase.name) diagnostics should not include bearer values")
+            }
+        }
     }
 
     private static func makeClient(

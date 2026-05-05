@@ -599,11 +599,15 @@ struct RubyWhisperDesktopTranscriptionRequest: Equatable {
         appendField("audioMimeType", audioMimeType, to: &data)
         appendField("cleanupEnabled", String(cleanupEnabled), to: &data)
         appendField("contextAwareCleanupEnabled", String(contextAwareCleanupEnabled), to: &data)
-        if let context = context?.nilIfBlank {
+        if cleanupEnabled,
+           contextAwareCleanupEnabled,
+           let context = context?.nilIfBlank {
             appendField("context", context, to: &data)
         }
-        for term in dictionaryTerms.compactMap(\.nilIfBlank) {
-            appendField("dictionaryTerms", term, to: &data)
+        if cleanupEnabled {
+            for term in dictionaryTerms.compactMap(\.nilIfBlank) {
+                appendField("dictionaryTerms", term, to: &data)
+            }
         }
 
         data.append("--\(multipartBoundary)\r\n")
@@ -792,6 +796,42 @@ struct RubyWhisperBackendError: Error, Equatable {
                 message: "Something went wrong. Try again.",
                 recovery: .retryOrContactSupport,
                 desktopState: .error,
+                retryable: true
+            )
+        case .rateLimited:
+            return RubyWhisperBackendError(
+                code: .rateLimited,
+                httpStatus: statusCode,
+                message: "Too many requests. Try again soon.",
+                recovery: .retryAfter,
+                desktopState: .error,
+                retryable: true
+            )
+        case .durationLimitReached:
+            return RubyWhisperBackendError(
+                code: .durationLimitReached,
+                httpStatus: statusCode,
+                message: "Recordings are limited to 10 minutes.",
+                recovery: .startNewWhisper,
+                desktopState: .durationLimitReached,
+                retryable: false
+            )
+        case .invalidAudio:
+            return RubyWhisperBackendError(
+                code: .invalidAudio,
+                httpStatus: statusCode,
+                message: "RubyWhisper could not read that audio.",
+                recovery: .recordAgain,
+                desktopState: .error,
+                retryable: false
+            )
+        case .providerError:
+            return RubyWhisperBackendError(
+                code: .providerError,
+                httpStatus: statusCode,
+                message: "RubyWhisper could not transcribe right now.",
+                recovery: .retry,
+                desktopState: .providerError,
                 retryable: true
             )
         default:
