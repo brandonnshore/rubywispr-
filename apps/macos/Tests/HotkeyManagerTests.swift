@@ -40,6 +40,8 @@ private struct HotkeyManagerTests {
         try exposesRecoverableRegistrationFailureAndRetry()
         try pauseReleasesActiveShortcutState()
         try disabledConfigurationDoesNotStartBackend()
+        holdSessionStartsAndStopsOnlyWhileHeld()
+        resetActiveSessionClearsHeldState()
 
         print("HotkeyManagerTests passed")
     }
@@ -103,5 +105,43 @@ private struct HotkeyManagerTests {
         expect(manager.registrationState.phase == .disabled, "disabled configuration should be disabled")
         expect(manager.registrationState.reason == .noBindingEnabled, "disabled configuration should name missing bindings")
         expect(manager.registrationState.affectedBinding == .both, "disabled configuration should affect both bindings")
+    }
+
+    private static func holdSessionStartsAndStopsOnlyWhileHeld() {
+        let controller = DictationShortcutSessionController()
+
+        expect(
+            controller.handle(event: .holdActivated, isTranscribing: false) == .start(.hold),
+            "hold activation should start hold recording from idle"
+        )
+        expect(controller.activeMode == .hold, "hold activation should mark hold active")
+        expect(
+            controller.handle(event: .holdActivated, isTranscribing: false) == nil,
+            "repeated hold activation should be ignored while held"
+        )
+        expect(
+            controller.handle(event: .holdDeactivated, isTranscribing: false) == .stop,
+            "hold release should stop active hold recording"
+        )
+        expect(controller.activeMode == nil, "hold release should reset active mode")
+        expect(
+            controller.handle(event: .holdDeactivated, isTranscribing: false) == nil,
+            "extra hold release should be ignored from idle"
+        )
+    }
+
+    private static func resetActiveSessionClearsHeldState() {
+        let controller = DictationShortcutSessionController()
+
+        expect(
+            controller.handle(event: .holdActivated, isTranscribing: false) == .start(.hold),
+            "hold activation should start before lifecycle reset"
+        )
+        expect(controller.resetActiveSession() == .hold, "reset should return the active mode it cleared")
+        expect(controller.activeMode == nil, "reset should clear active mode")
+        expect(
+            controller.handle(event: .holdDeactivated, isTranscribing: false) == nil,
+            "release after lifecycle reset should not emit another stop"
+        )
     }
 }

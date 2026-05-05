@@ -19,10 +19,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        appState.startHotkeyMonitoring()
+
         if !appState.hasCompletedSetup {
             showSetupWindow()
         } else {
-            appState.startHotkeyMonitoring()
             appState.startAccessibilityPolling()
             Task { @MainActor in
                 UpdateManager.shared.startPeriodicChecks()
@@ -47,6 +48,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.stopHotkeyMonitoring(reason: .appQuit)
     }
 
+    func applicationDidResignActive(_ notification: Notification) {
+        appState.handleAppDeactivationForHotkeySafety()
+    }
+
     @objc func handleShowSetup() {
         // Single wizard at a time — opening a second leaks the first's
         // willClose observer and breaks the bail-restore.
@@ -59,7 +64,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let wasCompleted = appState.hasCompletedSetup
         appState.hasCompletedSetup = false
         appState.stopAccessibilityPolling()
-        appState.stopHotkeyMonitoring(reason: .onboardingBlocked)
+        appState.startHotkeyMonitoring()
         showSetupWindow()
 
         // Restore prior state if the user closes the wizard without completing.

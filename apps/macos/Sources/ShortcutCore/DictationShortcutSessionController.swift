@@ -68,6 +68,13 @@ final class DictationShortcutSessionController {
         toggleStopArmed = false
     }
 
+    @discardableResult
+    func resetActiveSession() -> RecordingTriggerMode? {
+        let mode = activeMode
+        reset()
+        return mode
+    }
+
     func reset() {
         activeMode = nil
         toggleStopArmed = false
