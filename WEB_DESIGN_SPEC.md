@@ -384,7 +384,9 @@ Error:
 
 - Provider/backend error: clear, short, retry where safe.
 - Insertion error: "Click a text box first." Clipboard fallback and manual copy
-  recovery follow `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`.
+  recovery follow `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`. Direct
+  insertion eligibility, target safety, and ambiguous-result handling follow
+  `docs/RW_068_DIRECT_INSERTION_CONTRACT.md`.
 - Auth error: reopen sign-in.
 - Billing error: open account/billing.
 
