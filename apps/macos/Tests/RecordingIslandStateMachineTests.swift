@@ -19,6 +19,8 @@ private struct RecordingIslandStateMachineTests {
         mapsBackendFailuresToSafeRecoveryActions()
         requiredRecoveryStatesHaveCompactCopyAndActions()
         exposesPrivacySafeSyntheticRecoveryProofStates()
+        visualHarnessCoversEveryImplementedState()
+        visualHarnessUsesOnlySyntheticSafeEvidenceSummaries()
         keepsPrivateContentOutOfPresentation()
 
         print("RecordingIslandStateMachineTests passed")
@@ -268,6 +270,88 @@ private struct RecordingIslandStateMachineTests {
             expect(!visibleProofText.contains("@"), "proof states must not contain account emails")
             expect(!visibleProofText.contains("/Users/"), "proof states must not contain local paths")
             expect(!visibleProofText.contains("sk-"), "proof states must not contain token-like content")
+        }
+    }
+
+    private static func visualHarnessCoversEveryImplementedState() {
+        let matrix = RecordingIslandVisualTestHarness.screenshotMatrix
+        let matrixStates = Set(matrix.map(\.state))
+        let matrixIDs = Set(matrix.map(\.id))
+
+        expect(
+            matrixStates == Set(RecordingIslandStateName.allCases),
+            "visual harness screenshot matrix should cover every implemented island state"
+        )
+        expect(
+            matrixIDs.count == matrix.count,
+            "visual harness scenario IDs should be unique"
+        )
+        expect(
+            RecordingIslandVisualTestHarness.scenario(id: "ISLAND-010")?.state == .recordingHold,
+            "visual harness should expose recording_hold by stable scenario ID"
+        )
+        expect(
+            RecordingIslandVisualTestHarness.scenario(id: "ISLAND-011")?.state == .recordingToggle,
+            "visual harness should expose recording_toggle by stable scenario ID"
+        )
+        expect(
+            RecordingIslandVisualTestHarness.scenario(id: "ISLAND-000")?.isRunnableInDevHarness == false,
+            "hidden_idle should remain written-proof-only because there is no island UI to capture"
+        )
+
+        for scenario in matrix where scenario.presentation.isVisible {
+            expect(
+                RecordingIslandVisualTestHarness.runnableScenarioIDs.contains(scenario.id),
+                "\(scenario.id) should be runnable from the dev harness"
+            )
+        }
+
+        for state in RecordingIslandStateMachine.syntheticRecoveryProofStateNames {
+            expect(
+                matrix.contains { $0.state == state && ($0.area == .recovery || $0.area == .privacy) },
+                "\(state.rawValue) should remain in the visual proof recovery/privacy matrix"
+            )
+        }
+
+        expect(
+            RecordingIslandVisualTestHarness.scenario(id: "ISLAND-010")?.presentation.showsVisualizer == true,
+            "recording_hold harness scenario should show the synthetic visualizer"
+        )
+        expect(
+            RecordingIslandVisualTestHarness.scenario(id: "ISLAND-011")?.presentation.showsVisualizer == true,
+            "recording_toggle harness scenario should show the synthetic visualizer"
+        )
+        expect(
+            RecordingIslandVisualTestHarness.scenario(id: "ISLAND-021")?.presentation.showsVisualizer == false,
+            "processing_uploading harness scenario should not show the visualizer"
+        )
+    }
+
+    private static func visualHarnessUsesOnlySyntheticSafeEvidenceSummaries() {
+        for scenario in RecordingIslandVisualTestHarness.screenshotMatrix {
+            let proofText = [
+                scenario.id,
+                scenario.captureName,
+                scenario.presentation.title,
+                scenario.presentation.primaryAction?.rawValue ?? "",
+                scenario.presentation.primaryAction?.compactTitle ?? "",
+                scenario.presentation.secondaryAction?.rawValue ?? "",
+                scenario.presentation.secondaryAction?.compactTitle ?? "",
+                scenario.presentation.safeLogSummary,
+                scenario.safeEvidenceSummary
+            ].joined(separator: " ")
+
+            for fragment in RecordingIslandVisualTestHarness.forbiddenEvidenceFragments {
+                expect(
+                    !proofText.contains(fragment),
+                    "\(scenario.id) visual harness summary must not contain \(fragment)"
+                )
+            }
+
+            expect(
+                scenario.syntheticAudioLevel >= 0 && scenario.syntheticAudioLevel <= 1,
+                "\(scenario.id) synthetic audio level should stay normalized"
+            )
         }
     }
 

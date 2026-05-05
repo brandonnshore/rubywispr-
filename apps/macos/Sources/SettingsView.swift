@@ -673,19 +673,20 @@ struct DebugSettingsView: View {
                     }
                 }
 
-                SettingsCard("Recovery Proof States", icon: "rectangle.on.rectangle") {
+                SettingsCard("Island Visual Harness", icon: "rectangle.on.rectangle") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Show synthetic island recovery states with placeholder-only copy.")
+                        Text("Show synthetic island states with placeholder-only copy and synthetic meter levels.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 148), spacing: 8)], spacing: 8) {
-                            ForEach(RecordingIslandStateMachine.syntheticRecoveryProofStateNames, id: \.rawValue) { stateName in
-                                Button(stateName.rawValue) {
-                                    _ = appState.showDebugIslandState(stateName.rawValue)
+                            ForEach(RecordingIslandVisualTestHarness.screenshotMatrix, id: \.id) { scenario in
+                                Button(scenario.buttonTitle) {
+                                    _ = appState.showDebugIslandHarnessScenario(scenario.id)
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.small)
+                                .disabled(!scenario.isRunnableInDevHarness)
                             }
                         }
                     }
