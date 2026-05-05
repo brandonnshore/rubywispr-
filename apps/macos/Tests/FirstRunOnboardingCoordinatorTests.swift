@@ -36,6 +36,7 @@ private struct FirstRunOnboardingCoordinatorTests {
         testFirstRunStartsAtSignInAndBlocksDictation()
         testPartialCompletionStopsAtFirstUnsatisfiedGate()
         testReadyRequiresEveryGate()
+        testAccessibilityRequestAndRecoveryBlockTestWhisper()
         testResetReplaysOnboarding()
         testBlockedStatesWinOverLaterSignals()
         testStoredMetadataUsesOnlySanitizedCategories()
@@ -104,6 +105,34 @@ private struct FirstRunOnboardingCoordinatorTests {
         expect(coordinator.metadata.onboardingCompletedAt != nil, "ready should persist completion timestamp")
         expect(coordinator.metadata.completedAppVersion == "1.2.3", "ready should persist app version")
         expect(coordinator.metadata.completedAppBuild == "456", "ready should persist app build")
+    }
+
+    private static func testAccessibilityRequestAndRecoveryBlockTestWhisper() {
+        let coordinator = makeCoordinator()
+
+        let requesting = coordinator.update(with: FirstRunOnboardingGateSnapshot(
+            authState: .trialActive,
+            microphoneStatus: .granted,
+            accessibilityStatus: .requesting,
+            testWhisperStatus: .succeeded
+        ))
+        expect(requesting == .accessibilityRequesting, "requesting Accessibility should wait before test whisper")
+        expect(!coordinator.canEnterReady, "requesting Accessibility must not be ready")
+        expect(!coordinator.metadata.testWhisperCompleted, "test whisper success cannot count while Accessibility is requesting")
+
+        let denied = coordinator.update(with: FirstRunOnboardingGateSnapshot(
+            authState: .trialActive,
+            microphoneStatus: .granted,
+            accessibilityStatus: .denied,
+            testWhisperStatus: .succeeded
+        ))
+        expect(denied == .accessibilityRecovery, "denied Accessibility should enter recovery")
+        expect(coordinator.metadata.lastAccessibilityStatus == .denied, "metadata may store denied category only")
+        expect(!FirstRunOnboardingCoordinator.canStartTestWhisper(from: FirstRunOnboardingGateSnapshot(
+            authState: .trialActive,
+            microphoneStatus: .granted,
+            accessibilityStatus: .denied
+        )), "test whisper should be blocked until Accessibility is granted")
     }
 
     private static func testResetReplaysOnboarding() {
