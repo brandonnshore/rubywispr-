@@ -1238,6 +1238,40 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     @discardableResult
+    func performDesktopAccountRecoveryAction(
+        _ action: RubyWhisperDesktopRecoveryAction? = nil
+    ) -> Bool {
+        let recovery = action ?? authAccountSnapshot.recovery ?? authCoordinatorState.defaultRecoveryAction
+
+        switch recovery {
+        case .openSignIn:
+            let result = startDesktopSignIn()
+            return result.outcome == .browserPending || result.outcome == .alreadySignedIn
+        case .openTermsAcceptance:
+            return openDesktopWebAccountPage(queryItems: [
+                URLQueryItem(name: "terms", value: "required"),
+            ])
+        case .openCheckout:
+            return openDesktopWebAccountPage(queryItems: [
+                URLQueryItem(name: "checkout", value: "required"),
+            ])
+        case .openBilling:
+            return openDesktopWebAccountPage(queryItems: [
+                URLQueryItem(name: "billing", value: "required"),
+            ])
+        case .openAccount:
+            return openDesktopWebAccountPage()
+        case .retry, .retryAfter, .retryOrContactSupport:
+            refreshDesktopAccountState()
+            return true
+        case .startNewWhisper, .recordAgain, .unknown:
+            selectedSettingsTab = .account
+            NotificationCenter.default.post(name: .showSettings, object: nil)
+            return true
+        }
+    }
+
+    @discardableResult
     func startDesktopSignIn() -> DesktopLoginLaunchResult {
         desktopLoginCompletionTask?.cancel()
         let result = desktopLoginBridge.startLogin()
@@ -1303,6 +1337,36 @@ final class AppState: ObservableObject, @unchecked Sendable {
         if outcome == .timedOut {
             errorMessage = "Sign-in timed out. Start sign-in again."
         }
+    }
+
+    private func openDesktopWebAccountPage(queryItems: [URLQueryItem] = []) -> Bool {
+        guard let url = desktopWebURL(path: "/account", queryItems: queryItems) else {
+            errorMessage = "Account page is unavailable. Check the backend URL and try again."
+            return false
+        }
+
+        NSWorkspace.shared.open(url)
+        return true
+    }
+
+    private func desktopWebURL(path: String, queryItems: [URLQueryItem] = []) -> URL? {
+        let baseURL: URL
+        if let configuration = try? RubyWhisperBackendConfiguration.load() {
+            baseURL = configuration.baseURL
+        } else {
+            baseURL = URL(string: "https://rubywhisper.invalid")!
+        }
+
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+
+        let basePath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let routePath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components.path = "/" + [basePath, routePath].filter { !$0.isEmpty }.joined(separator: "/")
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        components.fragment = nil
+        return components.url
     }
 
     private var resolvedTranscriptionLanguage: String? {

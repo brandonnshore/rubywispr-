@@ -40,6 +40,7 @@ private struct FirstRunOnboardingCoordinatorTests {
         testAccessibilityRequestAndRecoveryBlockTestWhisper()
         testResetReplaysOnboarding()
         testBlockedStatesWinOverLaterSignals()
+        testAccountGatePresentationMapsAuthAndRecoveryStates()
         testMicrophonePermissionGatePresentsRecoveryWithoutPrivateData()
         testStoredMetadataUsesOnlySanitizedCategories()
         print("FirstRunOnboardingCoordinatorTests passed")
@@ -205,6 +206,38 @@ private struct FirstRunOnboardingCoordinatorTests {
             accessibilityStatus: .granted
         ))
         expect(!canStartTest, "test whisper should be blocked until local gates pass")
+    }
+
+    private static func testAccountGatePresentationMapsAuthAndRecoveryStates() {
+        let cases: [(state: DesktopAuthCoordinatorState, action: RubyWhisperDesktopRecoveryAction?, canContinue: Bool, progress: Bool)] = [
+            (.signedOut, .openSignIn, false, false),
+            (.loginLaunching, nil, false, true),
+            (.browserPending, nil, false, true),
+            (.handoffPending, nil, false, true),
+            (.sessionExchanging, nil, false, true),
+            (.accountRefreshing, .retry, false, true),
+            (.signedInTermsRequired, .openTermsAcceptance, false, false),
+            (.trialActive, nil, true, false),
+            (.paidActive, nil, true, false),
+            (.friendOfRubyActive, nil, true, false),
+            (.trialExhausted, .openCheckout, false, false),
+            (.paymentFailed, .openBilling, false, false),
+            (.blocked, .openAccount, false, false),
+            (.error, .retry, false, false),
+        ]
+
+        for testCase in cases {
+            let presentation = FirstRunOnboardingCoordinator.accountGatePresentation(for: testCase.state)
+            expect(presentation.primaryRecoveryAction == testCase.action, "\(testCase.state.rawValue) should map to recovery action")
+            expect(presentation.canContinue == testCase.canContinue, "\(testCase.state.rawValue) should map continue eligibility")
+            expect(presentation.showsProgress == testCase.progress, "\(testCase.state.rawValue) should map progress state")
+        }
+
+        let serverRecovery = FirstRunOnboardingCoordinator.accountGatePresentation(
+            for: .signedInTermsRequired,
+            recovery: .openAccount
+        )
+        expect(serverRecovery.primaryRecoveryAction == .openAccount, "server-provided recovery should be preserved for Terms gate")
     }
 
     private static func testStoredMetadataUsesOnlySanitizedCategories() {

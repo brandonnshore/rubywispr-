@@ -67,6 +67,17 @@ enum FirstRunOnboardingAccountCategory: String, Codable, Equatable {
     case friendOfRubyActive = "friend_of_ruby_active"
 }
 
+struct FirstRunOnboardingAccountGatePresentation: Equatable {
+    var title: String
+    var message: String
+    var statusLabel: String
+    var systemImageName: String
+    var primaryActionTitle: String?
+    var primaryRecoveryAction: RubyWhisperDesktopRecoveryAction?
+    var canContinue: Bool
+    var showsProgress: Bool
+}
+
 struct FirstRunOnboardingGateSnapshot: Equatable {
     var authState: DesktopAuthCoordinatorState
     var microphoneStatus: FirstRunOnboardingPermissionCategory
@@ -305,6 +316,113 @@ final class FirstRunOnboardingCoordinator: ObservableObject {
              .trialExhausted, .paymentFailed, .blocked, .canceled, .error,
              .unknown:
             return nil
+        }
+    }
+
+    static func accountGatePresentation(
+        for authState: DesktopAuthCoordinatorState,
+        recovery: RubyWhisperDesktopRecoveryAction? = nil
+    ) -> FirstRunOnboardingAccountGatePresentation {
+        switch authState.dictationAccountGateDecision {
+        case .allowed:
+            return FirstRunOnboardingAccountGatePresentation(
+                title: "Account Ready",
+                message: "Your signed-in account can use RubyWhisper transcription.",
+                statusLabel: authState.rawValue,
+                systemImageName: "checkmark.circle.fill",
+                primaryActionTitle: nil,
+                primaryRecoveryAction: nil,
+                canContinue: true,
+                showsProgress: false
+            )
+        case .signInRequired:
+            return FirstRunOnboardingAccountGatePresentation(
+                title: "Sign In",
+                message: "Sign in with your RubyWhisper account before continuing to Mac permissions.",
+                statusLabel: authState.rawValue,
+                systemImageName: "person.crop.circle.badge.xmark",
+                primaryActionTitle: "Sign In",
+                primaryRecoveryAction: .openSignIn,
+                canContinue: false,
+                showsProgress: false
+            )
+        case .signInInProgress:
+            return FirstRunOnboardingAccountGatePresentation(
+                title: "Complete Sign In",
+                message: "Finish the browser sign-in flow, then return to RubyWhisper.",
+                statusLabel: authState.rawValue,
+                systemImageName: "arrow.triangle.2.circlepath",
+                primaryActionTitle: nil,
+                primaryRecoveryAction: nil,
+                canContinue: false,
+                showsProgress: true
+            )
+        case .accountRefreshing:
+            return FirstRunOnboardingAccountGatePresentation(
+                title: "Loading Account",
+                message: "RubyWhisper is checking account eligibility before enabling setup.",
+                statusLabel: authState.rawValue,
+                systemImageName: "arrow.triangle.2.circlepath",
+                primaryActionTitle: "Retry",
+                primaryRecoveryAction: recovery ?? .retry,
+                canContinue: false,
+                showsProgress: true
+            )
+        case .termsRequired:
+            return FirstRunOnboardingAccountGatePresentation(
+                title: "Accept Terms",
+                message: "Accept Terms and Privacy in your web account before dictation is enabled.",
+                statusLabel: authState.rawValue,
+                systemImageName: "doc.text.fill",
+                primaryActionTitle: "Open Account",
+                primaryRecoveryAction: recovery ?? .openTermsAcceptance,
+                canContinue: false,
+                showsProgress: false
+            )
+        case .trialExhausted:
+            return FirstRunOnboardingAccountGatePresentation(
+                title: "Trial Exhausted",
+                message: "Choose a plan in your account before continuing setup.",
+                statusLabel: authState.rawValue,
+                systemImageName: "creditcard.fill",
+                primaryActionTitle: "Open Checkout",
+                primaryRecoveryAction: recovery ?? .openCheckout,
+                canContinue: false,
+                showsProgress: false
+            )
+        case .paymentFailed:
+            return FirstRunOnboardingAccountGatePresentation(
+                title: "Payment Needs Attention",
+                message: "Update billing in your account before continuing setup.",
+                statusLabel: authState.rawValue,
+                systemImageName: "creditcard.trianglebadge.exclamationmark",
+                primaryActionTitle: "Open Billing",
+                primaryRecoveryAction: recovery ?? .openBilling,
+                canContinue: false,
+                showsProgress: false
+            )
+        case .blocked:
+            return FirstRunOnboardingAccountGatePresentation(
+                title: "Account Blocked",
+                message: "Open your account for recovery and support options.",
+                statusLabel: authState.rawValue,
+                systemImageName: "exclamationmark.triangle.fill",
+                primaryActionTitle: "Open Account",
+                primaryRecoveryAction: recovery ?? .openAccount,
+                canContinue: false,
+                showsProgress: false
+            )
+        case .accountUnavailable:
+            return FirstRunOnboardingAccountGatePresentation(
+                title: "Account Unavailable",
+                message: "Refresh account state or sign in again before continuing setup.",
+                statusLabel: authState.rawValue,
+                systemImageName: "exclamationmark.triangle.fill",
+                primaryActionTitle: "Retry",
+                primaryRecoveryAction: recovery ?? .retry,
+                canContinue: false,
+                showsProgress: false
+            )
         }
     }
 
