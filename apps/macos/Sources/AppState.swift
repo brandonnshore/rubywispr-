@@ -1663,6 +1663,17 @@ final class AppState: ObservableObject, @unchecked Sendable {
             return false
         }
 
+        guard !resolvedTranscriptionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            cancelPendingShortcutStart()
+            shortcutSessionController.reset()
+            activeRecordingTriggerMode = nil
+            currentSessionIntent = .dictation
+            statusText = "Add API key"
+            debugStatusMessage = "Authentication required"
+            NotificationCenter.default.post(name: .showSetup, object: nil)
+            return false
+        }
+
         return true
     }
 

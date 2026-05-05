@@ -198,9 +198,22 @@ enum ShortcutMatcher {
             deactivations.append((.toggleDeactivated, configuration.toggle.specificityScore))
         }
 
-        let orderedActivations = activations.sorted(by: { $0.1 > $1.1 }).map(\.0)
+        let orderedActivations = mostSpecificActivationEvents(from: activations)
         let orderedDeactivations = deactivations.sorted(by: { $0.1 < $1.1 }).map(\.0)
         return orderedActivations + orderedDeactivations
+    }
+
+    private static func mostSpecificActivationEvents(
+        from activations: [(ShortcutEvent, Int)]
+    ) -> [ShortcutEvent] {
+        guard let highestSpecificity = activations.map(\.1).max() else {
+            return []
+        }
+
+        return activations
+            .filter { $0.1 == highestSpecificity }
+            .sorted(by: { $0.1 > $1.1 })
+            .map(\.0)
     }
 
     private static func bindingIsActive(
