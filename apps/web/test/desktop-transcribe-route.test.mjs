@@ -60,7 +60,9 @@ const forbiddenTranscriptionRequestPayloadKeys = [
   "transcriptText",
 ];
 const forbiddenTranscriptionRequestPayloadContent =
-  /uh schedule ruby whisper|Schedule RubyWhisper|Synthetic cleanup output|Synthetic provider output|Synthetic route context|Ruby Advisory|payload must not echo|Bearer /i;
+  /uh schedule ruby whisper|Schedule RubyWhisper|Synthetic cleanup output|Synthetic provider output|Synthetic route context|Ruby Advisory|term_placeholder_alpha|term_placeholder_beta|term_placeholder_disabled|payload must not echo|Bearer /i;
+const syntheticDictionaryTermContent =
+  /term_placeholder_alpha|term_placeholder_beta|term_placeholder_disabled/i;
 
 test("desktop transcribe route returns signed_out before request parsing", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
@@ -415,6 +417,11 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
     calls.find((call) => call.operation === "writeRequestMetadata").input,
   );
   assert.doesNotMatch(JSON.stringify(body), /rawTranscript|providerRequestBody|context|dictionary/i);
+  assertNoDictionaryTermContent(body);
+  assertNoDictionaryTermContent(calls);
+  assertNoDictionaryTermContent(
+    calls.find((call) => call.operation === "writeRequestMetadata").input,
+  );
 });
 
 test("desktop transcribe route omits non-finite success latency metadata", async () => {
@@ -630,7 +637,7 @@ test("desktop transcribe route returns cleanup-enabled cleaned provider success"
           cleanupEnabled: true,
           context: "Synthetic route context.",
           contextAwareCleanupEnabled: true,
-          dictionaryTerms: ["RubyWhisper", "Ruby Advisory"],
+          dictionaryTerms: ["term_placeholder_alpha", "term_placeholder_beta"],
         },
         metadata: {
           cleanupEnabled: true,
@@ -638,8 +645,8 @@ test("desktop transcribe route returns cleanup-enabled cleaned provider success"
         },
       }),
     providerClient: providerClientReturningCleanupSuccess(providerCalls, {
-      cleanedText: "Schedule RubyWhisper follow-up for Monday.",
-      transcriptionText: "uh schedule ruby whisper follow up for monday",
+      cleanedText: "Synthetic cleaned route output.",
+      transcriptionText: "synthetic route transcript",
     }),
   });
   const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
@@ -657,8 +664,8 @@ test("desktop transcribe route returns cleanup-enabled cleaned provider success"
   assert.deepEqual(body, {
     appVersion: "0.1.0-test",
     audioDurationMs: 4200,
-    cleanedText: "Schedule RubyWhisper follow-up for Monday.",
-    cleanedWordCount: 5,
+    cleanedText: "Synthetic cleaned route output.",
+    cleanedWordCount: 4,
     ok: true,
     osVersion: "macOS synthetic",
     planState: "trial_active",
@@ -666,8 +673,8 @@ test("desktop transcribe route returns cleanup-enabled cleaned provider success"
     providerLatencyMs: 24,
     requestId: "req_rw_synthetic_route_001",
     trialWordsLimit: 5000,
-    trialWordsRemaining: 3895,
-    trialWordsUsed: 1105,
+    trialWordsRemaining: 3896,
+    trialWordsUsed: 1104,
   });
   assert.deepEqual(
     toPlainObject(providerCalls).map((call) => call.operation),
@@ -677,15 +684,18 @@ test("desktop transcribe route returns cleanup-enabled cleaned provider success"
     cleanupEnabled: true,
     context: "Synthetic route context.",
     contextAwareCleanupEnabled: true,
-    dictionaryTerms: ["RubyWhisper", "Ruby Advisory"],
+    dictionaryTerms: ["term_placeholder_alpha", "term_placeholder_beta"],
     requestId: "req_rw_synthetic_route_001",
-    transcriptText: "uh schedule ruby whisper follow up for monday",
+    transcriptText: "synthetic route transcript",
   });
-  assert.equal(requestMetadataInput.cleanedWordCount, 5);
-  assert.equal(usageIncrementInput.billableWordCount, 5);
+  assert.equal(requestMetadataInput.cleanedWordCount, 4);
+  assert.equal(usageIncrementInput.billableWordCount, 4);
   assertTranscriptionRequestMetadataOnly(requestMetadataInput);
   assertNoPrivateCleanupPayload(requestMetadataInput);
   assertNoPrivateCleanupPayload(usageIncrementInput);
+  assertNoDictionaryTermContent(body);
+  assertNoDictionaryTermContent(requestMetadataInput);
+  assertNoDictionaryTermContent(usageIncrementInput);
 });
 
 test("desktop transcribe route omits cleanup context and dictionary when disabled", async () => {
@@ -732,7 +742,7 @@ test("desktop transcribe route maps cleanup failures to shared no-store errors",
           cleanupEnabled: true,
           context: "Synthetic route context.",
           contextAwareCleanupEnabled: true,
-          dictionaryTerms: ["RubyWhisper"],
+          dictionaryTerms: ["term_placeholder_alpha"],
         },
         metadata: {
           cleanupEnabled: true,
@@ -796,8 +806,10 @@ test("desktop transcribe route maps cleanup failures to shared no-store errors",
   assertNoPrivateCleanupPayload(requestMetadataInput);
   assert.doesNotMatch(
     JSON.stringify(body),
-    /Synthetic provider output|Synthetic route context|cleanedText|transcriptText/i,
+    /Synthetic provider output|Synthetic route context|cleanedText|transcriptText|term_placeholder_alpha/i,
   );
+  assertNoDictionaryTermContent(body);
+  assertNoDictionaryTermContent(requestMetadataInput);
 });
 
 test("desktop transcribe provider continuation can be invoked directly", async () => {
@@ -1137,7 +1149,7 @@ function parseSuccess(overrides = {}) {
       cleanupSettings: {
         cleanupEnabled: false,
         contextAwareCleanupEnabled: false,
-        dictionaryTerms: ["RubyWhisper"],
+        dictionaryTerms: ["term_placeholder_disabled"],
         ...overrides.cleanupSettings,
       },
       metadata: {
@@ -1431,6 +1443,7 @@ function providerClientReturningCleanupFailure(calls = []) {
         },
         metadata: {
           provider: "mock_provider",
+          dictionaryTerms: ["term_placeholder_alpha"],
           providerLatencyMs: 18,
           totalLatencyMs: 26,
         },
@@ -1652,6 +1665,10 @@ function assertNoPrivateCleanupPayload(value) {
     JSON.stringify(value),
     /uh schedule ruby whisper|Schedule RubyWhisper|Synthetic route context|Ruby Advisory/,
   );
+}
+
+function assertNoDictionaryTermContent(value) {
+  assert.doesNotMatch(JSON.stringify(value), syntheticDictionaryTermContent);
 }
 
 function assertTranscriptionRequestMetadataOnly(input) {

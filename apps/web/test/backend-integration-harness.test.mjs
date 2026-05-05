@@ -34,6 +34,7 @@ const forbiddenFixtureSourcePatterns = [
   /\btranscript\b/i,
   /\bcleaned(?:_|-)?text\b/i,
   /\bclipboard\b/i,
+  /\bdictionary(?:_|-)?terms?\b/i,
   /\bapp(?:_|-)?context\b/i,
   /\blocal(?:_|-)?history\b/i,
   /\bmagic(?:_|-)?link\b/i,
@@ -205,7 +206,7 @@ test("provider fixture guardrails reject private provider payload fields", () =>
     { rawTranscript: "synthetic payload must still stay out of fixtures" },
     { cleanedText: "synthetic payload must still stay out of fixtures" },
     { context: "synthetic payload must still stay out of fixtures" },
-    { dictionaryTerms: ["synthetic-term"] },
+    { dictionaryTerms: ["term_placeholder_alpha"] },
     { providerRequestBody: { prompt: "synthetic payload" } },
     { result: { text: "synthetic payload must still stay out of fixtures" } },
   ];

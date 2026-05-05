@@ -24,10 +24,14 @@ test("conservative cleanup prompt preserves cleanup boundaries", async () => {
   const cleanup = await loadConservativeCleanupModule();
   const prompt = cleanup.createRubyWhisperConservativeCleanupPrompt({
     cleanupEnabled: true,
-    context: "Synthetic editor context mentions Ruby Advisory.",
+    context: "Synthetic editor context.",
     contextAwareCleanupEnabled: true,
-    dictionaryTerms: ["RubyWhisper", "Ruby Advisory", "RubyWhisper"],
-    transcriptText: "uh schedule ruby whisper follow up for monday",
+    dictionaryTerms: [
+      "term_placeholder_alpha",
+      "term_placeholder_beta",
+      "term_placeholder_alpha",
+    ],
+    transcriptText: "synthetic transcript content",
   });
 
   assert.equal(prompt.length, 2);
@@ -35,8 +39,11 @@ test("conservative cleanup prompt preserves cleanup boundaries", async () => {
   assert.match(prompt[0].content, /conservatively/i);
   assert.match(prompt[0].content, /Do not add new ideas/i);
   assert.equal(prompt[1].role, "user");
-  assert.match(prompt[1].content, /Transcript:\nuh schedule ruby whisper follow up/i);
-  assert.match(prompt[1].content, /Known terms to preserve:\nRubyWhisper, Ruby Advisory/);
+  assert.match(prompt[1].content, /Transcript:\nsynthetic transcript content/i);
+  assert.match(
+    prompt[1].content,
+    /Known terms to preserve:\nterm_placeholder_alpha, term_placeholder_beta/,
+  );
   assert.match(prompt[1].content, /Surrounding context:\nSynthetic editor context/);
   assert.match(prompt[1].content, /Return only the final cleaned transcript text/);
 });
@@ -58,7 +65,11 @@ test("conservative cleanup builds provider input without disabled context", asyn
         cleanupEnabled: true,
         context: "Synthetic context must be omitted.",
         contextAwareCleanupEnabled: false,
-        dictionaryTerms: [" RubyWhisper ", "", "RubyWhisper"],
+        dictionaryTerms: [
+          " term_placeholder_alpha ",
+          "",
+          "term_placeholder_alpha",
+        ],
         requestId: " req_rw_synthetic_cleanup_001 ",
         transcriptText: " synthetic transcript ",
       }),
@@ -66,8 +77,23 @@ test("conservative cleanup builds provider input without disabled context", asyn
     {
       cleanupEnabled: true,
       contextAwareCleanupEnabled: false,
-      dictionaryTerms: ["RubyWhisper"],
+      dictionaryTerms: ["term_placeholder_alpha"],
       requestId: "req_rw_synthetic_cleanup_001",
+      transcriptText: "synthetic transcript",
+    },
+  );
+
+  assert.deepEqual(
+    toPlainObject(
+      cleanup.createRubyWhisperProviderCleanupInput({
+        cleanupEnabled: true,
+        dictionaryTerms: ["", " ".repeat(2), "x".repeat(81)],
+        transcriptText: "synthetic transcript",
+      }),
+    ),
+    {
+      cleanupEnabled: true,
+      contextAwareCleanupEnabled: true,
       transcriptText: "synthetic transcript",
     },
   );
@@ -80,7 +106,7 @@ test("conservative cleanup calls provider transiently when enabled", async () =>
     cleanupEnabled: true,
     context: "Synthetic context.",
     contextAwareCleanupEnabled: true,
-    dictionaryTerms: ["RubyWhisper"],
+    dictionaryTerms: ["term_placeholder_alpha"],
     providerClient: {
       cleanup: async (input) => {
         calls.push(input);
@@ -88,7 +114,7 @@ test("conservative cleanup calls provider transiently when enabled", async () =>
         return {
           ok: true,
           result: {
-            cleanedText: "Schedule RubyWhisper follow-up for Monday.",
+            cleanedText: "Synthetic cleaned output.",
             provider: "mock_provider",
             providerLatencyMs: 18,
           },
@@ -96,11 +122,11 @@ test("conservative cleanup calls provider transiently when enabled", async () =>
       },
     },
     requestId: "req_rw_synthetic_cleanup_001",
-    transcriptText: "uh schedule ruby whisper follow up for monday",
+    transcriptText: "synthetic transcript content",
   });
 
   assert.deepEqual(toPlainObject(result), {
-    cleanedText: "Schedule RubyWhisper follow-up for Monday.",
+    cleanedText: "Synthetic cleaned output.",
     cleanupApplied: true,
     cleanupAttempted: true,
     fallbackUsed: false,
@@ -112,9 +138,9 @@ test("conservative cleanup calls provider transiently when enabled", async () =>
       cleanupEnabled: true,
       context: "Synthetic context.",
       contextAwareCleanupEnabled: true,
-      dictionaryTerms: ["RubyWhisper"],
+      dictionaryTerms: ["term_placeholder_alpha"],
       requestId: "req_rw_synthetic_cleanup_001",
-      transcriptText: "uh schedule ruby whisper follow up for monday",
+      transcriptText: "synthetic transcript content",
     },
   ]);
 });

@@ -29,6 +29,7 @@ const forbiddenPrivateContentFragments = [
   "history",
   "recording",
   "transcript",
+  "vocabulary",
   "wispr",
 ];
 
@@ -98,6 +99,15 @@ test("Supabase migration columns do not introduce private content storage", asyn
   }
 
   assert.deepEqual(violations, []);
+});
+
+test("Supabase migrations never store transient dictionary payload content", async () => {
+  const { sql } = await migrationsPromise;
+
+  assert.doesNotMatch(
+    sql,
+    /\bdictionaryTerms\b|\bdictionary_terms\b|term_placeholder_(?:alpha|beta|disabled)\b/i,
+  );
 });
 
 async function loadMigrations() {

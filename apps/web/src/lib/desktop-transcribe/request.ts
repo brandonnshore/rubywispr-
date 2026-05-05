@@ -215,7 +215,7 @@ function createDesktopTranscribeRequestInput(options: {
     cleanupEnabled,
     ...(context ? { context } : {}),
     contextAwareCleanupEnabled,
-    dictionaryTerms: normalizeDictionaryTerms(options.fields),
+    dictionaryTerms: cleanupEnabled ? normalizeDictionaryTerms(options.fields) : [],
   };
 
   return {

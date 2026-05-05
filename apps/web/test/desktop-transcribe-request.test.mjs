@@ -35,7 +35,10 @@ test("desktop transcription parser accepts synthetic multipart requests", async 
   formData.set("cleanupEnabled", "true");
   formData.set("contextAwareCleanupEnabled", "1");
   formData.set("context", " synthetic app context ");
-  formData.set("dictionaryTerms", JSON.stringify(["RubyWhisper", "Unit API"]));
+  formData.set(
+    "dictionaryTerms",
+    JSON.stringify(["term_placeholder_alpha", "term_placeholder_beta"]),
+  );
 
   const result = await parser.parseDesktopTranscribeRequest(
     new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
@@ -61,8 +64,12 @@ test("desktop transcription parser accepts synthetic multipart requests", async 
     cleanupEnabled: true,
     context: "synthetic app context",
     contextAwareCleanupEnabled: true,
-    dictionaryTerms: ["RubyWhisper", "Unit API"],
+    dictionaryTerms: ["term_placeholder_alpha", "term_placeholder_beta"],
   });
+  assert.doesNotMatch(
+    JSON.stringify(result.input.metadata),
+    /term_placeholder_alpha|term_placeholder_beta|dictionaryTerms/i,
+  );
 });
 
 test("desktop transcription parser accepts synthetic binary audio requests", async () => {
@@ -146,6 +153,71 @@ test("desktop transcription parser defaults cleanup settings on unless explicitl
     unknownBooleanResult.input.cleanupSettings.contextAwareCleanupEnabled,
     true,
   );
+});
+
+test("desktop transcription parser treats dictionary terms as cleanup-only transient body content", async () => {
+  const parser = await loadDesktopTranscribeRequestModule();
+  const disabledCleanupForm = createSyntheticAudioFormData();
+
+  disabledCleanupForm.set("cleanupEnabled", "false");
+  disabledCleanupForm.set(
+    "dictionaryTerms",
+    JSON.stringify(["term_placeholder_disabled"]),
+  );
+
+  const disabledCleanupResult = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: disabledCleanupForm,
+      method: "POST",
+    }),
+  );
+
+  assert.equal(disabledCleanupResult.ok, true);
+  assert.equal(disabledCleanupResult.input.cleanupSettings.cleanupEnabled, false);
+  assert.deepEqual(disabledCleanupResult.input.cleanupSettings.dictionaryTerms, []);
+  assert.doesNotMatch(
+    JSON.stringify({
+      cleanupSettings: disabledCleanupResult.input.cleanupSettings,
+      metadata: disabledCleanupResult.input.metadata,
+    }),
+    /term_placeholder_disabled/,
+  );
+
+  const repeatedTermsForm = createSyntheticAudioFormData();
+  repeatedTermsForm.append("dictionaryTerms", " term_placeholder_alpha ");
+  repeatedTermsForm.append("dictionaryTerms", "");
+  repeatedTermsForm.append("dictionaryTerms", "term_placeholder_alpha");
+  repeatedTermsForm.append("dictionaryTerms", "term_placeholder_beta");
+
+  const repeatedTermsResult = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: repeatedTermsForm,
+      method: "POST",
+    }),
+  );
+
+  assert.equal(repeatedTermsResult.ok, true);
+  assert.deepEqual(repeatedTermsResult.input.cleanupSettings.dictionaryTerms, [
+    "term_placeholder_alpha",
+    "term_placeholder_beta",
+  ]);
+  assert.doesNotMatch(
+    JSON.stringify(repeatedTermsResult.input.metadata),
+    /term_placeholder_alpha|term_placeholder_beta|dictionaryTerms/i,
+  );
+
+  const emptyTermsForm = createSyntheticAudioFormData();
+  emptyTermsForm.set("dictionaryTerms", "[]");
+
+  const emptyTermsResult = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: emptyTermsForm,
+      method: "POST",
+    }),
+  );
+
+  assert.equal(emptyTermsResult.ok, true);
+  assert.deepEqual(emptyTermsResult.input.cleanupSettings.dictionaryTerms, []);
 });
 
 test("desktop transcription parser rejects missing or unreadable audio before provider work", async () => {
@@ -239,7 +311,7 @@ test("desktop transcription parser maps over-duration audio to duration limit me
   );
   formData.set("audioDurationMs", "600001");
   formData.set("context", "payload must not echo");
-  formData.set("dictionaryTerms", JSON.stringify(["payload must not echo"]));
+  formData.set("dictionaryTerms", JSON.stringify(["term_placeholder_alpha"]));
 
   const result = await parser.parseDesktopTranscribeRequest(
     new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
@@ -256,7 +328,10 @@ test("desktop transcription parser maps over-duration audio to duration limit me
     },
     ok: false,
   });
-  assert.doesNotMatch(JSON.stringify(result), /payload must not echo/);
+  assert.doesNotMatch(
+    JSON.stringify(result),
+    /payload must not echo|term_placeholder_alpha/,
+  );
 });
 
 test("desktop transcription parser is server-only and privacy neutral", async () => {
@@ -283,4 +358,20 @@ async function loadDesktopTranscribeRequestModule() {
   const encodedSource = Buffer.from(outputText).toString("base64");
 
   return import(`data:text/javascript;base64,${encodedSource}`);
+}
+
+function createSyntheticAudioFormData() {
+  const formData = new FormData();
+
+  formData.set(
+    "audio",
+    new Blob([new Uint8Array([1, 2, 3, 4])], {
+      type: "audio/wav",
+    }),
+    "synthetic.wav",
+  );
+  formData.set("audioDurationMs", "4200");
+  formData.set("cleanupEnabled", "true");
+
+  return formData;
 }
