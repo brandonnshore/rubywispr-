@@ -1177,6 +1177,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         let uploadGeneration = authStateOwner.authenticatedRequestGeneration
         let audio = try Data(contentsOf: artifact.fileURL)
+        try Task.checkCancellation()
+        guard authStateOwner.authenticatedRequestGeneration == uploadGeneration else {
+            throw CancellationError()
+        }
         let request = RubyWhisperDesktopTranscriptionRequest(
             body: .multipart(
                 audio: audio,
@@ -1198,6 +1202,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
             authStateOwner.applyTranscriptionUsageMetadata(success.usageMetadata)
             return success
         } catch RubyWhisperBackendClientError.backend(let backendError) {
+            try Task.checkCancellation()
+            guard authStateOwner.authenticatedRequestGeneration == uploadGeneration else {
+                throw CancellationError()
+            }
             _ = authStateOwner.applyTranscriptionBackendError(backendError)
             throw RubyWhisperDesktopTranscriptionFailure(
                 error: backendError,
