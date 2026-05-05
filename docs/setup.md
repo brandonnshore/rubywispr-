@@ -23,7 +23,7 @@ This checklist tracks provider setup for local development, staging, and product
 - [ ] Vercel: create preview/staging and production projects or environments for the Next.js app and backend routes.
 - [ ] APPLE Developer: prepare signing and notarization access for direct-download macOS releases; production signing requires human approval.
 - [ ] Sparkle: prepare appcast/update channels after the macOS app import confirms the updater choice; public production channel requires human approval.
-- [ ] Sentry or equivalent crash reporting: configure privacy-safe error reporting with scrubbing enabled and screenshots/session replay disabled.
+- [ ] Sentry or equivalent crash reporting: configure privacy-safe error reporting with scrubbing enabled and screenshots/session replay disabled. Live provider credentials, provider dashboard setup, and captured-event review remain blocked on RUB-123.
 
 ## Environment Variables
 
@@ -67,7 +67,7 @@ Every variable named in `TECHNICAL_INFRASTRUCTURE.md` is accounted for here. Rec
 - [ ] After the local Supabase stack is running with `supabase start`, list and apply migrations against the local database with `supabase migration list --local` and `supabase migration up --local`.
 - [ ] Use Stripe test mode and Stripe CLI webhook forwarding.
 - [ ] Use a Groq development or restricted API key.
-- [ ] Use a development Sentry/crash-reporting project only if needed.
+- [ ] Use a development Sentry/crash-reporting project only if needed after RUB-123 approves the live provider handoff. The source-safe web adapter defaults to no-op behavior and does not require a DSN or auth token.
 - [ ] Do not configure Apple Developer production signing or public Sparkle channels for local development.
 - [ ] Confirm commands do not print `.env.local` or private env source content.
 
@@ -80,7 +80,7 @@ Every variable named in `TECHNICAL_INFRASTRUCTURE.md` is accounted for here. Rec
 - [ ] human approval required: link or apply Supabase migrations to staging. Agents must not run `supabase link`, `supabase db push`, `supabase config push`, `supabase migration up --linked`, or commands with live staging `--db-url` values without approval.
 - [ ] Use Stripe test mode products, prices, checkout, portal, and webhook endpoint.
 - [ ] Use a Groq staging or restricted key if available.
-- [ ] Configure staging crash reporting with privacy scrubbing enabled.
+- [ ] Configure staging crash reporting with privacy scrubbing enabled after RUB-123 approves live provider credentials and captured-event review.
 - [ ] Use Apple Developer and Sparkle staging/test release paths only after the macOS import confirms the release workflow.
 - [ ] Verify staging values are isolated from production values.
 
@@ -92,7 +92,7 @@ Every variable named in `TECHNICAL_INFRASTRUCTURE.md` is accounted for here. Rec
 - [ ] human approval required: link, push, or apply Supabase production migrations. This scaffold does not create or apply production migrations.
 - [ ] human approval required: enable Stripe live mode, live products, live prices, checkout, customer portal, and webhook endpoint.
 - [ ] human approval required: provision the production Groq key.
-- [ ] human approval required: configure production Sentry/crash-reporting release token or DSN.
+- [ ] human approval required: configure production Sentry/crash-reporting release token or DSN after RUB-123 approves live provider credentials and captured-event review.
 - [ ] human approval required: configure Apple Developer signing and notarization credentials.
 - [ ] human approval required: configure the Sparkle public appcast/update channel.
 - [ ] Confirm production secrets live only in approved production secret stores.

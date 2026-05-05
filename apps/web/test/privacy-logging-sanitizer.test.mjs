@@ -38,6 +38,8 @@ const expectedMetadataKeys = [
   "totalLatencyMs",
   "appVersion",
   "osVersion",
+  "runtime",
+  "release",
   "errorCode",
 ];
 const expectedRequestEventNames = [
@@ -106,8 +108,10 @@ test("privacy log sanitizer preserves safe metadata and drops private payloads",
     providerRequestBody: "provider request body",
     providerResponseBody: "provider response body",
     rawTranscript: "private transcript",
+    release: "rw-web-test",
     requestId: "  req_rw_synthetic_001  ",
     route: "/api/desktop/transcribe",
+    runtime: "nodejs",
     status: 503,
     token: "payload must not echo",
     totalLatencyMs: 420,
@@ -134,6 +138,8 @@ test("privacy log sanitizer preserves safe metadata and drops private payloads",
     totalLatencyMs: 420,
     appVersion: "0.1.0-test",
     osVersion: "macOS test",
+    runtime: "nodejs",
+    release: "rw-web-test",
     errorCode: "provider_error",
   });
   assert.doesNotMatch(JSON.stringify(metadata), forbiddenPayloadPattern);
@@ -148,8 +154,10 @@ test("privacy log sanitizer drops unsafe allowed values", async () => {
     latencyMs: Number.NaN,
     osVersion: "macOS test",
     provider: "Bearer rw_synthetic_placeholder",
+    release: "rw-web-test",
     requestId: "req_rw_synthetic_002",
     route: "/".repeat(129),
+    runtime: "nodejs",
     totalLatencyMs: Number.POSITIVE_INFINITY,
     userId: "/Users/example/.config/rubywhisper/rubywhisper.env",
   });
@@ -158,6 +166,8 @@ test("privacy log sanitizer drops unsafe allowed values", async () => {
     requestId: "req_rw_synthetic_002",
     appVersion: "0.1.0-test",
     osVersion: "macOS test",
+    runtime: "nodejs",
+    release: "rw-web-test",
   });
 });
 

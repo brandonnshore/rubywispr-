@@ -34,6 +34,13 @@ const approvedPrivacyLoggerPath = path.join(
   "observability",
   "privacy-logger.ts",
 );
+const approvedErrorReporterPath = path.join(
+  srcRoot,
+  "lib",
+  "observability",
+  "error-reporter.ts",
+);
+const approvedCaptureBoundaryPaths = new Set([approvedErrorReporterPath]);
 const adHocLoggingPatterns = [
   {
     label: "console logging",
@@ -85,8 +92,13 @@ test("sensitive backend source cannot add ad hoc logging or private stringificat
 
     const source = await readFile(filePath, "utf8");
     const relativePath = normalizePath(path.relative(webRoot, filePath));
+    const isApprovedCaptureBoundary = approvedCaptureBoundaryPaths.has(filePath);
 
     for (const { label, pattern } of adHocLoggingPatterns) {
+      if (label === "direct error capture" && isApprovedCaptureBoundary) {
+        continue;
+      }
+
       if (pattern.test(source)) {
         violations.push(`${relativePath} contains ${label}`);
       }
@@ -96,7 +108,7 @@ test("sensitive backend source cannot add ad hoc logging or private stringificat
       violations.push(`${relativePath} stringifies sensitive request material`);
     }
 
-    if (unapprovedLoggerImportPattern.test(source)) {
+    if (!isApprovedCaptureBoundary && unapprovedLoggerImportPattern.test(source)) {
       violations.push(`${relativePath} imports an unapproved logger or capture SDK`);
     }
   }
@@ -110,6 +122,17 @@ test("approved privacy logger remains side-effect free", async () => {
   assert.match(source, /^import\s+["']server-only["'];/m);
   assert.match(source, /sanitizeRubyWhisperPrivacyLogMetadata/);
   assert.match(source, /createRubyWhisperBackendRequestFailedLogEvent/);
+  assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
+  assert.doesNotMatch(source, /\bfetch\s*\(/);
+  assert.doesNotMatch(source, /from\s+["'](?:@sentry\/[^"']+|pino|winston|next-logger|consola|debug)["']/i);
+  assert.doesNotMatch(source, /\bprocess\.env\b|\bserverEnv\b/);
+});
+
+test("approved error reporting adapter remains provider-neutral", async () => {
+  const source = await readFile(approvedErrorReporterPath, "utf8");
+
+  assert.match(source, /^import\s+["']server-only["'];/m);
+  assert.match(source, /createRubyWhisperPrivacyLogEvent/);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
   assert.doesNotMatch(source, /\bfetch\s*\(/);
   assert.doesNotMatch(source, /from\s+["'](?:@sentry\/[^"']+|pino|winston|next-logger|consola|debug)["']/i);

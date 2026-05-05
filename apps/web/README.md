@@ -374,11 +374,13 @@ RUB-105 can depend on the completed RW-029A-E mocked Friend of Ruby backend leav
 
 `src/lib/observability/privacy-logger.ts` is the server-only RW-030 helper for privacy-safe backend log metadata. Future backend, account, provider, cleanup, transcription, support, and admin code should use `sanitizeRubyWhisperPrivacyLogMetadata`, `createRubyWhisperPrivacyLogEvent`, or the `createRubyWhisperBackendRequest*LogEvent` helpers before handing data to any future log sink.
 
-Allowed metadata is limited to request/account/plan/duration/word-count/latency/provider/app/version/status/error-code fields. This matches the RW-044 logging guidance in `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md#logging-and-observability`, where support workflows should investigate through `requestId` and `error.code` rather than private content.
+`src/lib/observability/error-reporter.ts` is the server-only provider-neutral error/crash reporting adapter. Its default `rubyWhisperNoopErrorReporter` does not read env vars, import a provider SDK, call a network sink, or require live credentials. A future provider can only be attached by passing a sink to `createRubyWhisperErrorReporter`, and that sink receives the same sanitized event shape used by the privacy logger.
+
+Allowed metadata is limited to request/account/plan/duration/word-count/latency/provider/app/version/status/error-code/runtime/release fields. This matches the RW-044 logging guidance in `../../docs/BACKEND_DESKTOP_ERROR_CONTRACT.md#logging-and-observability`, where support workflows should investigate through `requestId` and `error.code` rather than private content.
 
 Never log request or response bodies, multipart audio, raw transcripts, cleaned text, context, clipboard contents, dictionary terms, prompts, provider request or response bodies, headers, cookies, auth/session material, private env values, secrets, or local Recent Wisprs. Do not add ad hoc `console` or logger calls in sensitive backend source; extend the approved helpers and tests instead.
 
-Live log sinks, Sentry/crash reporting, production sampling, and provider dashboard configuration remain human-gated setup work. Agents may add provider-neutral helpers and tests, but production/staging observability providers must not be configured with live credentials without explicit approval.
+Live log sinks, Sentry/crash reporting, production sampling, captured-event review, and provider dashboard configuration remain human-gated setup work in RUB-123. Agents may add provider-neutral helpers and tests, but production/staging observability providers must not be configured with live credentials without explicit approval.
 
 ## Shared API Error Contract
 
