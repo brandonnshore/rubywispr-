@@ -417,6 +417,37 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
   assert.doesNotMatch(JSON.stringify(body), /rawTranscript|providerRequestBody|context|dictionary/i);
 });
 
+test("desktop transcribe route omits non-finite success latency metadata", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+  const { calls, dependencies } = createRouteDependencies({
+    providerClient: {
+      cleanup: async () => {
+        throw new Error("Cleanup provider must not run for cleanup-disabled success.");
+      },
+      transcribe: async (input) => ({
+        ok: true,
+        result: {
+          audioDurationMs: input.audioDurationMs,
+          provider: "mock_provider",
+          providerLatencyMs: Number.NaN,
+          text: "Synthetic provider output.",
+        },
+      }),
+    },
+  });
+  const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+  const response = await handler(syntheticAudioRequest());
+  const body = await response.json();
+  const requestMetadataInput = calls.find(
+    (call) => call.operation === "writeRequestMetadata",
+  ).input;
+
+  assert.equal(response.status, 200);
+  assert.equal(Object.hasOwn(body, "providerLatencyMs"), false);
+  assert.equal(Object.hasOwn(requestMetadataInput, "latencyMs"), false);
+  assertTranscriptionRequestMetadataOnly(requestMetadataInput);
+});
+
 test("desktop transcribe route increments paid and Friend metadata without trial spend", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
 

@@ -77,6 +77,30 @@ test("transcription request helper prepares metadata-only success rows", async (
   assert.doesNotMatch(JSON.stringify(request), forbiddenPrivateFixturePattern);
 });
 
+test("transcription request helper omits invalid latency metadata", async () => {
+  const helper = await loadRequestMetadataHelper();
+
+  for (const invalidLatencyMs of [
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    -1,
+    "24",
+  ]) {
+    const request = helper.prepareTranscriptionRequestMetadata({
+      clerkUserId: "user_rw_synthetic_member_001",
+      latencyMs: invalidLatencyMs,
+      now: "2026-05-04T07:30:00.000Z",
+      planState: "trial_active",
+      provider: "mock_provider",
+      requestId: "req_rw_synthetic_route_001",
+      status: "success",
+    });
+
+    assert.equal(Object.hasOwn(request, "latency_ms"), false);
+    assert.doesNotMatch(JSON.stringify(request), forbiddenPrivateFixturePattern);
+  }
+});
+
 test("transcription request helper writes through service-role Supabase access", async () => {
   const helper = await loadRequestMetadataHelper();
   const { calls, client } = createRequestMetadataClient();

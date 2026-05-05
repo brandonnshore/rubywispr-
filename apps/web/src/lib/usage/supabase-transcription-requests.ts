@@ -149,7 +149,7 @@ export function prepareTranscriptionRequestMetadata(
   const osVersion = normalizeText(input.osVersion);
   const errorCode =
     status === "failure" && input.errorCode ? input.errorCode : undefined;
-  const latencyMs = normalizeOptionalCount(input.latencyMs);
+  const latencyMs = normalizeOptionalLatencyMs(input.latencyMs);
   const audioDurationMs = normalizeOptionalCount(input.audioDurationMs);
   const cleanedWordCount = normalizeOptionalCount(input.cleanedWordCount);
 
@@ -188,6 +188,18 @@ function normalizeOptionalCount(value: unknown) {
   }
 
   return normalizeRubyWhisperUsageWordCount(value);
+}
+
+function normalizeOptionalLatencyMs(value: unknown) {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+
+  return Math.floor(value);
 }
 
 function normalizeProvider(value: RubyWhisperProviderName | null | undefined) {

@@ -501,7 +501,7 @@ function createProviderSuccessPayload(
       : {}),
     planState: input.entitlement.planState,
     provider: result.provider,
-    ...(typeof result.providerLatencyMs === "number"
+    ...(isFiniteLatencyMs(result.providerLatencyMs)
       ? { providerLatencyMs: result.providerLatencyMs }
       : {}),
     requestId: success.requestId,
@@ -544,7 +544,7 @@ function createRequestMetadataInput(
       result.provider === "groq" || result.provider === "mock_provider"
         ? result.provider
         : "mock_provider",
-    ...(typeof result.providerLatencyMs === "number"
+    ...(isFiniteLatencyMs(result.providerLatencyMs)
       ? { latencyMs: result.providerLatencyMs }
       : {}),
     requestId,
@@ -574,4 +574,8 @@ function createProviderRouteMetadata(
     trialWordsLimit: input.entitlement.metadata.trialWordsLimit,
     trialWordsRemaining: input.entitlement.metadata.trialWordsRemaining,
   };
+}
+
+function isFiniteLatencyMs(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
