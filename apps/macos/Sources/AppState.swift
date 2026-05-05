@@ -521,7 +521,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var lastTranscript: String = ""
     @Published var errorMessage: String?
     @Published var statusText: String = "Ready"
-    @Published var hasAccessibility = false
+    @Published var hasAccessibility = false {
+        didSet {
+            refreshFirstRunOnboardingState()
+        }
+    }
     @Published var hotkeyMonitoringErrorMessage: String?
     @Published var hotkeyRegistrationState = HotkeyRegistrationState.unregistered
     @Published var isDebugOverlayActive = false
@@ -529,6 +533,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var pipelineHistory: [PipelineHistoryItem] = []
     @Published private(set) var authCoordinatorState: DesktopAuthCoordinatorState
     @Published private(set) var authAccountSnapshot: RubyWhisperDesktopAccountSnapshot
+    @Published private(set) var firstRunOnboardingStep: FirstRunOnboardingStep
     @Published var debugStatusMessage = "Idle"
     @Published var debugShowsUpdateReminderAfterDictation = false
     @Published var lastRawTranscript = ""
@@ -557,6 +562,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     let audioRecorder = AudioRecorder()
     let authStateOwner: DesktopAuthStateOwner
+    let firstRunOnboardingCoordinator: FirstRunOnboardingCoordinator
     let hotkeyManager = HotkeyManager()
     let overlayManager = RecordingOverlayManager()
     private var accessibilityTimer: Timer?
@@ -599,6 +605,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
             sessionStore: desktopSessionStore,
             accountSnapshotLoader: Self.makeDesktopAccountSnapshotLoader(sessionStore: desktopSessionStore)
         )
+        let firstRunOnboardingCoordinator = FirstRunOnboardingCoordinator()
         let hasCompletedSetup = UserDefaults.standard.bool(forKey: "hasCompletedSetup")
         let apiKey = Self.loadStoredAPIKey(account: apiKeyStorageKey)
         let apiBaseURL = Self.loadStoredAPIBaseURL(account: "api_base_url")
@@ -669,6 +676,17 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
 
         let initialAccessibility = AXIsProcessTrusted()
+        let initialMicrophoneStatus = Self.firstRunMicrophonePermissionCategory(
+            from: AVCaptureDevice.authorizationStatus(for: .audio)
+        )
+        let initialTestWhisperStatus: FirstRunOnboardingTestWhisperStatus =
+            firstRunOnboardingCoordinator.metadata.testWhisperCompleted ? .succeeded : .notStarted
+        let initialFirstRunStep = firstRunOnboardingCoordinator.update(with: FirstRunOnboardingGateSnapshot(
+            authState: authStateOwner.coordinatorState,
+            microphoneStatus: initialMicrophoneStatus,
+            accessibilityStatus: initialAccessibility ? .granted : .notDetermined,
+            testWhisperStatus: initialTestWhisperStatus
+        ))
         let initialScreenCapturePermission = CGPreflightScreenCaptureAccess()
         var removedAudioFileNames: [String] = []
         do {
@@ -725,8 +743,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.voiceMacros = initialMacros
         self.pipelineHistory = savedHistory
         self.authStateOwner = authStateOwner
+        self.firstRunOnboardingCoordinator = firstRunOnboardingCoordinator
         self.authCoordinatorState = authStateOwner.coordinatorState
         self.authAccountSnapshot = authStateOwner.accountSnapshot
+        self.firstRunOnboardingStep = initialFirstRunStep
         self.hasAccessibility = initialAccessibility
         self.hasScreenRecordingPermission = initialScreenCapturePermission
         self.launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -784,7 +804,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
         authStateOwner.$coordinatorState
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
-                self?.authCoordinatorState = state
+                guard let self else { return }
+                self.authCoordinatorState = state
+                self.refreshFirstRunOnboardingState()
             }
             .store(in: &authStateCancellables)
 
@@ -794,6 +816,49 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 self?.authAccountSnapshot = snapshot
             }
             .store(in: &authStateCancellables)
+    }
+
+    private func refreshFirstRunOnboardingState(
+        testWhisperStatus explicitTestWhisperStatus: FirstRunOnboardingTestWhisperStatus? = nil
+    ) {
+        let testWhisperStatus = explicitTestWhisperStatus ??
+            (firstRunOnboardingCoordinator.metadata.testWhisperCompleted ? .succeeded : .notStarted)
+        firstRunOnboardingStep = firstRunOnboardingCoordinator.update(with: FirstRunOnboardingGateSnapshot(
+            authState: authCoordinatorState,
+            microphoneStatus: Self.firstRunMicrophonePermissionCategory(
+                from: AVCaptureDevice.authorizationStatus(for: .audio)
+            ),
+            accessibilityStatus: hasAccessibility ? .granted : .notDetermined,
+            testWhisperStatus: testWhisperStatus
+        ))
+    }
+
+    private static func firstRunMicrophonePermissionCategory(
+        from status: AVAuthorizationStatus
+    ) -> FirstRunOnboardingPermissionCategory {
+        switch status {
+        case .authorized:
+            return .granted
+        case .notDetermined:
+            return .notDetermined
+        case .denied:
+            return .denied
+        case .restricted:
+            return .restricted
+        @unknown default:
+            return .unknown
+        }
+    }
+
+    func markFirstRunTestWhisperCompleted() {
+        refreshFirstRunOnboardingState(testWhisperStatus: .succeeded)
+    }
+
+    func resetFirstRunOnboardingForQA() {
+        firstRunOnboardingCoordinator.resetForQA()
+        hasCompletedSetup = false
+        refreshFirstRunOnboardingState(testWhisperStatus: .notStarted)
+        restartHotkeyMonitoring()
     }
 
     deinit {
@@ -1315,8 +1380,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
         hasScreenRecordingPermission = hasScreenCapturePermission()
         accessibilityTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
-                self?.hasAccessibility = AXIsProcessTrusted()
-                self?.hasScreenRecordingPermission = self?.hasScreenCapturePermission() ?? false
+                guard let self else { return }
+                self.hasAccessibility = AXIsProcessTrusted()
+                self.hasScreenRecordingPermission = self.hasScreenCapturePermission()
+                self.refreshFirstRunOnboardingState()
             }
         }
     }
@@ -1342,6 +1409,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
             refreshAvailableMicrophones()
+            refreshFirstRunOnboardingState()
             DispatchQueue.main.async {
                 completion(true)
             }
@@ -1351,16 +1419,19 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     if granted {
                         self?.refreshAvailableMicrophones()
                     }
+                    self?.refreshFirstRunOnboardingState()
                     completion(granted)
                 }
             }
         case .denied, .restricted:
             openMicrophoneSettings()
+            refreshFirstRunOnboardingState()
             DispatchQueue.main.async {
                 completion(false)
             }
         @unknown default:
             openMicrophoneSettings()
+            refreshFirstRunOnboardingState()
             DispatchQueue.main.async {
                 completion(false)
             }
@@ -1847,6 +1918,18 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func validateShortcutStartGate(mode: RecordingTriggerMode) -> Bool {
+        refreshFirstRunOnboardingState()
+        guard firstRunOnboardingStep.allowsNormalDictation else {
+            cancelPendingShortcutStart()
+            shortcutSessionController.reset()
+            activeRecordingTriggerMode = nil
+            currentSessionIntent = .dictation
+            statusText = "Complete onboarding"
+            debugStatusMessage = "Onboarding blocked: \(firstRunOnboardingStep.rawValue)"
+            NotificationCenter.default.post(name: .showSetup, object: nil)
+            return false
+        }
+
         guard hasCompletedSetup else {
             cancelPendingShortcutStart()
             shortcutSessionController.reset()
@@ -1892,6 +1975,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         if isRecording {
             stopAndTranscribe()
         } else {
+            guard validateShortcutStartGate(mode: .toggle) else { return }
             shortcutSessionController.beginManual(mode: .toggle)
             startRecording(triggerMode: .toggle)
         }
