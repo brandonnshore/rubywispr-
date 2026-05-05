@@ -1076,7 +1076,9 @@ struct SetupView: View {
     }
 
     func saveCustomVocabularyAndContinue() {
-        appState.customVocabulary = customVocabularyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        appState.importPersonalDictionaryTerms(
+            fromRawVocabulary: customVocabularyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
         withAnimation {
             currentStep = nextStep(currentStep)
         }

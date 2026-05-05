@@ -205,7 +205,7 @@ final class PipelineHistoryStore {
                 entity.contextScreenshotStatus = item.contextScreenshotStatus
                 entity.postProcessingStatus = item.postProcessingStatus
                 entity.debugStatus = item.debugStatus
-                entity.customVocabulary = item.customVocabulary
+                entity.customVocabulary = ""
                 entity.audioFileName = item.audioFileName
                 entity.contextAppName = item.contextAppName
                 entity.contextBundleIdentifier = item.contextBundleIdentifier
@@ -283,7 +283,7 @@ final class PipelineHistoryStore {
             contextScreenshotStatus: entity.contextScreenshotStatus ?? "available (image)",
             postProcessingStatus: entity.postProcessingStatus ?? "",
             debugStatus: entity.debugStatus ?? "",
-            customVocabulary: entity.customVocabulary ?? "",
+            customVocabulary: "",
             audioFileName: entity.audioFileName,
             contextAppName: entity.contextAppName,
             contextBundleIdentifier: entity.contextBundleIdentifier,

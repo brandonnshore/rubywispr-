@@ -212,7 +212,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private let toggleShortcutStorageKey = "toggle_shortcut"
     private let savedHoldCustomShortcutStorageKey = "saved_hold_custom_shortcut"
     private let savedToggleCustomShortcutStorageKey = "saved_toggle_custom_shortcut"
-    private let customVocabularyStorageKey = "custom_vocabulary"
     private let transcriptionLanguageStorageKey = "transcription_language"
     private let selectedMicrophoneStorageKey = "selected_microphone_id"
     private let customSystemPromptStorageKey = "custom_system_prompt"
@@ -383,11 +382,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
-    @Published var customVocabulary: String {
-        didSet {
-            UserDefaults.standard.set(customVocabulary, forKey: customVocabularyStorageKey)
-        }
-    }
+    @Published private(set) var customVocabulary: String
+    @Published private(set) var personalDictionaryTerms: [PersonalDictionaryTerm]
+    @Published private(set) var isPersonalDictionaryEnabled: Bool
 
     @Published var transcriptionLanguage: String {
         didSet {
@@ -582,6 +579,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var audioDeviceObservers: [NSObjectProtocol] = []
     private var needsMicrophoneRefreshAfterRecording = false
     private let pipelineHistoryStore = PipelineHistoryStore()
+    private let personalDictionaryStore: PersonalDictionaryStore
     private let shortcutSessionController = DictationShortcutSessionController()
     private var activeRecordingTriggerMode: RecordingTriggerMode?
     private var currentSessionIntent: SessionIntent = .dictation
@@ -641,7 +639,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
             forKey: savedToggleCustomShortcutStorageKey,
             fallback: shortcuts.toggle.isCustom ? shortcuts.toggle : nil
         )
-        let customVocabulary = UserDefaults.standard.string(forKey: customVocabularyStorageKey) ?? ""
+        let personalDictionaryStore = PersonalDictionaryStore()
+        let personalDictionaryTerms = personalDictionaryStore.listTerms()
+        let isPersonalDictionaryEnabled = personalDictionaryStore.isEnabled
+        let customVocabulary = personalDictionaryStore.termsForCleanupPayload().joined(separator: "\n")
         let transcriptionLanguage = Self.normalizeTranscriptionLanguage(
             UserDefaults.standard.string(forKey: transcriptionLanguageStorageKey) ?? ""
         )
@@ -739,6 +740,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.commandModeStyle = commandModeStyle
         self.commandModeManualModifier = commandModeManualModifier
         self.customVocabulary = customVocabulary
+        self.personalDictionaryTerms = personalDictionaryTerms
+        self.isPersonalDictionaryEnabled = isPersonalDictionaryEnabled
         self.transcriptionLanguage = transcriptionLanguage
         self.customSystemPrompt = customSystemPrompt
         self.customContextPrompt = customContextPrompt
@@ -756,6 +759,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.soundVolume = soundVolume
         self.voiceMacros = initialMacros
         self.pipelineHistory = savedHistory
+        self.personalDictionaryStore = personalDictionaryStore
         self.authStateOwner = authStateOwner
         self.desktopLoginBridge = desktopLoginBridge
         self.firstRunOnboardingCoordinator = firstRunOnboardingCoordinator
@@ -799,6 +803,44 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         // Clear any stale recording flag left over from an unclean exit.
         AppState.writeRecordingStateFlag(false)
+    }
+
+    @discardableResult
+    func addPersonalDictionaryTerm(_ rawTerm: String) throws -> PersonalDictionaryTerm {
+        let term = try personalDictionaryStore.addTerm(rawTerm)
+        refreshPersonalDictionaryState()
+        return term
+    }
+
+    @discardableResult
+    func editPersonalDictionaryTerm(id: String, rawTerm: String) throws -> PersonalDictionaryTerm {
+        let term = try personalDictionaryStore.editTerm(id: id, rawTerm: rawTerm)
+        refreshPersonalDictionaryState()
+        return term
+    }
+
+    func deletePersonalDictionaryTerm(id: String) throws {
+        try personalDictionaryStore.deleteTerm(id: id)
+        refreshPersonalDictionaryState()
+    }
+
+    func setPersonalDictionaryEnabled(_ enabled: Bool) {
+        personalDictionaryStore.setEnabled(enabled)
+        refreshPersonalDictionaryState()
+    }
+
+    func importPersonalDictionaryTerms(fromRawVocabulary rawVocabulary: String) {
+        let rawTerms = rawVocabulary.split(whereSeparator: { $0 == "\n" || $0 == "," || $0 == ";" })
+        for rawTerm in rawTerms {
+            _ = try? personalDictionaryStore.addTerm(String(rawTerm))
+        }
+        refreshPersonalDictionaryState()
+    }
+
+    private func refreshPersonalDictionaryState() {
+        personalDictionaryTerms = personalDictionaryStore.listTerms()
+        isPersonalDictionaryEnabled = personalDictionaryStore.isEnabled
+        customVocabulary = personalDictionaryStore.termsForCleanupPayload().joined(separator: "\n")
     }
 
     private static func makeDesktopAccountSnapshotLoader(
@@ -1432,7 +1474,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         contextScreenshotStatus: item.contextScreenshotStatus,
                         postProcessingStatus: processingStatus,
                         debugStatus: "Retried",
-                        customVocabulary: item.customVocabulary,
+                        customVocabulary: "",
                         audioFileName: item.audioFileName,
                         contextAppName: item.contextAppName,
                         contextBundleIdentifier: item.contextBundleIdentifier,
@@ -1465,7 +1507,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         contextScreenshotStatus: item.contextScreenshotStatus,
                         postProcessingStatus: "Error: \(error.localizedDescription)",
                         debugStatus: "Retry failed",
-                        customVocabulary: item.customVocabulary,
+                        customVocabulary: "",
                         audioFileName: item.audioFileName,
                         contextAppName: item.contextAppName,
                         contextBundleIdentifier: item.contextBundleIdentifier,
@@ -3139,7 +3181,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 ?? "available (\(context.screenshotMimeType ?? "image"))",
             postProcessingStatus: processingStatus,
             debugStatus: debugStatusMessage,
-            customVocabulary: customVocabulary,
+            customVocabulary: "",
             audioFileName: audioFileName,
             contextAppName: context.appName,
             contextBundleIdentifier: context.bundleIdentifier,
