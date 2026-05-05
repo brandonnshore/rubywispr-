@@ -132,7 +132,7 @@ The desktop request body must contain only the fields accepted by
 | `cleanupEnabled` | User cleanup setting, default enabled. | Boolean only. |
 | `contextAwareCleanupEnabled` | User context-aware cleanup setting after Terms/Privacy acceptance. | Boolean only. If false, omit `context`. |
 | `context` | Optional transient context collected under approved local setting. | Body only, never log/store. Omit if disabled, unavailable, too large, or unsafe to collect. |
-| `dictionaryTerms` | Optional local user dictionary/custom vocabulary when enabled. | Body only, never log/store. Omit if disabled or empty. |
+| `dictionaryTerms` | Optional local user dictionary/custom vocabulary when cleanup and dictionary support are enabled under `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md`. | Body only, never log/store. Omit if cleanup is disabled, dictionary support is disabled, Terms/Privacy acceptance is missing, invalid, or empty. |
 
 Redaction rules:
 
@@ -145,6 +145,9 @@ Redaction rules:
 - Dictionary data and context are user content. They may be sent transiently to
   the backend only when the user-enabled local settings allow it; otherwise omit
   the fields entirely.
+- Dictionary add/edit/delete, validation, local-only persistence, disabled
+  cleanup behavior, and downstream test seams are defined in
+  `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md`.
 - Clipboard content must not be sent in the upload request unless a future
   approved contract explicitly defines a context source and user control for it.
 
@@ -246,6 +249,9 @@ Approved local policies for v0.1:
 - App settings may store booleans and local preferences such as cleanup enabled,
   context-aware cleanup enabled, and whether dictionary support is enabled. They
   must not store provider secrets.
+- Local dictionary term storage is allowed only under
+  `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md`; terms must not sync or
+  persist server-side in v0.1.
 - Support and analytics may record only metadata categories/numbers allowed by
   `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md#metadata-allowlist` plus local
   cleanup lifecycle flags without paths or user content.

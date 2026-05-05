@@ -242,6 +242,9 @@ Dictionary:
 
 - Add/edit/delete local terms.
 - Empty state for first term.
+- Make local-only v0.1 storage clear.
+- Follow `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md` for validation,
+  disabled cleanup behavior, synthetic proof data, and no-sync privacy copy.
 
 Hotkeys:
 

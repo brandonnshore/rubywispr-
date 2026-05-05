@@ -172,10 +172,11 @@ FR-020 Recent Wisprs: The app must store final cleaned Recent Wisprs locally for
 
 FR-021 Personal dictionary: The app must support local personal dictionary terms.
 
-- Acceptance criteria: user can add/edit/delete local terms and cleanup honors them where feasible.
-- Validate by running: settings test and manual cleanup sample.
-- Required tests: dictionary persistence tests.
-- Security/privacy: local only in v0.1.
+- Acceptance criteria: user can add/edit/delete local terms; valid active terms are stored locally only; cleanup honors them where feasible only when cleanup and dictionary support are enabled.
+- Validate by running: settings/storage tests, cleanup payload-shaping tests, and manual cleanup sample with synthetic terms.
+- Required tests: dictionary persistence, deletion, validation, cleanup-disabled omission, payload shaping, and redaction tests.
+- Security/privacy: local only in v0.1; never synced or persisted server-side; terms may be sent only as transient cleanup request body content under `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md`.
+- Contract: `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md` defines term shape, add/edit/delete behavior, validation limits, disabled cleanup behavior, transient payload boundary, and downstream test seams.
 
 FR-022 Settings: The app must include settings sections for Account, Plan, Dictionary, Hotkeys, Appearance, and Advanced.
 
@@ -454,10 +455,15 @@ Request:
   "osVersion": "macOS 15.x",
   "cleanupEnabled": true,
   "contextAwareCleanupEnabled": true,
-  "dictionaryTerms": ["local", "terms"],
+  "dictionaryTerms": ["term_placeholder_alpha", "term_placeholder_beta"],
   "context": "<optional transient context>"
 }
 ```
+
+`dictionaryTerms` is optional transient body content. It must be omitted when
+cleanup is disabled, dictionary support is disabled, Terms/Privacy acceptance is
+missing, or no valid active local terms exist. The full source-safe contract is
+`docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md`.
 
 Response success:
 
@@ -629,7 +635,9 @@ WHEN an admin page is requested, THE SYSTEM SHALL verify admin role server-side 
 - Recent Wisprs retention, clear/disable controls, insertion status semantics,
   metadata-only evidence, and no-sync backend boundary are defined in
   `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
-- Personal dictionary local-only in v0.1.
+- Personal dictionary local-only in v0.1; no sync or server-side persistence.
+- Personal dictionary terms may be sent only transiently during eligible cleanup
+  requests and must be omitted when cleanup or dictionary support is disabled.
 - Terms/Privacy acceptance before first dictation.
 
 ## Accessibility Requirements
@@ -679,6 +687,7 @@ Automated:
 - Settings/history/dictionary local persistence tests, including the
   `docs/RW_070_RECENT_WISPRS_CONTRACT.md` seams for retention cleanup, clear
   history, disabled history, insertion status, and no-backend-sync assertions.
+- Dictionary cleanup payload-shaping and deletion tests.
 - Backend provider mock tests.
 
 Manual:

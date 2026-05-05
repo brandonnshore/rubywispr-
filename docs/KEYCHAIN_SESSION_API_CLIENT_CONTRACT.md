@@ -195,8 +195,9 @@ Request:
 - Body: audio as the backend-approved binary or multipart payload plus
   metadata. The client must not place audio or text in URL parameters.
 - Metadata: `audioDurationMs`, app version, build/channel when available, OS
-  version, platform, cleanup flags, and context/dictionary data only when the
-  user has enabled those local settings.
+  version, platform, cleanup flags, context only when context-aware cleanup is
+  enabled, and dictionary data only when cleanup and dictionary support are
+  enabled under `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md`.
 - Cache: backend success and error responses must set
   `Cache-Control: no-store`.
 
@@ -225,10 +226,10 @@ Error mapping:
 | `internal_error` | `error` | `retry_or_contact_support` | Bounded retry only when the backend indicates it is safe. |
 
 The transcription route must remain a privacy gateway. The backend may process
-audio, context, raw transcript, and cleaned text transiently, but it must not
-persist those bodies. Desktop logs and support metadata may record only allowed
-categorical/numeric metadata such as request ID, error code, duration, word
-count, latency, provider category, app version, and OS version.
+audio, context, dictionary terms, raw transcript, and cleaned text transiently,
+but it must not persist those bodies. Desktop logs and support metadata may
+record only allowed categorical/numeric metadata such as request ID, error code,
+duration, word count, latency, provider category, app version, and OS version.
 
 ## Retry And Concurrency Boundaries
 
