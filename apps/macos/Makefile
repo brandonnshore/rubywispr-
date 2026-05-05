@@ -26,7 +26,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-hotkey-manager
+.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-hotkey-manager test-secret-guardrails
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -147,6 +147,18 @@ test-backend-client:
 		Tests/RubyWhisperBackendAPIClientTests.swift
 	$(BUILD_DIR)/tests/RubyWhisperBackendAPIClientTests
 
+test-auth-state-owner:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-o $(BUILD_DIR)/tests/DesktopAuthStateOwnerTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Sources/DesktopSessionStore.swift \
+		Sources/RubyWhisperBackendAPIClient.swift \
+		Sources/DesktopAuthStateOwner.swift \
+		Tests/DesktopAuthStateOwnerTests.swift
+	$(BUILD_DIR)/tests/DesktopAuthStateOwnerTests
+
 test-hotkey-manager:
 	@mkdir -p $(BUILD_DIR)/tests
 	swiftc \
@@ -164,4 +176,14 @@ test-hotkey-manager:
 		Tests/HotkeyManagerTests.swift
 	$(BUILD_DIR)/tests/HotkeyManagerTests
 
-test: test-session-store test-backend-client test-hotkey-manager
+test-secret-guardrails:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-parse-as-library \
+		-o $(BUILD_DIR)/tests/SourceGuardrailTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Tests/SourceGuardrailTests.swift
+	$(BUILD_DIR)/tests/SourceGuardrailTests
+
+test: test-session-store test-backend-client test-auth-state-owner test-hotkey-manager test-secret-guardrails
