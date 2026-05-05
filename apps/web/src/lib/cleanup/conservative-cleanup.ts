@@ -3,6 +3,8 @@ import "server-only";
 import type {
   RubyWhisperProviderCleanupInput,
   RubyWhisperProviderClient,
+  RubyWhisperProviderError,
+  RubyWhisperProviderErrorMetadata,
   RubyWhisperProviderName,
 } from "@/lib/providers/client";
 
@@ -36,6 +38,8 @@ export type RubyWhisperConservativeCleanupResult = Readonly<{
   cleanupApplied: boolean;
   cleanupAttempted: boolean;
   fallbackUsed: boolean;
+  error?: RubyWhisperProviderError;
+  metadata?: RubyWhisperProviderErrorMetadata;
   provider?: RubyWhisperProviderName;
   providerLatencyMs?: number;
 }>;
@@ -145,6 +149,12 @@ export async function runRubyWhisperConservativeCleanup(
       cleanedText: transcriptText,
       cleanupApplied: false,
       cleanupAttempted: true,
+      ...(!cleanupResult?.ok && cleanupResult?.error
+        ? {
+            error: cleanupResult.error,
+            metadata: cleanupResult.metadata,
+          }
+        : {}),
       fallbackUsed: true,
     });
   }
@@ -179,7 +189,9 @@ function createCleanupResult(
     cleanedText: result.cleanedText,
     cleanupApplied: result.cleanupApplied,
     cleanupAttempted: result.cleanupAttempted,
+    ...(result.error ? { error: result.error } : {}),
     fallbackUsed: result.fallbackUsed,
+    ...(result.metadata ? { metadata: result.metadata } : {}),
     ...(result.provider ? { provider: result.provider } : {}),
     ...(typeof result.providerLatencyMs === "number"
       ? { providerLatencyMs: result.providerLatencyMs }

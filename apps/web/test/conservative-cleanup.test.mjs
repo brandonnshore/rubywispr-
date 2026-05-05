@@ -119,7 +119,7 @@ test("conservative cleanup calls provider transiently when enabled", async () =>
   ]);
 });
 
-test("conservative cleanup returns original transcript when disabled or provider fails", async () => {
+test("conservative cleanup returns original transcript and metadata when provider fails", async () => {
   const cleanup = await loadConservativeCleanupModule();
   let providerCalls = 0;
   const disabledResult = await cleanup.runRubyWhisperConservativeCleanup({
@@ -145,7 +145,10 @@ test("conservative cleanup returns original transcript when disabled or provider
             message: "Synthetic cleanup unavailable.",
             retryable: true,
           },
-          metadata: { provider: "mock_provider" },
+          metadata: {
+            provider: "mock_provider",
+            providerLatencyMs: 18,
+          },
           ok: false,
         };
       },
@@ -173,7 +176,17 @@ test("conservative cleanup returns original transcript when disabled or provider
     cleanedText: "synthetic transcript",
     cleanupApplied: false,
     cleanupAttempted: true,
+    error: {
+      apiErrorCode: "provider_error",
+      code: "provider_unavailable",
+      message: "Synthetic cleanup unavailable.",
+      retryable: true,
+    },
     fallbackUsed: true,
+    metadata: {
+      provider: "mock_provider",
+      providerLatencyMs: 18,
+    },
   });
   assert.deepEqual(toPlainObject(thrownFallbackResult), {
     cleanedText: "synthetic transcript",
