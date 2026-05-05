@@ -17,6 +17,15 @@ const requireCommonJs = createRequire(import.meta.url);
 const webRoot = path.join(repoRoot, "apps", "web");
 const adminAuthPath = path.join(webRoot, "src", "lib", "admin", "auth.ts");
 const adminPagePath = path.join(webRoot, "src", "app", "admin", "page.tsx");
+const privateCriticalFlowSentinels = [
+  "PRIVATE_AUDIO_SENTINEL",
+  "PRIVATE_TRANSCRIPT_SENTINEL",
+  "PRIVATE_CLIPBOARD_SENTINEL",
+  "PRIVATE_PAYMENT_CARD_SENTINEL",
+  "PRIVATE_INVOICE_SENTINEL",
+  "sk_live_rw_should_not_render",
+  "PRIVATE_CUSTOMER_CONTENT_SENTINEL",
+];
 
 test("admin page boundary allows signed-in active admins", async () => {
   const boundary = await loadAdminAuthModule();
@@ -155,7 +164,7 @@ test("admin page renders admin content only for active admins", async () => {
 
 test("admin page renders mocked source metadata without private content fields", async () => {
   const privateContentPattern =
-    /raw transcript|cleaned text|clipboard|dictionary|request body|response body|authorization token|provider payload|private backend detail/i;
+    /raw[_ ]?transcript|cleaned[_ ]?text|clipboard|dictionary|request body|response body|authorization token|provider payload|payment[_ -]?card|invoice|sk_(?:live|test)|private backend detail/i;
   const pageModule = await loadAdminPageModule({
     readDashboardSnapshot: async () => createMockDashboardSnapshot(),
     requireAdminForPage: async () =>
@@ -172,6 +181,7 @@ test("admin page renders mocked source metadata without private content fields",
   assert.match(markup, /FRIENDS-2026/);
   assert.doesNotMatch(markup, /req_rw_private_001|stripePromotionCodeId|promo_/i);
   assert.doesNotMatch(markup, privateContentPattern);
+  assertNoPrivateCriticalFlowSentinels(markup);
 });
 
 test("admin page renders sanitized Friend of Ruby batch creation feedback", async () => {
@@ -416,6 +426,7 @@ function createMockDashboardSnapshot() {
             created_at: "2026-05-04T00:00:00.000Z",
             email: "admin@example.test",
             is_blocked: false,
+            private_customer_content: privateCriticalFlowSentinels[6],
             terms_accepted_at: "2026-05-04T00:00:00.000Z",
           },
         ],
@@ -456,8 +467,11 @@ function createMockDashboardSnapshot() {
             clerk_user_id: "user_rw_synthetic_admin_001",
             current_period_end: "2026-06-04T00:00:00.000Z",
             friend_of_ruby_until: null,
+            invoice_pdf: privateCriticalFlowSentinels[4],
+            payment_card_label: privateCriticalFlowSentinels[3],
             plan: "monthly",
             status: "active",
+            stripe_live_secret: privateCriticalFlowSentinels[5],
             updated_at: "2026-05-04T00:00:00.000Z",
           },
         ],
@@ -468,7 +482,9 @@ function createMockDashboardSnapshot() {
         rows: [
           {
             app_version: "0.1.0",
+            audio_uri: privateCriticalFlowSentinels[0],
             audio_duration_ms: 1200,
+            clipboard_text: privateCriticalFlowSentinels[2],
             cleaned_word_count: 2500,
             clerk_user_id: "user_rw_synthetic_admin_001",
             created_at: "2026-05-04T00:00:00.000Z",
@@ -477,6 +493,7 @@ function createMockDashboardSnapshot() {
             os_version: "macOS 15.0",
             plan_state: "paid_active",
             provider: "mock_provider",
+            raw_transcript: privateCriticalFlowSentinels[1],
             status: "failure",
           },
         ],
@@ -514,4 +531,14 @@ async function assertRejectsRedirect(promise, expectedUrl) {
 
 function toPlainObject(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function assertNoPrivateCriticalFlowSentinels(markup) {
+  for (const sentinel of privateCriticalFlowSentinels) {
+    assert.doesNotMatch(markup, new RegExp(escapeRegex(sentinel)));
+  }
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

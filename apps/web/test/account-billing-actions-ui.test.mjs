@@ -23,6 +23,48 @@ const accountActionsPath = path.join(
   "account",
   "actions.ts",
 );
+const privateCriticalFlowSentinels = [
+  "PRIVATE_AUDIO_SENTINEL",
+  "PRIVATE_TRANSCRIPT_SENTINEL",
+  "PRIVATE_CLIPBOARD_SENTINEL",
+  "PRIVATE_PAYMENT_CARD_SENTINEL",
+  "PRIVATE_INVOICE_SENTINEL",
+  "sk_live_rw_should_not_render",
+  "PRIVATE_CUSTOMER_CONTENT_SENTINEL",
+];
+
+test("RW-087A signed-out account protected route redirects before mocked Terms, account, billing, or download state loads", async () => {
+  const calls = [];
+  const pageModule = await loadAccountPageModule({
+    readAccountPageMetadata: async () => {
+      calls.push("account.metadata");
+      return activeTrialAccountMetadata();
+    },
+    readAccountTermsAcceptanceState: async () => {
+      calls.push("terms.state");
+      return {
+        status: "required",
+      };
+    },
+    requireClerkUserIdForPage: async () => {
+      calls.push("account.guard");
+      throw Object.assign(new Error("NEXT_REDIRECT"), { url: "/sign-in" });
+    },
+  });
+
+  await assertRejectsRedirect(
+    pageModule.default({
+      searchParams: Promise.resolve({
+        billing: "customer_missing",
+        checkout: "success",
+        terms: "accepted",
+      }),
+    }),
+    "/sign-in",
+  );
+
+  assert.deepEqual(calls, ["account.guard"]);
+});
 
 test("signed-in account page renders account metadata, usage, download, and billing actions without provider internals", async () => {
   const pageModule = await loadAccountPageModule();
@@ -88,6 +130,41 @@ test("signed-in account page renders account metadata, usage, download, and bill
   assert.doesNotMatch(source, /\bSTRIPE_[A-Z0-9_]+\b/);
   assert.doesNotMatch(source, /\bcus_[A-Za-z0-9_]+\b/);
   assert.doesNotMatch(source, /\bpayment_method\b|\bcard\b|\binvoice\b/);
+});
+
+test("RW-087A signed-in account-ready path renders accepted Terms, paid plan, download, and sanitized metadata only", async () => {
+  const pageModule = await loadAccountPageModule({
+    accountMetadata: paidAccountMetadataWithPrivateSentinels(),
+    latestAppDownloadUrl: "https://downloads.rubywhisper.test/RubyWhisper.dmg",
+    readAccountTermsAcceptanceState: async () => ({
+      status: "accepted",
+      termsAcceptedAt: "2026-05-04T12:00:00.000Z",
+    }),
+  });
+  const markup = renderToStaticMarkup(
+    await pageModule.default({
+      searchParams: Promise.resolve({
+        checkout: "success",
+        terms: "accepted",
+      }),
+    }),
+  );
+
+  assert.match(markup, /Terms and Privacy accepted/);
+  assert.match(markup, /Acceptance has been recorded for this account\./);
+  assert.match(markup, /Paid Active/);
+  assert.match(markup, /Current plan<\/dt><dd>Annual/);
+  assert.match(markup, /Subscription status<\/dt><dd>Active/);
+  assert.match(markup, /Can transcribe<\/dt><dd>Yes/);
+  assert.match(markup, /Checkout was completed\. Your account may take a moment to update\./);
+  assert.match(markup, /Download RubyWhisper Mac beta/);
+  assert.match(
+    markup,
+    /href="https:\/\/downloads\.rubywhisper\.test\/RubyWhisper\.dmg"/,
+  );
+  assert.match(markup, /Manage billing/);
+  assertNoPrivateCriticalFlowSentinels(markup);
+  assert.doesNotMatch(markup, /\bpayment_method\b|\bcard\b|\binvoice\b/);
 });
 
 test("account page shows sanitized unavailable metadata states and configured direct download", async () => {
@@ -336,12 +413,15 @@ function createAccountPageRequire(overrides) {
         };
       case "@/lib/auth/clerk":
         return {
-          requireClerkUserIdForPage: async () => "user_rw_synthetic_member_001",
+          requireClerkUserIdForPage:
+            overrides.requireClerkUserIdForPage ??
+            (async () => "user_rw_synthetic_member_001"),
         };
       case "./metadata":
         return {
-          readAccountPageMetadata: async () =>
-            overrides.accountMetadata ?? activeTrialAccountMetadata(),
+          readAccountPageMetadata:
+            overrides.readAccountPageMetadata ??
+            (async () => overrides.accountMetadata ?? activeTrialAccountMetadata()),
         };
       case "./actions":
         return {
@@ -352,9 +432,11 @@ function createAccountPageRequire(overrides) {
         };
       case "./terms-acceptance":
         return {
-          readAccountTermsAcceptanceState: async () => ({
-            status: "required",
-          }),
+          readAccountTermsAcceptanceState:
+            overrides.readAccountTermsAcceptanceState ??
+            (async () => ({
+              status: "required",
+            })),
         };
       default:
         throw new Error(`Unexpected account page dependency ${specifier}`);
@@ -442,6 +524,90 @@ function unavailableAccountMetadata() {
       reason: "service_unavailable",
     },
   };
+}
+
+function paidAccountMetadataWithPrivateSentinels() {
+  return {
+    profile: {
+      ok: true,
+      value: {
+        clerkUserId: "user_rw_synthetic_member_001",
+        email: "member@example.com",
+        isBlocked: false,
+        privateAudioLabel: privateCriticalFlowSentinels[0],
+        privateCustomerContent: privateCriticalFlowSentinels[6],
+        termsAcceptedAt: "2026-05-04T12:00:00.000Z",
+      },
+    },
+    snapshot: {
+      ok: true,
+      value: {
+        accountStatus: "active",
+        billingPortalAvailable: true,
+        billingPortalUrl: null,
+        canTranscribe: true,
+        clipboardPreview: privateCriticalFlowSentinels[2],
+        email: "member@example.com",
+        isTrialExhausted: false,
+        isTrialLow: false,
+        lifetimeWordsUsed: 10_000,
+        monthlyPeriodStart: "2026-05-01",
+        monthlyWordsUsed: 2_500,
+        paymentCardPreview: privateCriticalFlowSentinels[3],
+        planState: "paid_active",
+        preflightPolicy: "allow_if_started_under_limit",
+        termsAccepted: true,
+        trialWordsLimit: 5_000,
+        trialWordsRemaining: 0,
+        trialWordsUsed: 5_000,
+      },
+    },
+    subscription: {
+      ok: true,
+      value: {
+        clerkUserId: "user_rw_synthetic_member_001",
+        currentPeriodEnd: "2026-06-04T00:00:00.000Z",
+        hasActiveSubscription: true,
+        invoiceUrl: privateCriticalFlowSentinels[4],
+        isFriendOfRubyActive: false,
+        paymentFailed: false,
+        plan: "annual",
+        planState: "paid_active",
+        requiresSubscription: false,
+        stripeCustomerId: "cus_rw_should_not_render",
+        stripeLiveSecret: privateCriticalFlowSentinels[5],
+        subscriptionStatus: "active",
+        transcriptStorageLabel: privateCriticalFlowSentinels[1],
+        updatedAt: "2026-05-04T12:00:00.000Z",
+      },
+    },
+    usageCounters: {
+      ok: true,
+      value: {
+        audioBytesLabel: privateCriticalFlowSentinels[0],
+        clerkUserId: "user_rw_synthetic_member_001",
+        isTrialExhausted: false,
+        isTrialLow: false,
+        lifetimeWordsUsed: 10_000,
+        monthlyPeriodStart: "2026-05-01",
+        monthlyWordsUsed: 2_500,
+        trialWordsLimit: 5_000,
+        trialWordsRemaining: 0,
+        trialWordsUsed: 5_000,
+        updatedAt: "2026-05-04T12:00:00.000Z",
+      },
+    },
+  };
+}
+
+function assertNoPrivateCriticalFlowSentinels(markup) {
+  for (const sentinel of privateCriticalFlowSentinels) {
+    assert.doesNotMatch(markup, new RegExp(escapeRegex(sentinel)));
+  }
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function createAccountActionsRequire(calls, overrides) {
