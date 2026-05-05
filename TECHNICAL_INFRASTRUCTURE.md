@@ -390,6 +390,9 @@ Mac app:
 - Signed and notarized through Apple Developer account.
 - Auto-update through Sparkle or chosen updater.
 - Mac App Store is future/later.
+- Use `docs/MAC_BETA_RELEASE_RUNBOOK.md` as the placeholder-only human release
+  checklist for signing, notarization, packaging, attribution, checksum notes,
+  appcast preparation, and clean-Mac validation.
 
 ### Direct-Download macOS Release Spike
 

@@ -38,6 +38,10 @@ These steps require Brandon or another approved human release owner:
 | Configure production Sentry or equivalent crash/error reporting | RUB-123 |
 | Publish or change the public Mac download URL, signing secrets, or appcast/update channel | RW-105 and RUB-80 / RW-107 |
 
+The source checklist for the human-owned Mac beta signing, notarization,
+packaging, attribution, checksum, appcast, and clean-Mac QA sequence lives in
+`docs/MAC_BETA_RELEASE_RUNBOOK.md`.
+
 Agents may prepare docs, source-safe config, synthetic tests, and PRs. Agents
 must not perform live provider setup, deploy production, change DNS, read
 private env files, or paste credential values into Linear, PRs, docs, logs, or
