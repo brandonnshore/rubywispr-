@@ -166,7 +166,7 @@ final class RubyWhisperBackendAPIClient: DesktopLoginHandoffExchanging {
             return RubyWhisperDesktopAccountSnapshot(error: error)
         } catch {
             return RubyWhisperDesktopAccountSnapshot(
-                state: .signedOut,
+                state: .error,
                 canTranscribe: false,
                 recovery: .retry,
                 retryable: true,
@@ -568,7 +568,7 @@ struct RubyWhisperDesktopAccountSnapshot: Equatable {
         case .networkError:
             return (.networkError, .retry, true)
         case .serviceUnavailable, .internalError:
-            return (.signedOut, error.recovery ?? .retry, true)
+            return (.error, error.recovery ?? .retry, true)
         case .rateLimited:
             return (.error, .retryAfter, true)
         case .durationLimitReached:
@@ -624,6 +624,15 @@ struct RubyWhisperDesktopTranscriptionSuccess: Equatable {
     var cleanedText: String
     var cleanedWordCount: Int
     var usageMetadata: RubyWhisperDesktopTranscriptionUsageMetadata
+
+    var insertionInput: RubyWhisperDesktopInsertionInput {
+        RubyWhisperDesktopInsertionInput(
+            requestId: requestId,
+            cleanedText: cleanedText,
+            cleanedWordCount: cleanedWordCount,
+            usageMetadata: usageMetadata
+        )
+    }
 }
 
 struct RubyWhisperDesktopTranscriptionUsageMetadata: Equatable {
@@ -633,6 +642,85 @@ struct RubyWhisperDesktopTranscriptionUsageMetadata: Equatable {
     var trialWordsLimit: Int?
     var planState: RubyWhisperDesktopPlanState?
     var audioDurationMs: Int?
+}
+
+struct RubyWhisperDesktopInsertionInput: Equatable {
+    var requestId: String
+    var cleanedText: String
+    var cleanedWordCount: Int
+    var usageMetadata: RubyWhisperDesktopTranscriptionUsageMetadata
+}
+
+struct RubyWhisperDesktopCleanedTextRecoveryState: Equatable {
+    var cleanedText: String?
+
+    init(cleanedText: String?, allowed: Bool) {
+        guard allowed,
+              let trimmed = cleanedText?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            self.cleanedText = nil
+            return
+        }
+        self.cleanedText = trimmed
+    }
+
+    static let empty = RubyWhisperDesktopCleanedTextRecoveryState(cleanedText: nil, allowed: false)
+}
+
+enum RubyWhisperDesktopUploadTerminalState: Equatable {
+    case insertionPending(RubyWhisperDesktopInsertionInput, recovery: RubyWhisperDesktopCleanedTextRecoveryState)
+    case failed(RubyWhisperDesktopTranscriptionFailure, recovery: RubyWhisperDesktopCleanedTextRecoveryState)
+    case canceled
+
+    static func success(
+        _ success: RubyWhisperDesktopTranscriptionSuccess,
+        allowCleanedTextRecovery: Bool = false
+    ) -> RubyWhisperDesktopUploadTerminalState {
+        .insertionPending(
+            success.insertionInput,
+            recovery: RubyWhisperDesktopCleanedTextRecoveryState(
+                cleanedText: success.cleanedText,
+                allowed: allowCleanedTextRecovery
+            )
+        )
+    }
+
+    static func failure(
+        _ failure: RubyWhisperDesktopTranscriptionFailure,
+        cleanedText: String? = nil,
+        allowCleanedTextRecovery: Bool = false
+    ) -> RubyWhisperDesktopUploadTerminalState {
+        .failed(
+            failure,
+            recovery: RubyWhisperDesktopCleanedTextRecoveryState(
+                cleanedText: cleanedText,
+                allowed: allowCleanedTextRecovery
+            )
+        )
+    }
+
+    var insertionInput: RubyWhisperDesktopInsertionInput? {
+        if case .insertionPending(let input, _) = self {
+            return input
+        }
+        return nil
+    }
+
+    var failure: RubyWhisperDesktopTranscriptionFailure? {
+        if case .failed(let failure, _) = self {
+            return failure
+        }
+        return nil
+    }
+
+    var recoveryState: RubyWhisperDesktopCleanedTextRecoveryState {
+        switch self {
+        case .insertionPending(_, let recovery), .failed(_, let recovery):
+            return recovery
+        case .canceled:
+            return .empty
+        }
+    }
 }
 
 struct RubyWhisperDesktopTranscriptionFailure: Error, Equatable {

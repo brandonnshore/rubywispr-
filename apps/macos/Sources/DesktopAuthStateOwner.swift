@@ -596,7 +596,7 @@ extension RubyWhisperDesktopAccountSnapshot {
 
     static var accountRefreshUnavailable: RubyWhisperDesktopAccountSnapshot {
         RubyWhisperDesktopAccountSnapshot(
-            state: .signedOut,
+            state: .error,
             canTranscribe: false,
             recovery: .retry,
             retryable: true,
