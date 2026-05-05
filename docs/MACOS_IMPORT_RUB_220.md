@@ -38,8 +38,17 @@ Excluded:
 
 ## Follow-Up Boundaries
 
-RUB-220 is source import only. It does not rebrand FreeFlow surfaces, replace direct provider calls, reduce local persistence, add RubyWhisper island states, sign/notarize/package the app, or establish the final build command contract.
+RUB-220 is source import only. It does not rebrand FreeFlow surfaces, replace
+direct provider calls, reduce local persistence, add RubyWhisper island states,
+or sign/notarize/package the app.
 
-Build validation is deferred to RUB-221 / RW-060B. The imported source is known from prior audit evidence to be Makefile-based, with no upstream Xcode project, workspace, package, or schemes.
+RUB-221 / RW-060B established the local development build contract as:
+
+```bash
+make -C apps/macos clean all CODESIGN_IDENTITY=-
+```
+
+The imported source is Makefile-based, with no upstream Xcode project,
+workspace, package, or schemes.
 
 Before any beta or release workflow, preserve MIT attribution in distributed artifacts and complete the ADR-required backend proxy, privacy/storage, insertion recovery, island state, updater, icon/media, and release-surface refactors.

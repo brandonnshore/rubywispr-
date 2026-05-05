@@ -38,6 +38,32 @@ Excluded upstream surfaces and local/runtime content:
 
 ## Build Status
 
-No build was run as part of RUB-220. Build-command validation is deferred to RUB-221 / RW-060B because this import intentionally preserves the selected source base while leaving the RubyWhisper macOS build contract, rebrand, signing, notarization, and release packaging work to follow-up tickets.
+RUB-221 / RW-060B established the repo-local macOS build command contract after
+the RUB-220 import.
+
+Authoritative local Debug/ad hoc build command from the repository root:
+
+```bash
+make -C apps/macos clean all CODESIGN_IDENTITY=-
+```
+
+The Makefile is the local development build entrypoint. It uses direct `swiftc`
+compilation, copies `Info.plist` and resources into an app bundle, and signs
+with the provided `CODESIGN_IDENTITY`. Passing `CODESIGN_IDENTITY=-` selects ad
+hoc signing, which is the repeatable local developer path.
+
+Build output:
+
+```text
+apps/macos/build/FreeFlow Dev.app
+```
+
+The output name, bundle identifier, entitlements filename, and some resources
+still reflect the imported FreeFlow harness until later RubyWhisper rebrand and
+release-packaging tickets change them.
+
+`xcodebuild` is not authoritative for this imported source. There is no Xcode
+project, workspace, Swift package, or scheme under `apps/macos`; `xcodebuild -list`
+exits 66 in this directory.
 
 The imported upstream source is still a FreeFlow harness. It includes direct provider, updater, local settings, and local history behavior that must be refactored before RubyWhisper beta use.

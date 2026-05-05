@@ -195,10 +195,19 @@ Expected prerequisites:
 
 ### 4. Build And Sign
 
-Human gate: the release owner runs the final build command only after the
-macOS source import defines the authoritative build path.
+Human gate: the release owner runs the final release build command only after a
+release-packaging ticket defines that path. The current repo-local macOS
+development command is Makefile-based:
 
-Placeholder-only Xcode-style flow:
+```bash
+make -C apps/macos clean all CODESIGN_IDENTITY=-
+```
+
+That command creates an ad hoc local app bundle for development only; it is not
+a signed release, notarized artifact, or DMG.
+
+Placeholder-only Xcode-style release flow, not a current local development
+command:
 
 ```bash
 xcodebuild archive \

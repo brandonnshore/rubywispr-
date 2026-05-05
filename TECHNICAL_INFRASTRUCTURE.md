@@ -326,15 +326,20 @@ npm run build
 
 Backend validation uses the same commands because backend routes live inside the Next.js app. If a future ticket adds a narrower backend-only script, it must update this command contract before other tickets cite it.
 
-Blocked macOS command discovery after RW-010 audits FreeFlow and RUB-220 records the imported source path:
+RUB-221 / RW-060B macOS command discovery after the RUB-220 source import:
 
 ```bash
-xcodebuild -list
-xcodebuild -scheme <DiscoveredScheme> -configuration Debug build
-xcodebuild test -scheme <DiscoveredScheme>
+make -C apps/macos clean all CODESIGN_IDENTITY=-
 ```
 
-Do not treat the placeholder scheme as an active repo command. The imported `apps/macos` source is Makefile-based FreeFlow harness code, not an Xcode project. Until RUB-221 / RW-060B records the RubyWhisper macOS build command contract, macOS implementation tickets should cite the RW-060B build-command blocker instead of relying on a repo-local `xcodebuild` command.
+This is the authoritative repo-local macOS Debug/ad hoc build command. It uses
+the imported Makefile, direct `swiftc`, and ad hoc codesigning to produce
+`apps/macos/build/FreeFlow Dev.app`. The app name and bundle identifier still
+match the imported FreeFlow harness until a later rebrand ticket changes them.
+
+`xcodebuild` is not an authoritative local development command for the imported
+macOS source. `apps/macos` has no Xcode project, workspace, Swift package, or
+schemes, and `xcodebuild -list` exits 66 in that directory.
 
 ## Build, Test, Lint, Typecheck Commands
 
@@ -354,7 +359,18 @@ npm run test
 npm run build
 ```
 
-- macOS commands: blocked until RUB-221 / RW-060B records the RubyWhisper macOS build command contract for `apps/macos`. The imported harness is Makefile-based and has no upstream Xcode project, workspace, package, or schemes.
+- Exact macOS local Debug/ad hoc build command:
+
+  ```bash
+  make -C apps/macos clean all CODESIGN_IDENTITY=-
+  ```
+
+  The authoritative build entrypoint is the Makefile in `apps/macos`, not
+  `xcodebuild`. The command builds `apps/macos/build/FreeFlow Dev.app` with an
+  ad hoc signature (`Signature=adhoc`) and does not create a signed release,
+  notarized artifact, DMG, CI runner, or test target. Downstream Mac
+  implementation tickets should cite this command unless they explicitly add a
+  new Xcode or SwiftPM project contract.
 - CI command selection is blocked on RW-005 after the web scaffold and macOS import decisions exist.
 
 If a package manager other than npm is chosen, update this doc and all future issues before implementation work cites the new command.
