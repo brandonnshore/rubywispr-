@@ -48,7 +48,7 @@ const expectedRequestEventNames = [
   "backend.request.failed",
 ];
 const forbiddenPayloadPattern =
-  /payload must not echo|private audio|private transcript|private cleaned text|private context|private clipboard|private prompt|provider request body|provider response body|Bearer rw_synthetic_placeholder|rubywhisper\.env|\.env\.local/i;
+  /payload must not echo|private audio|private transcript|private cleaned text|private context|private clipboard|private dictionary|private prompt|provider request body|provider response body|term_placeholder_alpha|Bearer rw_synthetic_placeholder|rubywhisper\.env|\.env\.local/i;
 
 test("privacy log metadata exposes an explicit metadata-only allowlist", async () => {
   const privacyLogger = await loadPrivacyLoggerModule();
@@ -93,7 +93,8 @@ test("privacy log sanitizer preserves safe metadata and drops private payloads",
     clipboard: "private clipboard",
     context: "private context",
     cookie: "session=payload must not echo",
-    dictionaryTerms: ["payload must not echo"],
+    dictionaryContent: "private dictionary",
+    dictionaryTerms: ["term_placeholder_alpha"],
     durationMs: 42_000,
     errorCode: "provider_error",
     headers: { authorization: "Bearer rw_synthetic_placeholder" },

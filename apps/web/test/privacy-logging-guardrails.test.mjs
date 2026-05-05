@@ -90,6 +90,8 @@ const liveLookingFixturePatterns = [
     pattern: /https?:\/\/[^\s"'`]*(?:api\.groq\.com|api\.stripe\.com|clerk|supabase)[^\s"'`]*/i,
   },
 ];
+const transientDictionaryPayloadPattern =
+  /\bdictionaryTerms\b|\bdictionary_terms\b|term_placeholder_(?:alpha|beta|disabled)\b/i;
 
 test("sensitive web/backend source cannot add ad hoc logging or private stringification", async () => {
   const violations = [];
@@ -131,6 +133,7 @@ test("approved privacy logger remains side-effect free", async () => {
   assert.match(source, /^import\s+["']server-only["'];/m);
   assert.match(source, /sanitizeRubyWhisperPrivacyLogMetadata/);
   assert.match(source, /createRubyWhisperBackendRequestFailedLogEvent/);
+  assert.doesNotMatch(source, transientDictionaryPayloadPattern);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
   assert.doesNotMatch(source, /\bfetch\s*\(/);
   assert.doesNotMatch(source, /from\s+["'](?:@sentry\/[^"']+|pino|winston|next-logger|consola|debug)["']/i);
@@ -163,6 +166,12 @@ test("privacy logging fixtures stay synthetic and local", async () => {
   }
 
   assert.deepEqual(violations, []);
+});
+
+test("durable backend fixtures never store transient dictionary payloads", async () => {
+  const source = await readFile(syntheticBackendFixturesPath, "utf8");
+
+  assert.doesNotMatch(source, transientDictionaryPayloadPattern);
 });
 
 async function listSensitiveSourceFiles() {

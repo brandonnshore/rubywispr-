@@ -92,6 +92,7 @@ test("provider errors sanitize metadata before route mapping", async () => {
         audioDurationMs: 4200,
         cleanedText: "payload must not echo",
         context: "payload must not echo",
+        dictionaryTerms: ["term_placeholder_alpha"],
         providerLatencyMs: 210,
         providerRequestBody: "payload must not echo",
         rawTranscript: "payload must not echo",
@@ -120,7 +121,10 @@ test("provider errors sanitize metadata before route mapping", async () => {
       totalLatencyMs: 320,
     },
   });
-  assert.doesNotMatch(JSON.stringify(failure), /payload must not echo|Bearer/);
+  assert.doesNotMatch(
+    JSON.stringify(failure),
+    /payload must not echo|Bearer|term_placeholder_alpha/,
+  );
 });
 
 test("mock provider client supports synthetic transcription and cleanup", async () => {
