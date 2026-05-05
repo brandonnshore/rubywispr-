@@ -22,6 +22,7 @@ Imported app source and build inputs:
   RUB-222 metadata rebrand
 - `Resources/AppIcon-*.png`
 - `Resources/AppIcon*.icns`
+- `Resources/ThirdPartyNotices.md`
 - `.gitignore`
 - `LICENSE`
 
@@ -49,14 +50,21 @@ make -C apps/macos clean all CODESIGN_IDENTITY=-
 ```
 
 The Makefile is the local development build entrypoint. It uses direct `swiftc`
-compilation, copies `Info.plist` and resources into an app bundle, and signs
-with the provided `CODESIGN_IDENTITY`. Passing `CODESIGN_IDENTITY=-` selects ad
-hoc signing, which is the repeatable local developer path.
+compilation, copies `Info.plist`, icons, and `Resources/ThirdPartyNotices.md`
+into the app bundle, and signs with the provided `CODESIGN_IDENTITY`. Passing
+`CODESIGN_IDENTITY=-` selects ad hoc signing, which is the repeatable local
+developer path.
 
 Build output:
 
 ```text
 apps/macos/build/RubyWhisper.app
+```
+
+The bundled notice path is:
+
+```text
+apps/macos/build/RubyWhisper.app/Contents/Resources/ThirdPartyNotices.md
 ```
 
 The output name, bundle identifier, entitlements filename, and resources use

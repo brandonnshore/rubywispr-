@@ -157,6 +157,8 @@ Attribution checklist:
 - Include third-party notices in the distributed app, such as
   `RubyWhisper.app/Contents/Resources/ThirdPartyNotices.md`, an
   About/Acknowledgments surface, or both.
+- Verify the bundled notice was copied from
+  `apps/macos/Resources/ThirdPartyNotices.md` for the exact build under review.
 - Confirm release notes and website copy do not imply FreeFlow maintainer
   endorsement.
 - Re-check imported dependencies and build tools for any added license notices.
