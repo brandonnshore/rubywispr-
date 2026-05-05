@@ -325,6 +325,10 @@ private struct DesktopLoginExchangeResponse: Decodable {
     var accountID: String?
 
     func sessionMaterial() throws -> DesktopSessionMaterial {
+        guard ok else {
+            throw RubyWhisperBackendClientError.invalidResponse("Desktop login exchange was not accepted.")
+        }
+
         let session = DesktopSessionMaterial(
             accessToken: accessToken,
             refreshToken: refreshToken,

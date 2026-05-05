@@ -71,6 +71,7 @@ private struct RubyWhisperBackendAPIClientTests {
         do {
             try await testAccountRequestUsesSessionAuthMetadataAndNoStore()
             try await testLoginHandoffExchangeUsesNoStoreMetadataAndReturnsSessionMaterial()
+            try await testLoginHandoffExchangeRejectsUnacceptedEnvelope()
             try await testAccountSnapshotMapsDocumentedSuccessStates()
             try await testAccountSnapshotMapsFailureResponsesFailClosed()
             try await testExpiredSessionRefreshClearsLocalSession()
@@ -189,6 +190,38 @@ private struct RubyWhisperBackendAPIClientTests {
         let handoffDescription = String(describing: handoff)
         expect(!handoffDescription.contains("exchange_placeholder_redacted"), "handoff diagnostics should redact exchange code")
         expect(!handoffDescription.contains("nonce_placeholder_redacted"), "handoff diagnostics should redact nonce verifier")
+    }
+
+    private static func testLoginHandoffExchangeRejectsUnacceptedEnvelope() async throws {
+        let transport = CapturingTransport(stubs: [
+            .init(
+                statusCode: 200,
+                headers: ["Cache-Control": "no-store"],
+                body: Data("""
+                {
+                  "ok": false,
+                  "accessToken": "session_placeholder_redacted_unaccepted"
+                }
+                """.utf8)
+            ),
+        ])
+        let client = try makeClient(token: nil, transport: transport)
+        let handoff = DesktopLoginHandoff(
+            attemptID: UUID(uuidString: "00000000-0000-0000-0000-000000000061")!,
+            state: "state_placeholder_redacted",
+            exchangeCode: "exchange_placeholder_redacted",
+            nonceVerifier: "nonce_placeholder_redacted"
+        )
+
+        do {
+            _ = try await client.exchangeLoginHandoff(handoff)
+            expect(false, "unaccepted exchange envelope should not return session material")
+        } catch let error as RubyWhisperBackendClientError {
+            expect(
+                error == .invalidResponse("Desktop login exchange was not accepted."),
+                "unaccepted exchange envelope should fail with stable invalid response"
+            )
+        }
     }
 
     private static func testAccountSnapshotMapsDocumentedSuccessStates() async throws {
