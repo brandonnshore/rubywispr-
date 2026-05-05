@@ -601,6 +601,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var realtimeService: RealtimeTranscriptionService?
     private var automaticTerminationDisabled = false
     private var activeAudioInterruption: ActiveAudioInterruption?
+    private var activeTransientRecordingArtifact: TransientRecordingArtifact?
     private var pendingOverlayDismissToken: UUID?
     private var shouldMonitorHotkeys = false
     private var isCapturingShortcut = false
@@ -715,15 +716,21 @@ final class AppState: ObservableObject, @unchecked Sendable {
             testWhisperStatus: initialTestWhisperStatus
         ))
         let initialScreenCapturePermission = CGPreflightScreenCaptureAccess()
+        let transientCleanup = TransientRecordingArtifactStore.cleanupStaleArtifacts()
+        if !transientCleanup.succeeded {
+            print("Transient recording cleanup completed with recoverable failures.")
+        }
         var removedAudioFileNames: [String] = []
         do {
-            removedAudioFileNames = try pipelineHistoryStore.trim(to: maxPipelineHistoryCount)
+            removedAudioFileNames += try pipelineHistoryStore.sanitizePersistedContentReferences()
+            removedAudioFileNames += try pipelineHistoryStore.trim(to: maxPipelineHistoryCount)
         } catch {
             print("Failed to trim pipeline history during init: \(error)")
         }
         for audioFileName in removedAudioFileNames {
             Self.deleteAudioFile(audioFileName)
         }
+        Self.deletePersistedAudioStorageDirectory()
         let savedHistory = pipelineHistoryStore.loadAllHistory()
 
         let selectedMicrophoneID = UserDefaults.standard.string(forKey: selectedMicrophoneStorageKey) ?? "default"
@@ -976,6 +983,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
     deinit {
         desktopLoginTimeoutTask?.cancel()
         desktopLoginCompletionTask?.cancel()
+        cancelTranscription()
+        activeTransientRecordingArtifact?.delete()
+        activeTransientRecordingArtifact = nil
+        _ = TransientRecordingArtifactStore.cleanupStaleArtifacts()
         removeAudioDeviceObservers()
         AppState.writeRecordingStateFlag(false)
     }
@@ -1316,6 +1327,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
     func logoutDesktopAccount() -> DesktopAuthSessionClearResult {
         desktopLoginTimeoutTask?.cancel()
         desktopLoginCompletionTask?.cancel()
+        cancelTranscription()
+        cancelActiveShortcutRecordingForLifecycleChange()
+        _ = TransientRecordingArtifactStore.cleanupStaleArtifacts()
         return authStateOwner.logout()
     }
 
@@ -1388,11 +1402,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         persistShortcut(binding, key: key)
     }
 
-    struct SavedAudioFile {
-        let fileName: String
-        let fileURL: URL
-    }
-
     static func audioStorageDirectory() -> URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let appName = AppName.displayName
@@ -1444,29 +1453,14 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
-    static func saveAudioFile(from tempURL: URL) -> SavedAudioFile? {
-        let fileName = UUID().uuidString + ".wav"
-        let destURL = audioStorageDirectory().appendingPathComponent(fileName)
-        do {
-            try FileManager.default.copyItem(at: tempURL, to: destURL)
-            return SavedAudioFile(fileName: fileName, fileURL: destURL)
-        } catch {
-            os_log(
-                .error,
-                log: recordingLog,
-                "failed to persist audio file %{public}@ from %{public}@ to %{public}@ : %{public}@",
-                fileName,
-                tempURL.path,
-                destURL.path,
-                error.localizedDescription
-            )
-            return nil
-        }
-    }
-
     private static func deleteAudioFile(_ fileName: String) {
         let fileURL = audioStorageDirectory().appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    private static func deletePersistedAudioStorageDirectory() {
+        let audioDir = audioStorageDirectory()
+        try? FileManager.default.removeItem(at: audioDir)
     }
 
     func clearPipelineHistory() {
@@ -1494,138 +1488,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     func retryTranscription(item: PipelineHistoryItem) {
-        guard let audioFileName = item.audioFileName else { return }
-        guard !retryingItemIDs.contains(item.id) else { return }
-
-        retryingItemIDs.insert(item.id)
-
-        let audioURL = Self.audioStorageDirectory().appendingPathComponent(audioFileName)
-        guard FileManager.default.fileExists(atPath: audioURL.path) else {
-            retryingItemIDs.remove(item.id)
-            errorMessage = "Audio file not found for retry."
-            return
-        }
-
-        let restoredContext = AppContext(
-            appName: nil,
-            bundleIdentifier: nil,
-            windowTitle: nil,
-            selectedText: nil,
-            currentActivity: item.contextSummary,
-            contextSystemPrompt: item.contextSystemPrompt,
-            contextPrompt: item.contextPrompt,
-            screenshotDataURL: item.contextScreenshotDataURL,
-            screenshotMimeType: item.contextScreenshotDataURL != nil ? "image/jpeg" : nil,
-            screenshotError: nil
-        )
-
-        let postProcessingService = PostProcessingService(
-            apiKey: apiKey,
-            baseURL: apiBaseURL,
-            preferredModel: postProcessingModel,
-            preferredFallbackModel: postProcessingFallbackModel
-        )
-        let capturedCustomVocabulary = customVocabulary
-        let capturedCustomSystemPrompt = customSystemPrompt
-
-        Task {
-            do {
-                let transcriptionService = try makeTranscriptionService()
-                let rawTranscript = try await transcriptionService.transcribe(fileURL: audioURL)
-                let parsedTranscript = Self.parseTranscriptCommands(
-                    from: rawTranscript,
-                    pressEnterCommandEnabled: self.isPressEnterVoiceCommandEnabled
-                )
-
-                let finalTranscript: String
-                let processingStatus: String
-                let postProcessingPrompt: String
-                let restoredIntent = SessionIntent.fromPersisted(
-                    intent: item.intent,
-                    selectedText: item.selectedText
-                )
-                let result = await self.processTranscript(
-                    parsedTranscript.transcript,
-                    intent: restoredIntent,
-                    context: restoredContext,
-                    postProcessingService: postProcessingService,
-                    customVocabulary: capturedCustomVocabulary,
-                    customSystemPrompt: capturedCustomSystemPrompt,
-                    outputLanguage: self.outputLanguage
-                )
-                finalTranscript = result.finalTranscript
-                processingStatus = Self.statusMessage(
-                    for: result.outcome,
-                    parsedTranscript: parsedTranscript,
-                    isRetry: true
-                )
-                postProcessingPrompt = result.prompt
-
-                await MainActor.run {
-                    let updatedItem = PipelineHistoryItem(
-                        intent: item.intent,
-                        selectedText: item.selectedText,
-                        capturedSelection: item.capturedSelection,
-                        id: item.id,
-                        timestamp: item.timestamp,
-                        rawTranscript: parsedTranscript.transcript,
-                        postProcessedTranscript: finalTranscript.trimmingCharacters(in: .whitespacesAndNewlines),
-                        postProcessingPrompt: postProcessingPrompt,
-                        systemPrompt: item.systemPrompt,
-                        contextSummary: item.contextSummary,
-                        contextSystemPrompt: item.contextSystemPrompt,
-                        contextPrompt: item.contextPrompt,
-                        contextScreenshotDataURL: item.contextScreenshotDataURL,
-                        contextScreenshotStatus: item.contextScreenshotStatus,
-                        postProcessingStatus: processingStatus,
-                        debugStatus: "Retried",
-                        customVocabulary: "",
-                        audioFileName: item.audioFileName,
-                        contextAppName: item.contextAppName,
-                        contextBundleIdentifier: item.contextBundleIdentifier,
-                        contextWindowTitle: item.contextWindowTitle
-                    )
-                    do {
-                        try pipelineHistoryStore.update(updatedItem)
-                        pipelineHistory = pipelineHistoryStore.loadAllHistory()
-                    } catch {
-                        errorMessage = "Failed to save retry result: \(error.localizedDescription)"
-                    }
-                    retryingItemIDs.remove(item.id)
-                }
-            } catch {
-                await MainActor.run {
-                    let updatedItem = PipelineHistoryItem(
-                        intent: item.intent,
-                        selectedText: item.selectedText,
-                        capturedSelection: item.capturedSelection,
-                        id: item.id,
-                        timestamp: item.timestamp,
-                        rawTranscript: item.rawTranscript,
-                        postProcessedTranscript: item.postProcessedTranscript,
-                        postProcessingPrompt: item.postProcessingPrompt,
-                        systemPrompt: item.systemPrompt,
-                        contextSummary: item.contextSummary,
-                        contextSystemPrompt: item.contextSystemPrompt,
-                        contextPrompt: item.contextPrompt,
-                        contextScreenshotDataURL: item.contextScreenshotDataURL,
-                        contextScreenshotStatus: item.contextScreenshotStatus,
-                        postProcessingStatus: "Error: \(error.localizedDescription)",
-                        debugStatus: "Retry failed",
-                        customVocabulary: "",
-                        audioFileName: item.audioFileName,
-                        contextAppName: item.contextAppName,
-                        contextBundleIdentifier: item.contextBundleIdentifier,
-                        contextWindowTitle: item.contextWindowTitle
-                    )
-                    do {
-                        try pipelineHistoryStore.update(updatedItem)
-                        pipelineHistory = pipelineHistoryStore.loadAllHistory()
-                    } catch {}
-                    retryingItemIDs.remove(item.id)
-                }
-            }
-        }
+        _ = item
+        errorMessage = "Audio retry is unavailable. Start a new whisper."
     }
 
     func startAccessibilityPolling() {
@@ -2381,6 +2245,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
         statusText = "Cancelled"
         overlayManager.dismiss()
         audioRecorder.cleanup()
+        activeTransientRecordingArtifact?.delete()
+        activeTransientRecordingArtifact = nil
         if let transcribingAudioFileName {
             Self.deleteAudioFile(transcribingAudioFileName)
             self.transcribingAudioFileName = nil
@@ -3100,9 +2966,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
         errorMessage = nil
         playAlertSound(named: "Pop")
         overlayManager.showTranscribing()
-        audioRecorder.stopRecording { [weak self] fileURL in
+        audioRecorder.stopRecording { [weak self] artifact in
             guard let self else { return }
-            guard let fileURL else {
+            guard let artifact else {
                 self.isTranscribing = false
                 self.audioRecorder.cleanup()
                 self.endCriticalDictationActivity()
@@ -3115,14 +2981,13 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
             guard self.isTranscribing else {
                 self.tearDownRealtimeService()
-                self.audioRecorder.cleanup()
+                artifact.delete()
                 self.refreshAvailableMicrophonesIfNeeded()
                 return
             }
 
-            let savedAudioFile = Self.saveAudioFile(from: fileURL)
-            let transcriptionFileURL = savedAudioFile?.fileURL ?? fileURL
-            self.transcribingAudioFileName = savedAudioFile?.fileName
+            self.activeTransientRecordingArtifact = artifact
+            let transcriptionFileURL = artifact.fileURL
             self.statusText = "Transcribing..."
             self.debugStatusMessage = "Transcribing audio"
 
@@ -3138,18 +3003,18 @@ final class AppState: ObservableObject, @unchecked Sendable {
             self.audioRecorder.onPCM16Samples = nil
             self.transcriptionTask?.cancel()
             guard self.isTranscribing else {
-                if let savedAudioFile {
-                    Self.deleteAudioFile(savedAudioFile.fileName)
+                artifact.delete()
+                if self.activeTransientRecordingArtifact === artifact {
+                    self.activeTransientRecordingArtifact = nil
                 }
-                self.transcribingAudioFileName = nil
                 activeRealtime?.cancel()
-                self.audioRecorder.cleanup()
                 self.endCriticalDictationActivity()
                 self.refreshAvailableMicrophonesIfNeeded()
                 return
             }
             self.transcriptionTask = Task {
                 defer {
+                    artifact.delete()
                     activeRealtime?.cancel()
                 }
                 do {
@@ -3216,11 +3081,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             systemPrompt: Self.resolvedSystemPrompt(self.customSystemPrompt),
                             context: appContext,
                             processingStatus: processingStatus,
-                            intent: sessionIntent,
-                            audioFileName: savedAudioFile?.fileName
+                            intent: sessionIntent
                         )
                         self.transcriptionTask = nil
-                        self.transcribingAudioFileName = nil
+                        if self.activeTransientRecordingArtifact === artifact {
+                            self.activeTransientRecordingArtifact = nil
+                        }
                         self.lastTranscript = trimmedFinalTranscript
                         self.isTranscribing = false
                         self.endCriticalDictationActivity()
@@ -3269,7 +3135,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             }
                         }
 
-                        self.audioRecorder.cleanup()
                         self.refreshAvailableMicrophonesIfNeeded()
 
                         self.scheduleReadyStatusReset(after: 3, matching: [completionStatusText, "Nothing to transcribe", enterOnlyStatusText])
@@ -3278,6 +3143,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     await MainActor.run {
                         self.transcriptionTask = nil
                         self.endCriticalDictationActivity()
+                        if self.activeTransientRecordingArtifact === artifact {
+                            self.activeTransientRecordingArtifact = nil
+                        }
                     }
                 } catch {
                     let resolvedContext: AppContext
@@ -3291,7 +3159,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     await MainActor.run {
                         guard self.isTranscribing else { return }
                         self.transcriptionTask = nil
-                        self.transcribingAudioFileName = nil
+                        if self.activeTransientRecordingArtifact === artifact {
+                            self.activeTransientRecordingArtifact = nil
+                        }
                         self.errorMessage = error.localizedDescription
                         self.isTranscribing = false
                         self.endCriticalDictationActivity()
@@ -3312,10 +3182,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             systemPrompt: Self.resolvedSystemPrompt(self.customSystemPrompt),
                             context: resolvedContext,
                             processingStatus: "Error: \(error.localizedDescription)",
-                            intent: sessionIntent,
-                            audioFileName: savedAudioFile?.fileName
+                            intent: sessionIntent
                         )
-                        self.audioRecorder.cleanup()
                         self.refreshAvailableMicrophonesIfNeeded()
                     }
                 }
@@ -3347,9 +3215,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
         endCriticalDictationActivity()
         overlayManager.dismiss()
         blockDictationAttempt(for: decision, routeSignIn: true)
-        audioRecorder.stopRecording { [weak self] _ in
+        audioRecorder.stopRecording { [weak self] artifact in
             guard let self else { return }
-            self.audioRecorder.cleanup()
+            artifact?.delete()
             self.refreshAvailableMicrophonesIfNeeded()
         }
     }
@@ -3378,28 +3246,34 @@ final class AppState: ObservableObject, @unchecked Sendable {
         intent: SessionIntent,
         audioFileName: String? = nil
     ) {
+        _ = rawTranscript
+        _ = postProcessedTranscript
+        _ = postProcessingPrompt
+        _ = systemPrompt
+        _ = audioFileName
+        let sanitizedScreenshotStatus = context.screenshotError
+            ?? (context.screenshotDataURL == nil ? "No screenshot" : "available")
         let newEntry = PipelineHistoryItem(
             intent: intent.persistedIntent,
-            selectedText: intent.persistedSelectedText,
-            capturedSelection: context.selectedText,
+            selectedText: nil,
+            capturedSelection: nil,
             timestamp: Date(),
-            rawTranscript: rawTranscript,
-            postProcessedTranscript: postProcessedTranscript,
-            postProcessingPrompt: postProcessingPrompt,
-            systemPrompt: systemPrompt,
-            contextSummary: context.contextSummary,
-            contextSystemPrompt: context.contextSystemPrompt,
-            contextPrompt: context.contextPrompt,
-            contextScreenshotDataURL: context.screenshotDataURL,
-            contextScreenshotStatus: context.screenshotError
-                ?? "available (\(context.screenshotMimeType ?? "image"))",
+            rawTranscript: "",
+            postProcessedTranscript: "",
+            postProcessingPrompt: nil,
+            systemPrompt: nil,
+            contextSummary: "",
+            contextSystemPrompt: nil,
+            contextPrompt: nil,
+            contextScreenshotDataURL: nil,
+            contextScreenshotStatus: sanitizedScreenshotStatus,
             postProcessingStatus: processingStatus,
             debugStatus: debugStatusMessage,
             customVocabulary: "",
-            audioFileName: audioFileName,
+            audioFileName: nil,
             contextAppName: context.appName,
             contextBundleIdentifier: context.bundleIdentifier,
-            contextWindowTitle: context.windowTitle
+            contextWindowTitle: nil
         )
         do {
             let removedAudioFileNames = try pipelineHistoryStore.append(newEntry, maxCount: maxPipelineHistoryCount)

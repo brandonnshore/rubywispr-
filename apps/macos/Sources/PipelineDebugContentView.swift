@@ -29,11 +29,11 @@ struct PipelineDebugContentView: View {
             }
 
             if !postProcessingPrompt.isEmpty {
-                debugRow(title: "Post-Processing Prompt", value: postProcessingPrompt, copyText: postProcessingPrompt)
+                debugRow(title: "Post-Processing Prompt", value: "Redacted")
             }
 
             if !contextSummary.isEmpty {
-                debugRow(title: "Context", value: contextSummary)
+                debugRow(title: "Context", value: "Redacted")
             }
 
             if !contextScreenshotStatus.isEmpty || contextScreenshotDataURL != nil {
@@ -44,11 +44,11 @@ struct PipelineDebugContentView: View {
             }
 
             if !rawTranscript.isEmpty {
-                debugRow(title: "Raw Transcript", value: rawTranscript, copyText: rawTranscript)
+                debugRow(title: "Raw Transcript", value: "Redacted")
             }
 
             if !postProcessedTranscript.isEmpty {
-                debugRow(title: "Post-Processed Transcript", value: postProcessedTranscript, copyText: postProcessedTranscript)
+                debugRow(title: "Post-Processed Transcript", value: "Redacted")
             }
 
             if contextSummary.isEmpty && rawTranscript.isEmpty && postProcessedTranscript.isEmpty && postProcessingPrompt.isEmpty {
