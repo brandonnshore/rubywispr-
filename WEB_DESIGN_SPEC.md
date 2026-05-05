@@ -183,6 +183,9 @@ Design requirements:
 - Clear progress.
 - System Settings guidance for permissions.
 - No large marketing hero inside the app.
+- Flow order, permission recovery, test whisper gating, keyboard accessibility,
+  and local completion metadata must follow
+  `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`.
 
 ### Recording Island
 

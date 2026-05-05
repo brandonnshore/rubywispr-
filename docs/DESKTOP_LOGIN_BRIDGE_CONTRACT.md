@@ -10,6 +10,7 @@ It extends:
 - `TECHNICAL_SPEC.md#FR-002 Magic link`
 - `TECHNICAL_SPEC.md#GET /api/desktop/account`
 - `TECHNICAL_INFRASTRUCTURE.md#Clerk`
+- `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
 - `docs/USAGE_QUOTA_CONTRACT.md`
 - `apps/web/README.md#Auth Privacy Validation Contract`
@@ -134,7 +135,10 @@ The backend error contract remains canonical for stable machine codes,
 retryability, `desktopState`, and `recovery` values. The usage quota contract
 remains canonical for `trial_active`, `trial_exhausted`, `paid_active`,
 `friend_of_ruby_active`, `payment_failed`, `blocked`, and
-`subscription_required` entitlement semantics.
+`subscription_required` entitlement semantics. First-run onboarding must consume
+these auth/account states through
+`docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md` before requesting microphone
+or Accessibility permissions.
 
 ## Source-Contract Readiness
 

@@ -12,6 +12,7 @@ extends:
 - `TECHNICAL_SPEC.md#GET /api/desktop/account`
 - `TECHNICAL_INFRASTRUCTURE.md#Local Mac Storage`
 - `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`
+- `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
 - `docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`
 - `docs/USAGE_QUOTA_CONTRACT.md`
@@ -122,6 +123,10 @@ Request rules:
   bodies, cookies, and redirect URLs before logging.
 - Do not expose generic HTTP clients to recording, account, settings, or
   onboarding code paths when a typed RubyWhisper client method exists.
+
+First-run onboarding, including the test whisper, must use this typed client for
+account refresh and transcription requests. It must not build alternate network
+calls or persist auth/account material outside this contract.
 
 Forbidden request behavior:
 

@@ -404,7 +404,9 @@ signed_out
 The desktop browser login bridge state machine and account handoff mapping live
 in `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`. Keychain session storage and the
 typed RubyWhisper backend API client contract live in
-`docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`.
+`docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`. First-run onboarding order,
+permission gates, test whisper, and local completion metadata are defined in
+`docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`.
 
 ## API Contracts
 
