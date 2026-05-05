@@ -43,6 +43,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        appState.stopHotkeyMonitoring(reason: .appQuit)
+    }
+
     @objc func handleShowSetup() {
         // Single wizard at a time — opening a second leaks the first's
         // willClose observer and breaks the bail-restore.
@@ -55,7 +59,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let wasCompleted = appState.hasCompletedSetup
         appState.hasCompletedSetup = false
         appState.stopAccessibilityPolling()
-        appState.stopHotkeyMonitoring()
+        appState.stopHotkeyMonitoring(reason: .onboardingBlocked)
         showSetupWindow()
 
         // Restore prior state if the user closes the wizard without completing.

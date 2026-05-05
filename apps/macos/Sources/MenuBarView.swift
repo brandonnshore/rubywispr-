@@ -125,6 +125,9 @@ struct MenuBarView: View {
                     .font(.caption)
                     .padding(.horizontal, 16)
                     .lineLimit(3)
+                Button("Retry Global Shortcuts") {
+                    appState.retryHotkeyRegistration()
+                }
             }
 
             if let error = appState.errorMessage {

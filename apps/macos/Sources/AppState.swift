@@ -520,6 +520,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var statusText: String = "Ready"
     @Published var hasAccessibility = false
     @Published var hotkeyMonitoringErrorMessage: String?
+    @Published var hotkeyRegistrationState = HotkeyRegistrationState.unregistered
     @Published var isDebugOverlayActive = false
     @Published var selectedSettingsTab: SettingsTab? = .general
     @Published var pipelineHistory: [PipelineHistoryItem] = []
@@ -1494,15 +1495,29 @@ final class AppState: ObservableObject, @unchecked Sendable {
         hotkeyManager.onEscapeKeyPressed = { [weak self] in
             self?.handleEscapeKeyPress() ?? false
         }
+        hotkeyManager.onRegistrationStateChanged = { [weak self] state in
+            DispatchQueue.main.async {
+                self?.hotkeyRegistrationState = state
+            }
+        }
         restartHotkeyMonitoring()
     }
 
-    func stopHotkeyMonitoring() {
+    func stopHotkeyMonitoring(reason: HotkeyLifecyclePauseReason = .logout) {
         shouldMonitorHotkeys = false
         hotkeyMonitoringErrorMessage = nil
-        hotkeyManager.onShortcutEvent = nil
-        hotkeyManager.onEscapeKeyPressed = nil
-        hotkeyManager.stop()
+        if reason == .appQuit {
+            hotkeyManager.onShortcutEvent = nil
+            hotkeyManager.onEscapeKeyPressed = nil
+            hotkeyManager.onRegistrationStateChanged = nil
+            hotkeyManager.unregister(reason: reason)
+        } else {
+            hotkeyManager.unregister(reason: reason)
+            hotkeyManager.onShortcutEvent = nil
+            hotkeyManager.onEscapeKeyPressed = nil
+            hotkeyManager.onRegistrationStateChanged = nil
+        }
+        hotkeyRegistrationState = hotkeyManager.registrationState
     }
 
     func suspendHotkeyMonitoringForShortcutCapture() {
@@ -1531,17 +1546,74 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func restartHotkeyMonitoring() {
-        guard shouldMonitorHotkeys, !isCapturingShortcut, !isAwaitingMicrophonePermission else {
-            hotkeyManager.stop()
+        guard shouldMonitorHotkeys else {
+            hotkeyManager.pause(reason: .onboardingBlocked)
+            hotkeyRegistrationState = hotkeyManager.registrationState
+            hotkeyMonitoringErrorMessage = nil
+            return
+        }
+
+        guard !isCapturingShortcut else {
+            hotkeyManager.pause(reason: .shortcutCapture)
+            hotkeyRegistrationState = hotkeyManager.registrationState
+            hotkeyMonitoringErrorMessage = nil
+            return
+        }
+
+        guard !isAwaitingMicrophonePermission else {
+            hotkeyManager.pause(reason: .microphonePermissionPrompt)
+            hotkeyRegistrationState = hotkeyManager.registrationState
+            hotkeyMonitoringErrorMessage = nil
             return
         }
 
         do {
-            try hotkeyManager.start(configuration: activeShortcutConfiguration)
+            try hotkeyManager.register(configuration: activeShortcutConfiguration)
+            hotkeyRegistrationState = hotkeyManager.registrationState
             hotkeyMonitoringErrorMessage = nil
         } catch {
-            hotkeyMonitoringErrorMessage = error.localizedDescription
+            hotkeyRegistrationState = hotkeyManager.registrationState
+            hotkeyMonitoringErrorMessage = Self.hotkeyRecoveryMessage(
+                for: hotkeyManager.registrationState,
+                fallback: error.localizedDescription
+            )
             os_log(.error, log: recordingLog, "Hotkey monitoring failed to start: %{public}@", error.localizedDescription)
+        }
+    }
+
+    func retryHotkeyRegistration() {
+        guard shouldMonitorHotkeys, !isCapturingShortcut, !isAwaitingMicrophonePermission else {
+            restartHotkeyMonitoring()
+            return
+        }
+
+        do {
+            try hotkeyManager.retryRegistration()
+            hotkeyRegistrationState = hotkeyManager.registrationState
+            hotkeyMonitoringErrorMessage = nil
+        } catch {
+            hotkeyRegistrationState = hotkeyManager.registrationState
+            hotkeyMonitoringErrorMessage = Self.hotkeyRecoveryMessage(
+                for: hotkeyManager.registrationState,
+                fallback: error.localizedDescription
+            )
+            os_log(.error, log: recordingLog, "Hotkey monitoring retry failed: %{public}@", error.localizedDescription)
+        }
+    }
+
+    private static func hotkeyRecoveryMessage(
+        for state: HotkeyRegistrationState,
+        fallback: String
+    ) -> String {
+        switch state.reason {
+        case .eventTapUnavailable:
+            return "Global shortcuts could not start. Grant keyboard monitoring or Accessibility permission, then retry."
+        case .eventTapRunLoopSourceUnavailable:
+            return "Global shortcuts could not start because macOS could not attach the keyboard monitor. Retry after restarting the app."
+        case .unknown:
+            return fallback
+        case .none, .paused, .noBindingEnabled, .holdBindingDisabled, .toggleBindingDisabled:
+            return fallback
         }
     }
 
@@ -1937,7 +2009,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
         pendingMicrophonePermissionTriggerMode = triggerMode
         pendingMicrophonePermissionSelectionSnapshot = selectionSnapshot
         pendingMicrophonePermissionManualCommandRequested = manualCommandRequested
-        hotkeyManager.stop()
+        hotkeyManager.pause(reason: .microphonePermissionPrompt)
+        hotkeyRegistrationState = hotkeyManager.registrationState
         shortcutSessionController.reset()
         activeRecordingTriggerMode = nil
         cancelRecordingInitializationTimer()
