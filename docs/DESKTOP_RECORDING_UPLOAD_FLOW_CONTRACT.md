@@ -12,6 +12,7 @@ It extends:
 
 - `TECHNICAL_SPEC.md#POST /api/desktop/transcribe`
 - `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
+- `docs/RW_064_GLOBAL_HOTKEY_CONTRACT.md`
 - `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md#post-apidesktoptranscribe`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
 - `docs/USAGE_QUOTA_CONTRACT.md`

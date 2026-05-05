@@ -80,6 +80,9 @@ FR-010 Hotkeys: The app must support hold-to-talk and toggle recording.
 - Validate by running: manual hotkey QA.
 - Required tests: manual only if global hotkey framework is not unit-testable.
 - Security/privacy: no extra permission beyond required macOS input monitoring/accessibility if needed.
+- Contract: `docs/RW_064_GLOBAL_HOTKEY_CONTRACT.md` defines registration
+  lifecycle, gating, conflict recovery, duration behavior, and metadata-only
+  privacy boundaries for RW-064 implementation leaves.
 
 FR-011 Recording island: The app must show a floating, draggable recording island while recording/processing/errors need attention.
 
