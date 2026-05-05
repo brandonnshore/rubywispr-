@@ -17,6 +17,8 @@ private struct RecordingIslandStateMachineTests {
         mapsGateFailuresWithoutStartingRecording()
         mapsAccountStates()
         mapsBackendFailuresToSafeRecoveryActions()
+        requiredRecoveryStatesHaveCompactCopyAndActions()
+        exposesPrivacySafeSyntheticRecoveryProofStates()
         keepsPrivateContentOutOfPresentation()
 
         print("RecordingIslandStateMachineTests passed")
@@ -168,6 +170,105 @@ private struct RecordingIslandStateMachineTests {
             RecordingIslandStateMachine.uploadFailure(failure(code: .internalError, recovery: .retryOrContactSupport)).state == .serviceError,
             "internal errors should map to service_error"
         )
+    }
+
+    private static func requiredRecoveryStatesHaveCompactCopyAndActions() {
+        let requiredStates: Set<RecordingIslandStateName> = [
+            .signedOut,
+            .termsRequired,
+            .trialExhausted,
+            .paymentFailed,
+            .microphoneRecovery,
+            .accessibilityRecovery,
+            .durationLimitReached,
+            .insertionFailed,
+            .networkError,
+            .providerError,
+            .hotkeyUnavailable
+        ]
+
+        for state in requiredStates {
+            let presentation = RecordingIslandStateMachine.syntheticPresentation(for: state)
+            expect(presentation.isVisible, "\(state.rawValue) should be visible")
+            expect(!presentation.title.isEmpty, "\(state.rawValue) should have user-facing copy")
+            expect(presentation.title.count <= 24, "\(state.rawValue) copy should stay compact")
+            expect(presentation.primaryAction != nil, "\(state.rawValue) should have a primary action")
+            if let primaryAction = presentation.primaryAction {
+                expect(!primaryAction.compactTitle.isEmpty, "\(state.rawValue) primary action should have a compact title")
+                expect(primaryAction.compactTitle.count <= 8, "\(state.rawValue) action title should fit the island")
+            }
+        }
+
+        let insertionFailed = RecordingIslandStateMachine.insertionFailed()
+        expect(
+            insertionFailed.title == "Click a text box first",
+            "insertion failure should use approved recovery copy"
+        )
+        expect(
+            insertionFailed.primaryAction == .copyCleanedText,
+            "insertion failure should offer copy without rendering cleaned text"
+        )
+        expect(
+            insertionFailed.secondaryAction == .retryInsertion,
+            "insertion failure should offer retry insertion"
+        )
+
+        expect(
+            RecordingIslandStateMachine.account(.trialExhausted).primaryAction == .openCheckout,
+            "trial-exhausted accounts should route to checkout"
+        )
+        expect(
+            RecordingIslandStateMachine.account(.paymentFailed).primaryAction == .openBilling,
+            "payment-failed accounts should route to billing"
+        )
+        expect(
+            RecordingIslandStateMachine.account(.signedOut).primaryAction == .openSignIn,
+            "signed-out accounts should route to sign-in"
+        )
+    }
+
+    private static func exposesPrivacySafeSyntheticRecoveryProofStates() {
+        let proofStates = Set(RecordingIslandStateMachine.syntheticRecoveryProofStateNames)
+        let expectedProofStates: Set<RecordingIslandStateName> = [
+            .signedOut,
+            .termsRequired,
+            .trialExhausted,
+            .paymentFailed,
+            .accountBlocked,
+            .microphoneRecovery,
+            .accessibilityRecovery,
+            .hotkeyUnavailable,
+            .hotkeyConflict,
+            .durationLimitReached,
+            .insertionFailed,
+            .networkError,
+            .providerError,
+            .serviceError,
+            .unsafeRetryRequired
+        ]
+
+        expect(
+            proofStates == expectedProofStates,
+            "synthetic recovery proof matrix should cover required private-safe recovery states"
+        )
+
+        for presentation in RecordingIslandStateMachine.syntheticRecoveryProofPresentations {
+            let visibleProofText = [
+                presentation.state.rawValue,
+                presentation.title,
+                presentation.primaryAction?.rawValue ?? "",
+                presentation.primaryAction?.compactTitle ?? "",
+                presentation.secondaryAction?.rawValue ?? "",
+                presentation.secondaryAction?.compactTitle ?? "",
+                presentation.safeLogSummary
+            ].joined(separator: " ")
+
+            expect(!visibleProofText.contains("PRIVATE_TRANSCRIPT"), "proof states must not contain transcripts")
+            expect(!visibleProofText.contains("cleanedText"), "proof states must not contain cleaned text")
+            expect(!visibleProofText.contains("@"), "proof states must not contain account emails")
+            expect(!visibleProofText.contains("/Users/"), "proof states must not contain local paths")
+            expect(!visibleProofText.contains("sk-"), "proof states must not contain token-like content")
+        }
     }
 
     private static func keepsPrivateContentOutOfPresentation() {

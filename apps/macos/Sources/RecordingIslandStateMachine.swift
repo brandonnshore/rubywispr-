@@ -96,6 +96,45 @@ enum RecordingIslandAction: String, Equatable, Codable {
     case recordAgain = "record_again"
     case startNewWhisper = "start_new_whisper"
     case retryOrContactSupport = "retry_or_contact_support"
+
+    var compactTitle: String {
+        switch self {
+        case .stopRecording:
+            return "Stop"
+        case .cancelIfSafe:
+            return "Cancel"
+        case .waitOrCancel:
+            return "Wait"
+        case .openOnboardingStep:
+            return "Setup"
+        case .openSignIn:
+            return "Sign In"
+        case .openTermsAcceptance:
+            return "Terms"
+        case .openCheckout:
+            return "Upgrade"
+        case .openBilling:
+            return "Billing"
+        case .openAccount:
+            return "Account"
+        case .openSystemSettingsMicrophone, .openSystemSettingsAccessibility:
+            return "Settings"
+        case .openHotkeySettings:
+            return "Hotkeys"
+        case .retryHotkeyRegistration, .retryInsertion, .retry:
+            return "Retry"
+        case .retryAfter:
+            return "Later"
+        case .copyCleanedText:
+            return "Copy"
+        case .recordAgain:
+            return "Record"
+        case .startNewWhisper:
+            return "New"
+        case .retryOrContactSupport:
+            return "Retry"
+        }
+    }
 }
 
 struct RecordingIslandPresentation: Equatable {
@@ -116,12 +155,35 @@ struct RecordingIslandPresentation: Equatable {
         [
             "island_state=\(state.rawValue)",
             "primary_action=\(primaryAction?.rawValue ?? "none")",
+            "secondary_action=\(secondaryAction?.rawValue ?? "none")",
             "same_audio_retry=\(allowsSameAudioRetry)"
         ].joined(separator: " ")
     }
 }
 
 enum RecordingIslandStateMachine {
+    static let syntheticRecoveryProofStateNames: [RecordingIslandStateName] = [
+        .signedOut,
+        .termsRequired,
+        .trialExhausted,
+        .paymentFailed,
+        .accountBlocked,
+        .microphoneRecovery,
+        .accessibilityRecovery,
+        .hotkeyUnavailable,
+        .hotkeyConflict,
+        .durationLimitReached,
+        .insertionFailed,
+        .networkError,
+        .providerError,
+        .serviceError,
+        .unsafeRetryRequired
+    ]
+
+    static var syntheticRecoveryProofPresentations: [RecordingIslandPresentation] {
+        syntheticRecoveryProofStateNames.map { syntheticPresentation(for: $0) }
+    }
+
     static func hiddenIdle() -> RecordingIslandPresentation {
         presentation(for: .hiddenIdle)
     }
@@ -396,23 +458,23 @@ enum RecordingIslandStateMachine {
         case .accountRefreshing:
             return ("Loading account", "arrow.triangle.2.circlepath", .waitOrCancel, nil)
         case .signedOut:
-            return ("Sign in required", "person.crop.circle.badge.xmark", .openSignIn, nil)
+            return ("Sign in to dictate", "person.crop.circle.badge.xmark", .openSignIn, nil)
         case .termsRequired:
             return ("Accept Terms", "doc.text.fill", .openTermsAcceptance, nil)
         case .trialExhausted:
-            return ("Trial exhausted", "creditcard.fill", .openCheckout, nil)
+            return ("Upgrade to continue", "creditcard.fill", .openCheckout, nil)
         case .paymentFailed:
             return ("Update billing", "creditcard.trianglebadge.exclamationmark", .openBilling, nil)
         case .accountBlocked:
-            return ("Account blocked", "exclamationmark.triangle.fill", .openAccount, nil)
+            return ("Account unavailable", "exclamationmark.triangle.fill", .openAccount, nil)
         case .microphoneRecovery:
-            return ("Microphone access", "mic.slash.fill", .openSystemSettingsMicrophone, nil)
+            return ("Allow microphone", "mic.slash.fill", .openSystemSettingsMicrophone, nil)
         case .accessibilityRecovery:
-            return ("Accessibility access", "cursorarrow.motionlines", .openSystemSettingsAccessibility, nil)
+            return ("Allow Accessibility", "cursorarrow.motionlines", .openSystemSettingsAccessibility, nil)
         case .hotkeyUnavailable:
-            return ("Hotkey unavailable", "keyboard.badge.exclamationmark", .openHotkeySettings, nil)
+            return ("Hotkey unavailable", "keyboard.badge.exclamationmark", .openHotkeySettings, .retryHotkeyRegistration)
         case .hotkeyConflict:
-            return ("Hotkey conflict", "keyboard.badge.exclamationmark", .retryHotkeyRegistration, nil)
+            return ("Hotkey unavailable", "keyboard.badge.exclamationmark", .retryHotkeyRegistration, .openHotkeySettings)
         case .recorderBusy:
             return ("Already working", "waveform", nil, nil)
         case .recordingHold:
@@ -422,7 +484,7 @@ enum RecordingIslandStateMachine {
         case .nearingDurationLimit:
             return ("Time limit soon", "timer", .stopRecording, nil)
         case .durationLimitReached:
-            return ("Duration limit", "timer", .startNewWhisper, nil)
+            return ("10 minute limit", "timer", .startNewWhisper, nil)
         case .processingUploading:
             return ("Processing", "arrow.up.circle.fill", .cancelIfSafe, nil)
         case .inserting:
@@ -430,19 +492,19 @@ enum RecordingIslandStateMachine {
         case .success:
             return ("Done", "checkmark", nil, nil)
         case .insertionFailed:
-            return ("Click a text box first.", "text.cursor", .copyCleanedText, .retryInsertion)
+            return ("Click a text box first", "text.cursor", .copyCleanedText, .retryInsertion)
         case .rateLimited:
             return ("Rate limited", "hourglass", .retryAfter, nil)
         case .networkError:
-            return ("Network error", "wifi.exclamationmark", .startNewWhisper, nil)
+            return ("Check internet", "wifi.exclamationmark", .startNewWhisper, nil)
         case .providerError:
-            return ("Transcription unavailable", "waveform.badge.exclamationmark", .startNewWhisper, nil)
+            return ("Try again later", "waveform.badge.exclamationmark", .startNewWhisper, nil)
         case .invalidAudio:
             return ("Record again", "waveform.slash", .recordAgain, nil)
         case .serviceError:
             return ("Service unavailable", "exclamationmark.triangle.fill", .retryOrContactSupport, nil)
         case .unsafeRetryRequired:
-            return ("Record again", "arrow.clockwise.circle", .startNewWhisper, nil)
+            return ("Start a new whisper", "arrow.clockwise.circle", .startNewWhisper, nil)
         }
     }
 }
