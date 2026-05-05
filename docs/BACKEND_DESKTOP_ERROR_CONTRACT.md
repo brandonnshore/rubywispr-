@@ -13,6 +13,7 @@ Source requirements:
 - `WEB_DESIGN_SPEC.md#Component States`
 - `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
 - `docs/RW_067_DURATION_CAP_CONTRACT.md`
+- `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`
 - `IMPLEMENTATION_PLAN.md` Wave 4 backend requirements
 
 ## Response Shape
@@ -120,8 +121,8 @@ future desktop support upload endpoint explicitly accepts sanitized diagnostics.
 | `microphone_permission_denied` | `permission_denied` | `open_system_settings_microphone` | Allow microphone access in System Settings. | No audio |
 | `accessibility_permission_denied` | `permission_denied` | `open_system_settings_accessibility` | Allow Accessibility so RubyWhisper can insert text. | No content |
 | `no_text_field_focused` | `insertion_failed` | `focus_text_field` | Click a text box first. | Local cleaned text only |
-| `insertion_failed` | `insertion_failed` | `retry_or_copy` | Click a text box first. | Local cleaned text only |
-| `clipboard_unavailable` | `insertion_failed` | `manual_copy` | Copy the text manually. | Local cleaned text only |
+| `insertion_failed` | `insertion_failed` | `retry_or_copy` | Click a text box first. | Local cleaned text only; clipboard fallback sub-states are defined in `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md` |
+| `clipboard_unavailable` | `insertion_failed` | `manual_copy` | Copy the text manually. | Local cleaned text only; no backend fallback upload |
 | `desktop_offline` | `network_error` | `retry` | Check your internet connection and try again. | No server log unless request arrived |
 
 The desktop app may keep final cleaned text in local Recent Wisprs according to

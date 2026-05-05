@@ -210,6 +210,10 @@ The implementation contract for state names, stable dimensions, visualizer
 behavior, reduced motion, recovery actions, and privacy-safe proof rules lives
 in `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`.
 
+The implementation contract for clipboard-safe fallback, recovery copy,
+best-effort clipboard restoration, and fallback privacy boundaries lives in
+`docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`.
+
 ### Main App / Settings
 
 Sections:
@@ -372,7 +376,8 @@ Loading:
 Error:
 
 - Provider/backend error: clear, short, retry where safe.
-- Insertion error: "Click a text box first."
+- Insertion error: "Click a text box first." Clipboard fallback and manual copy
+  recovery follow `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`.
 - Auth error: reopen sign-in.
 - Billing error: open account/billing.
 
