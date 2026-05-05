@@ -703,7 +703,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         let initialAccessibility = AXIsProcessTrusted()
         let initialMicrophoneStatus = Self.firstRunMicrophonePermissionCategory(
-            from: AVCaptureDevice.authorizationStatus(for: .audio)
+            from: AVCaptureDevice.authorizationStatus(for: .audio),
+            hasInputDevice: !AudioDevice.availableInputDevices().isEmpty
         )
         let initialTestWhisperStatus: FirstRunOnboardingTestWhisperStatus =
             firstRunOnboardingCoordinator.metadata.testWhisperCompleted ? .succeeded : .notStarted
@@ -902,14 +903,16 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func refreshFirstRunOnboardingState(
+        microphoneStatus explicitMicrophoneStatus: FirstRunOnboardingPermissionCategory? = nil,
         testWhisperStatus explicitTestWhisperStatus: FirstRunOnboardingTestWhisperStatus? = nil
     ) {
         let testWhisperStatus = explicitTestWhisperStatus ??
             (firstRunOnboardingCoordinator.metadata.testWhisperCompleted ? .succeeded : .notStarted)
         firstRunOnboardingStep = firstRunOnboardingCoordinator.update(with: FirstRunOnboardingGateSnapshot(
             authState: authCoordinatorState,
-            microphoneStatus: Self.firstRunMicrophonePermissionCategory(
-                from: AVCaptureDevice.authorizationStatus(for: .audio)
+            microphoneStatus: explicitMicrophoneStatus ?? Self.firstRunMicrophonePermissionCategory(
+                from: AVCaptureDevice.authorizationStatus(for: .audio),
+                hasInputDevice: !AudioDevice.availableInputDevices().isEmpty
             ),
             accessibilityStatus: firstRunAccessibilityPermissionStatus,
             testWhisperStatus: testWhisperStatus
@@ -917,20 +920,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private static func firstRunMicrophonePermissionCategory(
-        from status: AVAuthorizationStatus
+        from status: AVAuthorizationStatus,
+        hasInputDevice: Bool
     ) -> FirstRunOnboardingPermissionCategory {
-        switch status {
-        case .authorized:
-            return .granted
-        case .notDetermined:
-            return .notDetermined
-        case .denied:
-            return .denied
-        case .restricted:
-            return .restricted
-        @unknown default:
-            return .unknown
-        }
+        MicrophonePermissionGate.category(from: status, hasInputDevice: hasInputDevice)
     }
 
     func markFirstRunTestWhisperCompleted() {
@@ -1610,6 +1603,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 completion(true)
             }
         case .notDetermined:
+            refreshFirstRunOnboardingState(microphoneStatus: .requesting)
             AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
                 DispatchQueue.main.async {
                     if granted {

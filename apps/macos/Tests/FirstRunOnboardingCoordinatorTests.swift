@@ -1,4 +1,5 @@
 import Darwin
+import AVFoundation
 import Foundation
 
 @discardableResult
@@ -39,6 +40,7 @@ private struct FirstRunOnboardingCoordinatorTests {
         testAccessibilityRequestAndRecoveryBlockTestWhisper()
         testResetReplaysOnboarding()
         testBlockedStatesWinOverLaterSignals()
+        testMicrophonePermissionGatePresentsRecoveryWithoutPrivateData()
         testStoredMetadataUsesOnlySanitizedCategories()
         print("FirstRunOnboardingCoordinatorTests passed")
     }
@@ -243,6 +245,54 @@ private struct FirstRunOnboardingCoordinatorTests {
         }
         expect(serialized.contains("trial_active"), "metadata should contain only account category")
         expect(serialized.contains("granted"), "metadata should contain permission categories")
+    }
+
+    private static func testMicrophonePermissionGatePresentsRecoveryWithoutPrivateData() {
+        let granted = MicrophonePermissionGate.category(
+            from: .authorized,
+            hasInputDevice: true
+        )
+        expect(granted == .granted, "authorized microphone with input should be granted")
+
+        let unavailable = MicrophonePermissionGate.category(
+            from: .authorized,
+            hasInputDevice: false
+        )
+        expect(unavailable == .unavailable, "authorized microphone without input should be unavailable")
+
+        let deniedPresentation = MicrophonePermissionGate.presentation(for: .denied)
+        expect(!deniedPresentation.canProceed, "denied microphone should block progression")
+        expect(deniedPresentation.primaryAction == .openSystemSettings, "denied microphone should recover through settings")
+        expect(deniedPresentation.showsRecoveryPath, "denied microphone should show written recovery path")
+
+        let waitingPresentation = MicrophonePermissionGate.presentation(for: .requesting)
+        expect(!waitingPresentation.canProceed, "requesting microphone should wait for macOS")
+        expect(waitingPresentation.primaryAction == .none, "requesting microphone should not start recording")
+
+        let serialized = [
+            deniedPresentation.category.rawValue,
+            deniedPresentation.statusLabel,
+            deniedPresentation.primaryAction.rawValue,
+            MicrophonePermissionGate.recoveryPath
+        ].joined(separator: " ")
+        let forbiddenFragments = [
+            "tok" + "en",
+            "Bearer",
+            "Authorization",
+            "@example",
+            "audio",
+            "transcript",
+            "clipboard",
+            "selected_text",
+            "provider_payload",
+            "magic_link",
+            "MacBook",
+            "uid="
+        ]
+
+        for fragment in forbiddenFragments {
+            expect(!serialized.contains(fragment), "permission evidence should not contain private fragment \(fragment)")
+        }
     }
 
     private static func makeCoordinator(

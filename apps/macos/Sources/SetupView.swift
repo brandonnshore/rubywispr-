@@ -72,7 +72,7 @@ struct SetupView: View {
     }
 
     @State private var currentStep = SetupStep.welcome
-    @State private var micPermissionGranted = false
+    @State private var micPermissionStatus: FirstRunOnboardingPermissionCategory = .unknown
     @State private var accessibilityStatus: FirstRunOnboardingPermissionCategory = .notDetermined
     @State private var apiKeyInput: String = ""
     @State private var apiBaseURLInput: String = ""
@@ -190,6 +190,15 @@ struct SetupView: View {
             checkMicPermission()
             checkAccessibility()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            checkMicPermission()
+            if currentStep == .accessibility {
+                appState.markAccessibilityRecoveryIfStillMissing()
+                syncAccessibilityStatus()
+            } else {
+                checkAccessibility()
+            }
+        }
         .onDisappear {
             accessibilityTimer?.invalidate()
             screenRecordingTimer?.invalidate()
@@ -209,11 +218,6 @@ struct SetupView: View {
             } else {
                 appState.resumeHotkeyMonitoringAfterShortcutCapture()
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            guard currentStep == .accessibility else { return }
-            appState.markAccessibilityRecoveryIfStillMissing()
-            syncAccessibilityStatus()
         }
     }
 
@@ -409,41 +413,63 @@ struct SetupView: View {
     }
 
     var micPermissionStep: some View {
-        VStack(spacing: 20) {
+        let presentation = MicrophonePermissionGate.presentation(for: micPermissionStatus)
+
+        return VStack(spacing: 20) {
             Image(systemName: "mic.fill")
                 .font(.system(size: 60))
-                .foregroundStyle(.blue)
+                .foregroundStyle(micPermissionColor)
 
-            Text("Microphone Access")
+            Text(presentation.title)
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("\(AppName.displayName) needs access to your microphone to record audio for transcription.")
+            Text(presentation.message)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack {
-                Image(systemName: "mic.fill")
-                    .frame(width: 24)
-                    .foregroundStyle(.blue)
-                Text("Microphone")
-                Spacer()
-                if micPermissionGranted {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text("Granted")
-                        .foregroundStyle(.green)
-                } else {
-                    Button("Grant Access") {
-                        requestMicPermission()
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: micPermissionStatusIcon)
+                        .frame(width: 24)
+                        .foregroundStyle(micPermissionColor)
+                    Text("Microphone")
+                    Spacer()
+                    Text(presentation.statusLabel)
+                        .foregroundStyle(micPermissionColor)
+                        .font(.callout.weight(.semibold))
+                }
+
+                if presentation.showsRecoveryPath {
+                    Text(MicrophonePermissionGate.recoveryPath)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 10) {
+                    if let actionTitle = presentation.primaryActionTitle {
+                        Button(actionTitle) {
+                            handleMicrophonePrimaryAction(presentation.primaryAction)
+                        }
+                        .keyboardShortcut(.defaultAction)
+                    }
+
+                    if presentation.primaryAction == .openSystemSettings {
+                        Button("Check Again") {
+                            checkMicPermission()
+                        }
                     }
                 }
+                .controlSize(.regular)
             }
             .padding(12)
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(8)
-
+        }
+        .onAppear {
+            checkMicPermission()
         }
     }
 
@@ -950,9 +976,16 @@ struct SetupView: View {
             Spacer()
         }
         .onAppear {
+            checkMicPermission()
+            checkAccessibility()
             appState.refreshAvailableMicrophones()
             testMicPulsing = true
-            startTestHotkeyMonitoring()
+            if micPermissionStatus == .granted && accessibilityStatus == .granted {
+                startTestHotkeyMonitoring()
+            } else {
+                testError = firstRunTestLocalGateError()
+                testPhase = .done
+            }
         }
         .onDisappear {
             stopTestHotkeyMonitoring()
@@ -1028,7 +1061,7 @@ struct SetupView: View {
     private var canContinueFromCurrentStep: Bool {
         switch currentStep {
         case .micPermission:
-            return micPermissionGranted
+            return MicrophonePermissionGate.presentation(for: micPermissionStatus).canProceed
         case .accessibility:
             return accessibilityStatus == .granted
         case .screenRecording:
@@ -1060,6 +1093,22 @@ struct SetupView: View {
     private var canFinishSetup: Bool {
         appState.isHotkeyReadyForDictation &&
             appState.firstRunOnboardingStep == .ready
+    }
+
+    private func firstRunTestLocalGateError() -> String {
+        if micPermissionStatus != .granted {
+            let presentation = MicrophonePermissionGate.presentation(for: micPermissionStatus)
+            if presentation.showsRecoveryPath {
+                return "\(presentation.title). \(MicrophonePermissionGate.recoveryPath)."
+            }
+            return presentation.message
+        }
+
+        if accessibilityStatus != .granted {
+            return "Accessibility access is required before the test whisper. Go back and enable RubyWhisper in System Settings > Privacy & Security > Accessibility."
+        }
+
+        return "Complete the local permission steps before trying a test whisper."
     }
 
     private func hotkeyRecoveryBox(title: String, message: String, diagnostic: String) -> some View {
@@ -1156,17 +1205,57 @@ struct SetupView: View {
     }
 
     func checkMicPermission() {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:
-            micPermissionGranted = true
-        default:
-            break
-        }
+        appState.refreshAvailableMicrophones()
+        micPermissionStatus = MicrophonePermissionGate.category(
+            from: AVCaptureDevice.authorizationStatus(for: .audio),
+            hasInputDevice: !AudioDevice.availableInputDevices().isEmpty
+        )
     }
 
     func requestMicPermission() {
-        appState.requestMicrophoneAccess { granted in
-            micPermissionGranted = granted
+        micPermissionStatus = .requesting
+        appState.requestMicrophoneAccess { _ in
+            checkMicPermission()
+        }
+    }
+
+    private var micPermissionColor: Color {
+        switch micPermissionStatus {
+        case .granted:
+            return .green
+        case .denied, .restricted, .unavailable:
+            return .orange
+        case .requesting:
+            return .blue
+        case .unknown, .notDetermined:
+            return .secondary
+        }
+    }
+
+    private var micPermissionStatusIcon: String {
+        switch micPermissionStatus {
+        case .granted:
+            return "checkmark.circle.fill"
+        case .denied, .restricted, .unavailable:
+            return "exclamationmark.triangle.fill"
+        case .requesting:
+            return "hourglass"
+        case .unknown, .notDetermined:
+            return "mic.fill"
+        }
+    }
+
+    private func handleMicrophonePrimaryAction(_ action: MicrophonePermissionPrimaryAction) {
+        switch action {
+        case .none:
+            break
+        case .requestAccess:
+            requestMicPermission()
+        case .openSystemSettings:
+            appState.openMicrophoneSettings()
+            checkMicPermission()
+        case .retry:
+            checkMicPermission()
         }
     }
 
@@ -1339,22 +1428,25 @@ struct SetupView: View {
     }
 
     private func canStartFirstRunTestWhisper() -> Bool {
+        checkMicPermission()
+        checkAccessibility()
+
         guard appState.validateFirstRunTestDictationAccountGate() else {
             testError = appState.authStateTitle
             return false
         }
 
-        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
-            testError = "Microphone permission is required before the test whisper."
-            appState.requestMicrophoneAccess { granted in
-                micPermissionGranted = granted
+        guard micPermissionStatus == .granted else {
+            testError = firstRunTestLocalGateError()
+            if micPermissionStatus == .notDetermined {
+                requestMicPermission()
             }
             return false
         }
 
         guard appState.refreshAccessibilityTrustStatus(recoveryWhenMissing: true) else {
             syncAccessibilityStatus()
-            testError = "Accessibility permission is required before the test whisper can complete."
+            testError = firstRunTestLocalGateError()
             currentStep = .accessibility
             return false
         }
@@ -1362,8 +1454,8 @@ struct SetupView: View {
         syncAccessibilityStatus()
         return FirstRunOnboardingCoordinator.canStartTestWhisper(from: FirstRunOnboardingGateSnapshot(
             authState: appState.authCoordinatorState,
-            microphoneStatus: .granted,
-            accessibilityStatus: appState.firstRunAccessibilityPermissionStatus
+            microphoneStatus: micPermissionStatus,
+            accessibilityStatus: accessibilityStatus
         ))
     }
 
