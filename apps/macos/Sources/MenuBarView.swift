@@ -107,6 +107,16 @@ struct MenuBarView: View {
                 Button("Cancel Sign In") {
                     appState.cancelDesktopSignIn()
                 }
+            } else if appState.authCoordinatorState == .signedOut ||
+                        appState.authCoordinatorState == .canceled ||
+                        appState.authCoordinatorState == .error {
+                Button("Sign In") {
+                    appState.startDesktopSignIn()
+                }
+                Button("Refresh Account") {
+                    appState.refreshDesktopAccountState()
+                }
+                .disabled(appState.authCoordinatorState == .accountRefreshing)
             } else {
                 Button("Refresh Account") {
                     appState.refreshDesktopAccountState()

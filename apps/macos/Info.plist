@@ -20,6 +20,17 @@
     <string>https://rubywhisper.invalid</string>
     <key>RubyWhisperAppChannel</key>
     <string>development</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>RubyWhisper Login Callback</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>rubywhisper</string>
+            </array>
+        </dict>
+    </array>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>
