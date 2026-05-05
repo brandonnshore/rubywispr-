@@ -143,6 +143,9 @@ FR-017 Insertion: The app must insert cleaned text into the active text field wh
 - Validate by running: manual tests in Notes, browser, Slack/equivalent, and code editor.
 - Required tests: manual app-integration tests.
 - Security/privacy: do not read more app content than needed for insertion/context.
+- Contract: `docs/RW_068_DIRECT_INSERTION_CONTRACT.md` defines insertion
+  eligibility, target categories, success/failure/ambiguous outcomes, timeout
+  behavior, RW-069 recovery handoff, and target-app privacy boundaries.
 
 FR-018 Insertion failure recovery: The app must never silently discard a whisper when insertion fails.
 
