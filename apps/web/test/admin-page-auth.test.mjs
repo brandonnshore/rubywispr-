@@ -136,14 +136,46 @@ test("admin page renders admin content only for active admins", async () => {
 
   assert.match(markup, /Admin operations/);
   assert.match(markup, /Server-side admin authorization is active/);
+  assert.match(markup, /User and account metadata/);
+  assert.match(markup, /Plan and subscription status/);
+  assert.match(markup, /Request and error counts/);
+  assert.match(markup, /Friend of Ruby batches/);
+  assert.doesNotMatch(markup, /Tables pending/);
   assert.doesNotMatch(markup, /Admin access denied/);
   assert.match(source, /export\s+const\s+dynamic\s*=\s*["']force-dynamic["']/);
   assert.match(source, /requireRubyWhisperAdminForPage/);
+  assert.match(source, /readRubyWhisperAdminDashboardSnapshot/);
   assert.doesNotMatch(source, /\buseAuth\b|\buseUser\b|\bSignedIn\b|\bSignedOut\b|\bProtect\b/);
 });
 
-test("admin page denies signed-in non-admins without rendering admin content", async () => {
+test("admin page renders mocked source metadata without private content fields", async () => {
+  const privateContentPattern =
+    /raw transcript|cleaned text|clipboard|dictionary|request body|response body|authorization token|provider payload|private backend detail/i;
   const pageModule = await loadAdminPageModule({
+    readDashboardSnapshot: async () => createMockDashboardSnapshot(),
+    requireAdminForPage: async () =>
+      createAllowedAdminResult("user_rw_synthetic_admin_001"),
+  });
+
+  const markup = renderToStaticMarkup(await pageModule.default());
+
+  assert.match(markup, /admin@example\.test/);
+  assert.match(markup, /Monthly/);
+  assert.match(markup, /2,500/);
+  assert.match(markup, /Mock Provider/);
+  assert.match(markup, /rate_limited/);
+  assert.match(markup, /FRIENDS-2026/);
+  assert.doesNotMatch(markup, /req_rw_private_001|stripePromotionCodeId|promo_/i);
+  assert.doesNotMatch(markup, privateContentPattern);
+});
+
+test("admin page denies signed-in non-admins without rendering admin content", async () => {
+  const dashboardCalls = [];
+  const pageModule = await loadAdminPageModule({
+    readDashboardSnapshot: async () => {
+      dashboardCalls.push({ operation: "dashboard.read" });
+      return createMockDashboardSnapshot();
+    },
     requireAdminForPage: async () => ({
       action: "denied",
       allowed: false,
@@ -163,6 +195,9 @@ test("admin page denies signed-in non-admins without rendering admin content", a
   assert.match(markup, /does not have an active RubyWhisper admin role/);
   assert.doesNotMatch(markup, /Admin operations/);
   assert.doesNotMatch(markup, /Server-side admin authorization is active/);
+  assert.doesNotMatch(markup, /User and account metadata/);
+  assert.doesNotMatch(markup, /admin@example\.test/);
+  assert.deepEqual(dashboardCalls, []);
 });
 
 test("admin page fails closed without rendering admin content on backend errors", async () => {
@@ -185,6 +220,7 @@ test("admin page fails closed without rendering admin content on backend errors"
   assert.match(markup, /Admin access denied/);
   assert.doesNotMatch(markup, /Admin operations/);
   assert.doesNotMatch(markup, /Server-side admin authorization is active/);
+  assert.doesNotMatch(markup, /User and account metadata/);
 });
 
 test("admin page preserves the Clerk sign-in redirect for signed-out requests", async () => {
@@ -223,7 +259,10 @@ async function loadAdminAuthModule() {
   return commonJsModule.exports;
 }
 
-async function loadAdminPageModule({ requireAdminForPage }) {
+async function loadAdminPageModule({
+  readDashboardSnapshot = async () => createMockDashboardSnapshot(),
+  requireAdminForPage,
+}) {
   const source = await readFile(adminPagePath, "utf8");
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: {
@@ -240,7 +279,10 @@ async function loadAdminPageModule({ requireAdminForPage }) {
     {
       exports: commonJsModule.exports,
       module: commonJsModule,
-      require: createAdminPageRequire(requireAdminForPage),
+      require: createAdminPageRequire({
+        readDashboardSnapshot,
+        requireAdminForPage,
+      }),
     },
     {
       filename: adminPagePath,
@@ -275,7 +317,10 @@ function createAdminAuthRequire() {
   };
 }
 
-function createAdminPageRequire(requireAdminForPage) {
+function createAdminPageRequire({
+  readDashboardSnapshot,
+  requireAdminForPage,
+}) {
   return function requireAdminPageModule(specifier) {
     switch (specifier) {
       case "react/jsx-runtime":
@@ -293,6 +338,10 @@ function createAdminPageRequire(requireAdminForPage) {
         return {
           requireRubyWhisperAdminForPage: requireAdminForPage,
         };
+      case "@/lib/admin/dashboard":
+        return {
+          readRubyWhisperAdminDashboardSnapshot: readDashboardSnapshot,
+        };
       default:
         throw new Error(`Unexpected admin page dependency ${specifier}`);
     }
@@ -307,6 +356,117 @@ function createAllowedAdminResult(clerkUserId) {
     ok: true,
     role: "admin",
     status: "active_admin",
+  };
+}
+
+function createMockDashboardSnapshot() {
+  return {
+    action: "loaded",
+    ok: true,
+    snapshot: {
+      friendOfRubyBatches: {
+        ok: true,
+        rows: [
+          {
+            code: "FRIENDS-2026",
+            created_at: "2026-05-04T00:00:00.000Z",
+            created_by_clerk_user_id: "user_rw_synthetic_admin_001",
+            expires_at: "2027-05-04T00:00:00.000Z",
+            max_redemptions: 10,
+          },
+        ],
+        status: "loaded",
+      },
+      generatedAt: "2026-05-04T12:00:00.000Z",
+      profiles: {
+        ok: true,
+        rows: [
+          {
+            clerk_user_id: "user_rw_synthetic_admin_001",
+            created_at: "2026-05-04T00:00:00.000Z",
+            email: "admin@example.test",
+            is_blocked: false,
+            terms_accepted_at: "2026-05-04T00:00:00.000Z",
+          },
+        ],
+        status: "loaded",
+      },
+      rateLimits: {
+        ok: true,
+        rows: [
+          {
+            clerk_user_id: "user_rw_synthetic_admin_001",
+            request_count: 2,
+            updated_at: "2026-05-04T00:05:00.000Z",
+            window_start: "2026-05-04T00:00:00.000Z",
+          },
+        ],
+        status: "loaded",
+      },
+      stripeWebhookEvents: {
+        ok: true,
+        rows: [
+          {
+            created_at: "2026-05-04T00:00:00.000Z",
+            error_code: null,
+            event_type: "customer.subscription.updated",
+            failed_at: null,
+            processed_at: "2026-05-04T00:00:01.000Z",
+            status: "processed",
+            stripe_created_at: "2026-05-04T00:00:00.000Z",
+            updated_at: "2026-05-04T00:00:01.000Z",
+          },
+        ],
+        status: "loaded",
+      },
+      subscriptions: {
+        ok: true,
+        rows: [
+          {
+            clerk_user_id: "user_rw_synthetic_admin_001",
+            current_period_end: "2026-06-04T00:00:00.000Z",
+            friend_of_ruby_until: null,
+            plan: "monthly",
+            status: "active",
+            updated_at: "2026-05-04T00:00:00.000Z",
+          },
+        ],
+        status: "loaded",
+      },
+      transcriptionRequests: {
+        ok: true,
+        rows: [
+          {
+            app_version: "0.1.0",
+            audio_duration_ms: 1200,
+            cleaned_word_count: 2500,
+            clerk_user_id: "user_rw_synthetic_admin_001",
+            created_at: "2026-05-04T00:00:00.000Z",
+            error_code: "rate_limited",
+            latency_ms: 250,
+            os_version: "macOS 15.0",
+            plan_state: "paid_active",
+            provider: "mock_provider",
+            status: "failure",
+          },
+        ],
+        status: "loaded",
+      },
+      usageCounters: {
+        ok: true,
+        rows: [
+          {
+            clerk_user_id: "user_rw_synthetic_admin_001",
+            lifetime_words_used: 10000,
+            monthly_period_start: "2026-05-01",
+            monthly_words_used: 2500,
+            trial_words_used: 500,
+            updated_at: "2026-05-04T00:00:00.000Z",
+          },
+        ],
+        status: "loaded",
+      },
+    },
   };
 }
 
