@@ -142,6 +142,25 @@ final class RubyWhisperBackendAPIClient {
         return try decodeResponse(data, response: response, as: RubyWhisperDesktopAccountResponse.self)
     }
 
+    func refreshAccountSnapshot() async -> RubyWhisperDesktopAccountSnapshot {
+        do {
+            return try await fetchAccount().accountSnapshot()
+        } catch RubyWhisperBackendClientError.backend(let error) {
+            if error.code == .signedOut {
+                try? sessionStore.delete()
+            }
+            return RubyWhisperDesktopAccountSnapshot(error: error)
+        } catch {
+            return RubyWhisperDesktopAccountSnapshot(
+                state: .signedOut,
+                canTranscribe: false,
+                recovery: .retry,
+                retryable: true,
+                failureCode: .serviceUnavailable
+            )
+        }
+    }
+
     func transcribe(_ transcriptionRequest: RubyWhisperDesktopTranscriptionRequest) async throws -> RubyWhisperDesktopTranscriptionResponse {
         let body = try transcriptionRequest.httpBody()
         var request = try authenticatedRequest(path: "/api/desktop/transcribe", method: "POST")
@@ -250,14 +269,7 @@ final class RubyWhisperBackendAPIClient {
             let envelope = try decoder.decode(RubyWhisperBackendErrorEnvelope.self, from: data)
             return envelope.mappedError(statusCode: response.statusCode)
         } catch {
-            return RubyWhisperBackendError(
-                code: .unknown("http_\(response.statusCode)"),
-                httpStatus: response.statusCode,
-                message: "RubyWhisper backend request failed.",
-                recovery: .retryOrContactSupport,
-                desktopState: .error,
-                retryable: false
-            )
+            return RubyWhisperBackendError.defaultMapping(statusCode: response.statusCode)
         }
     }
 
@@ -293,6 +305,211 @@ struct RubyWhisperDesktopAccountResponse: Decodable, Equatable {
     var billingPortalAvailable: Bool
     var billingPortalUrl: URL?
     var failureCode: RubyWhisperBackendErrorCode?
+
+    func accountSnapshot() -> RubyWhisperDesktopAccountSnapshot {
+        if accountStatus == .termsRequired || failureCode == .termsRequired {
+            return snapshot(
+                state: .signedInTermsRequired,
+                canTranscribe: false,
+                recovery: .openTermsAcceptance
+            )
+        }
+
+        if failureCode == .trialExhausted || failureCode == .subscriptionRequired || planState == .trialExhausted {
+            return snapshot(
+                state: .trialExhausted,
+                canTranscribe: false,
+                recovery: .openCheckout
+            )
+        }
+
+        if failureCode == .paymentFailed || planState == .paymentFailed {
+            return snapshot(
+                state: .paymentFailed,
+                canTranscribe: false,
+                recovery: .openBilling
+            )
+        }
+
+        if failureCode == .accountBlocked || planState == .blocked {
+            return snapshot(
+                state: .blocked,
+                canTranscribe: false,
+                recovery: .openAccount
+            )
+        }
+
+        guard accountStatus == .active, canTranscribe else {
+            return snapshot(
+                state: .error,
+                canTranscribe: false,
+                recovery: .retryOrContactSupport
+            )
+        }
+
+        switch planState {
+        case .trialActive:
+            return snapshot(state: .trialActive, canTranscribe: true)
+        case .paidActive:
+            return snapshot(state: .paidActive, canTranscribe: true)
+        case .friendOfRubyActive:
+            return snapshot(state: .friendOfRubyActive, canTranscribe: true)
+        case .trialExhausted, .paymentFailed, .blocked:
+            return snapshot(
+                state: .error,
+                canTranscribe: false,
+                recovery: .retryOrContactSupport
+            )
+        case .unknown:
+            return snapshot(
+                state: .error,
+                canTranscribe: false,
+                recovery: .retryOrContactSupport
+            )
+        }
+    }
+
+    private func snapshot(
+        state: RubyWhisperDesktopState,
+        canTranscribe: Bool,
+        recovery: RubyWhisperDesktopRecoveryAction? = nil
+    ) -> RubyWhisperDesktopAccountSnapshot {
+        RubyWhisperDesktopAccountSnapshot(
+            state: state,
+            canTranscribe: canTranscribe,
+            recovery: recovery,
+            retryable: false,
+            email: email,
+            termsAccepted: termsAccepted,
+            accountStatus: accountStatus,
+            planState: planState,
+            preflightPolicy: preflightPolicy,
+            trialWordsUsed: trialWordsUsed,
+            trialWordsRemaining: trialWordsRemaining,
+            trialWordsLimit: trialWordsLimit,
+            isTrialLow: isTrialLow,
+            isTrialExhausted: isTrialExhausted,
+            monthlyWordsUsed: monthlyWordsUsed,
+            monthlyPeriodStart: monthlyPeriodStart,
+            lifetimeWordsUsed: lifetimeWordsUsed,
+            billingPortalAvailable: billingPortalAvailable,
+            failureCode: failureCode
+        )
+    }
+}
+
+struct RubyWhisperDesktopAccountSnapshot: Equatable {
+    var state: RubyWhisperDesktopState
+    var canTranscribe: Bool
+    var recovery: RubyWhisperDesktopRecoveryAction?
+    var retryable: Bool
+    var email: String?
+    var termsAccepted: Bool?
+    var accountStatus: RubyWhisperDesktopAccountStatus?
+    var planState: RubyWhisperDesktopPlanState?
+    var preflightPolicy: String?
+    var trialWordsUsed: Int?
+    var trialWordsRemaining: Int?
+    var trialWordsLimit: Int?
+    var isTrialLow: Bool?
+    var isTrialExhausted: Bool?
+    var monthlyWordsUsed: Int?
+    var monthlyPeriodStart: String?
+    var lifetimeWordsUsed: Int?
+    var billingPortalAvailable: Bool?
+    var failureCode: RubyWhisperBackendErrorCode?
+    var requestId: String?
+    var httpStatus: Int?
+
+    init(
+        state: RubyWhisperDesktopState,
+        canTranscribe: Bool,
+        recovery: RubyWhisperDesktopRecoveryAction? = nil,
+        retryable: Bool = false,
+        email: String? = nil,
+        termsAccepted: Bool? = nil,
+        accountStatus: RubyWhisperDesktopAccountStatus? = nil,
+        planState: RubyWhisperDesktopPlanState? = nil,
+        preflightPolicy: String? = nil,
+        trialWordsUsed: Int? = nil,
+        trialWordsRemaining: Int? = nil,
+        trialWordsLimit: Int? = nil,
+        isTrialLow: Bool? = nil,
+        isTrialExhausted: Bool? = nil,
+        monthlyWordsUsed: Int? = nil,
+        monthlyPeriodStart: String? = nil,
+        lifetimeWordsUsed: Int? = nil,
+        billingPortalAvailable: Bool? = nil,
+        failureCode: RubyWhisperBackendErrorCode? = nil,
+        requestId: String? = nil,
+        httpStatus: Int? = nil
+    ) {
+        self.state = state
+        self.canTranscribe = canTranscribe
+        self.recovery = recovery
+        self.retryable = retryable
+        self.email = email
+        self.termsAccepted = termsAccepted
+        self.accountStatus = accountStatus
+        self.planState = planState
+        self.preflightPolicy = preflightPolicy
+        self.trialWordsUsed = trialWordsUsed
+        self.trialWordsRemaining = trialWordsRemaining
+        self.trialWordsLimit = trialWordsLimit
+        self.isTrialLow = isTrialLow
+        self.isTrialExhausted = isTrialExhausted
+        self.monthlyWordsUsed = monthlyWordsUsed
+        self.monthlyPeriodStart = monthlyPeriodStart
+        self.lifetimeWordsUsed = lifetimeWordsUsed
+        self.billingPortalAvailable = billingPortalAvailable
+        self.failureCode = failureCode
+        self.requestId = requestId
+        self.httpStatus = httpStatus
+    }
+
+    init(error: RubyWhisperBackendError) {
+        let mapped = RubyWhisperDesktopAccountSnapshot.mapping(for: error)
+        self.init(
+            state: mapped.state,
+            canTranscribe: false,
+            recovery: mapped.recovery,
+            retryable: mapped.retryable,
+            failureCode: error.code,
+            requestId: error.requestId,
+            httpStatus: error.httpStatus
+        )
+    }
+
+    private static func mapping(
+        for error: RubyWhisperBackendError
+    ) -> (state: RubyWhisperDesktopState, recovery: RubyWhisperDesktopRecoveryAction, retryable: Bool) {
+        switch error.code {
+        case .signedOut:
+            return (.signedOut, .openSignIn, false)
+        case .termsRequired:
+            return (.signedInTermsRequired, .openTermsAcceptance, false)
+        case .trialExhausted, .subscriptionRequired:
+            return (.trialExhausted, .openCheckout, false)
+        case .paymentFailed:
+            return (.paymentFailed, .openBilling, false)
+        case .accountBlocked:
+            return (.blocked, .openAccount, false)
+        case .networkError:
+            return (.networkError, .retry, true)
+        case .serviceUnavailable, .internalError:
+            return (.signedOut, error.recovery ?? .retry, true)
+        case .rateLimited:
+            return (.error, .retryAfter, true)
+        case .durationLimitReached:
+            return (.durationLimitReached, .startNewWhisper, false)
+        case .invalidAudio:
+            return (.error, .recordAgain, false)
+        case .providerError:
+            return (.providerError, .retry, true)
+        case .unknown:
+            return (.error, error.recovery ?? .retryOrContactSupport, error.retryable ?? false)
+        }
+    }
 }
 
 struct RubyWhisperDesktopTranscriptionResponse: Decodable, Equatable {
@@ -440,6 +657,149 @@ struct RubyWhisperBackendError: Error, Equatable {
     var recovery: RubyWhisperDesktopRecoveryAction?
     var desktopState: RubyWhisperDesktopState?
     var retryable: Bool?
+
+    static func defaultMapping(statusCode: Int) -> RubyWhisperBackendError {
+        switch statusCode {
+        case 401:
+            return RubyWhisperBackendError(
+                code: .signedOut,
+                httpStatus: statusCode,
+                message: "Sign in to use RubyWhisper.",
+                recovery: .openSignIn,
+                desktopState: .signedOut,
+                retryable: false
+            )
+        case 403:
+            return RubyWhisperBackendError(
+                code: .termsRequired,
+                httpStatus: statusCode,
+                message: "Accept Terms and Privacy to start dictating.",
+                recovery: .openTermsAcceptance,
+                desktopState: .signedInTermsRequired,
+                retryable: false
+            )
+        case 500:
+            return RubyWhisperBackendError(
+                code: .internalError,
+                httpStatus: statusCode,
+                message: "Something went wrong. Try again.",
+                recovery: .retryOrContactSupport,
+                desktopState: .error,
+                retryable: true
+            )
+        case 502, 503, 504:
+            return RubyWhisperBackendError(
+                code: .serviceUnavailable,
+                httpStatus: statusCode,
+                message: "RubyWhisper is temporarily unavailable.",
+                recovery: .retry,
+                desktopState: .error,
+                retryable: true
+            )
+        default:
+            return RubyWhisperBackendError(
+                code: .unknown("http_\(statusCode)"),
+                httpStatus: statusCode,
+                message: "RubyWhisper backend request failed.",
+                recovery: .retryOrContactSupport,
+                desktopState: .error,
+                retryable: false
+            )
+        }
+    }
+
+    static func defaultMapping(
+        code: RubyWhisperBackendErrorCode,
+        statusCode: Int
+    ) -> RubyWhisperBackendError {
+        switch code {
+        case .signedOut:
+            return RubyWhisperBackendError(
+                code: .signedOut,
+                httpStatus: statusCode,
+                message: "Sign in to use RubyWhisper.",
+                recovery: .openSignIn,
+                desktopState: .signedOut,
+                retryable: false
+            )
+        case .termsRequired:
+            return RubyWhisperBackendError(
+                code: .termsRequired,
+                httpStatus: statusCode,
+                message: "Accept Terms and Privacy to start dictating.",
+                recovery: .openTermsAcceptance,
+                desktopState: .signedInTermsRequired,
+                retryable: false
+            )
+        case .trialExhausted:
+            return RubyWhisperBackendError(
+                code: .trialExhausted,
+                httpStatus: statusCode,
+                message: "Upgrade to keep using RubyWhisper.",
+                recovery: .openCheckout,
+                desktopState: .trialExhausted,
+                retryable: false
+            )
+        case .subscriptionRequired:
+            return RubyWhisperBackendError(
+                code: .subscriptionRequired,
+                httpStatus: statusCode,
+                message: "Choose a plan to keep dictating.",
+                recovery: .openCheckout,
+                desktopState: .trialExhausted,
+                retryable: false
+            )
+        case .paymentFailed:
+            return RubyWhisperBackendError(
+                code: .paymentFailed,
+                httpStatus: statusCode,
+                message: "Update billing to continue.",
+                recovery: .openBilling,
+                desktopState: .paymentFailed,
+                retryable: false
+            )
+        case .accountBlocked:
+            return RubyWhisperBackendError(
+                code: .accountBlocked,
+                httpStatus: statusCode,
+                message: "This account cannot dictate right now.",
+                recovery: .openAccount,
+                desktopState: .blocked,
+                retryable: false
+            )
+        case .networkError:
+            return RubyWhisperBackendError(
+                code: .networkError,
+                httpStatus: statusCode,
+                message: "Check your internet connection and try again.",
+                recovery: .retry,
+                desktopState: .networkError,
+                retryable: true
+            )
+        case .serviceUnavailable:
+            return RubyWhisperBackendError(
+                code: .serviceUnavailable,
+                httpStatus: statusCode,
+                message: "RubyWhisper is temporarily unavailable.",
+                recovery: .retry,
+                desktopState: .error,
+                retryable: true
+            )
+        case .internalError:
+            return RubyWhisperBackendError(
+                code: .internalError,
+                httpStatus: statusCode,
+                message: "Something went wrong. Try again.",
+                recovery: .retryOrContactSupport,
+                desktopState: .error,
+                retryable: true
+            )
+        default:
+            var fallback = defaultMapping(statusCode: statusCode)
+            fallback.code = code
+            return fallback
+        }
+    }
 }
 
 enum RubyWhisperBackendErrorCode: Equatable, RawRepresentable, Codable {
@@ -717,14 +1077,17 @@ private struct RubyWhisperBackendErrorEnvelope: Decodable {
     var message: String?
 
     func mappedError(statusCode: Int) -> RubyWhisperBackendError {
-        RubyWhisperBackendError(
-            code: error?.code ?? errorCode ?? .unknown("http_\(statusCode)"),
+        let statusFallback = RubyWhisperBackendError.defaultMapping(statusCode: statusCode)
+        let code = error?.code ?? errorCode ?? statusFallback.code
+        let fallback = RubyWhisperBackendError.defaultMapping(code: code, statusCode: statusCode)
+        return RubyWhisperBackendError(
+            code: code,
             requestId: requestId,
             httpStatus: statusCode,
-            message: error?.message ?? message,
-            recovery: error?.recovery,
-            desktopState: error?.desktopState,
-            retryable: error?.retryable
+            message: error?.message ?? message ?? fallback.message,
+            recovery: error?.recovery ?? fallback.recovery,
+            desktopState: error?.desktopState ?? fallback.desktopState,
+            retryable: error?.retryable ?? fallback.retryable
         )
     }
 }

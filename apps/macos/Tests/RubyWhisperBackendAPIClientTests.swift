@@ -70,6 +70,8 @@ private struct RubyWhisperBackendAPIClientTests {
     static func main() async {
         do {
             try await testAccountRequestUsesSessionAuthMetadataAndNoStore()
+            try await testAccountSnapshotMapsDocumentedSuccessStates()
+            try await testAccountSnapshotMapsFailureResponsesFailClosed()
             try await testBackendErrorMappingRedactsDiagnostics()
             try await testSignedOutDoesNotCallTransport()
             try await testTransportFailureMapsToNetworkError()
@@ -130,6 +132,160 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(request.value(forHTTPHeaderField: "X-RubyWhisper-App-Version") == "0.1.0-test", "account request should include app version metadata")
         expect(request.value(forHTTPHeaderField: "X-RubyWhisper-OS-Version") == "macOS synthetic", "account request should include OS metadata")
         expect(request.value(forHTTPHeaderField: "X-RubyWhisper-Platform") == "macos", "account request should include platform metadata")
+    }
+
+    private static func testAccountSnapshotMapsDocumentedSuccessStates() async throws {
+        let cases: [(name: String, response: RubyWhisperDesktopAccountResponse, state: RubyWhisperDesktopState, canTranscribe: Bool, recovery: RubyWhisperDesktopRecoveryAction?)] = [
+            (
+                "trial active",
+                makeAccountResponse(planState: .trialActive, canTranscribe: true),
+                .trialActive,
+                true,
+                nil
+            ),
+            (
+                "paid active",
+                makeAccountResponse(planState: .paidActive, canTranscribe: true),
+                .paidActive,
+                true,
+                nil
+            ),
+            (
+                "Friend of Ruby active",
+                makeAccountResponse(planState: .friendOfRubyActive, canTranscribe: true),
+                .friendOfRubyActive,
+                true,
+                nil
+            ),
+            (
+                "terms required account status",
+                makeAccountResponse(accountStatus: .termsRequired, planState: .trialActive, canTranscribe: false),
+                .signedInTermsRequired,
+                false,
+                .openTermsAcceptance
+            ),
+            (
+                "terms required failure code",
+                makeAccountResponse(planState: .trialActive, canTranscribe: false, failureCode: .termsRequired),
+                .signedInTermsRequired,
+                false,
+                .openTermsAcceptance
+            ),
+            (
+                "trial exhausted",
+                makeAccountResponse(planState: .trialExhausted, canTranscribe: false),
+                .trialExhausted,
+                false,
+                .openCheckout
+            ),
+            (
+                "subscription required",
+                makeAccountResponse(planState: .trialActive, canTranscribe: false, failureCode: .subscriptionRequired),
+                .trialExhausted,
+                false,
+                .openCheckout
+            ),
+            (
+                "payment failed",
+                makeAccountResponse(planState: .paymentFailed, canTranscribe: false),
+                .paymentFailed,
+                false,
+                .openBilling
+            ),
+            (
+                "account blocked",
+                makeAccountResponse(planState: .blocked, canTranscribe: false, failureCode: .accountBlocked),
+                .blocked,
+                false,
+                .openAccount
+            ),
+        ]
+
+        for testCase in cases {
+            let snapshot = testCase.response.accountSnapshot()
+            expect(snapshot.state == testCase.state, "\(testCase.name) should map desktop state")
+            expect(snapshot.canTranscribe == testCase.canTranscribe, "\(testCase.name) should map dictation gate")
+            expect(snapshot.recovery == testCase.recovery, "\(testCase.name) should map recovery")
+            expect(snapshot.failureCode == testCase.response.failureCode, "\(testCase.name) should preserve metadata-only failure code")
+        }
+    }
+
+    private static func testAccountSnapshotMapsFailureResponsesFailClosed() async throws {
+        let signedOutStore = MemorySessionStore(session: sessionMaterial(token: "session_placeholder_redacted_401"))
+        let signedOutSnapshot = try await refreshSnapshot(
+            statusCode: 401,
+            body: Data(),
+            sessionStore: signedOutStore
+        )
+        expect(signedOutSnapshot.state == .signedOut, "401 should map to signed_out")
+        expect(signedOutSnapshot.canTranscribe == false, "401 should disable dictation")
+        expect(signedOutSnapshot.recovery == .openSignIn, "401 should recover through sign-in")
+        expect(signedOutSnapshot.retryable == false, "401 should not be retryable without login")
+        expect(signedOutStore.read() == nil, "401 signed_out should clear local session material")
+
+        let termsRequiredSnapshot = try await refreshSnapshot(statusCode: 403, body: Data())
+        expect(termsRequiredSnapshot.state == .signedInTermsRequired, "403 without a more specific code should map to signed_in_terms_required")
+        expect(termsRequiredSnapshot.canTranscribe == false, "403 terms_required should disable dictation")
+        expect(termsRequiredSnapshot.recovery == .openTermsAcceptance, "403 terms_required should recover through Terms acceptance")
+        expect(termsRequiredSnapshot.retryable == false, "403 terms_required should not be retryable until Terms acceptance")
+
+        let serviceUnavailableSnapshot = try await refreshSnapshot(
+            statusCode: 503,
+            body: Data("""
+            {
+              "ok": false,
+              "requestId": "req_service_unavailable",
+              "error": {
+                "code": "service_unavailable",
+                "message": "RubyWhisper is temporarily unavailable.",
+                "retryable": true,
+                "recovery": "retry",
+                "desktopState": "error"
+              }
+            }
+            """.utf8)
+        )
+        expect(serviceUnavailableSnapshot.state == .signedOut, "service_unavailable account refresh should fail closed to signed_out until refresh succeeds")
+        expect(serviceUnavailableSnapshot.canTranscribe == false, "service_unavailable should not enable dictation")
+        expect(serviceUnavailableSnapshot.recovery == .retry, "service_unavailable should be retryable")
+        expect(serviceUnavailableSnapshot.retryable == true, "service_unavailable should mark retryable")
+        expect(serviceUnavailableSnapshot.requestId == "req_service_unavailable", "service_unavailable should preserve support-safe request ID")
+
+        let internalErrorSnapshot = try await refreshSnapshot(
+            statusCode: 500,
+            body: Data("""
+            {
+              "ok": false,
+              "error": {
+                "code": "internal_error",
+                "retryable": true,
+                "recovery": "retry_or_contact_support",
+                "desktopState": "error"
+              }
+            }
+            """.utf8)
+        )
+        expect(internalErrorSnapshot.state == .signedOut, "internal_error account refresh should fail closed to signed_out until refresh succeeds")
+        expect(internalErrorSnapshot.canTranscribe == false, "internal_error should not enable dictation")
+        expect(internalErrorSnapshot.retryable == true, "internal_error should mark retryable")
+
+        let blockedSnapshot = try await refreshSnapshot(
+            statusCode: 403,
+            body: Data("""
+            {
+              "ok": false,
+              "error": {
+                "code": "account_blocked",
+                "retryable": false,
+                "recovery": "open_account",
+                "desktopState": "blocked"
+              }
+            }
+            """.utf8)
+        )
+        expect(blockedSnapshot.state == .blocked, "403 account_blocked should remain distinct from terms_required")
+        expect(blockedSnapshot.canTranscribe == false, "account_blocked should disable dictation")
+        expect(blockedSnapshot.recovery == .openAccount, "account_blocked should recover through account surface")
     }
 
     private static func testBackendErrorMappingRedactsDiagnostics() async throws {
@@ -308,25 +464,75 @@ private struct RubyWhisperBackendAPIClientTests {
         token: String?,
         transport: CapturingTransport
     ) throws -> RubyWhisperBackendAPIClient {
+        try makeClient(sessionStore: MemorySessionStore(session: token.map { sessionMaterial(token: $0) }), transport: transport)
+    }
+
+    private static func makeClient(
+        sessionStore: DesktopSessionStoring,
+        transport: CapturingTransport
+    ) throws -> RubyWhisperBackendAPIClient {
         let configuration = try RubyWhisperBackendConfiguration(
             baseURL: URL(string: "https://backend.example.test")!,
             appVersion: "0.1.0-test",
             appChannel: "test",
             osVersion: "macOS synthetic"
         )
-        let session = token.map {
-            DesktopSessionMaterial(
-                accessToken: $0,
-                refreshToken: "refresh_placeholder_redacted",
-                expiresAt: Date(timeIntervalSince1970: 4_102_444_800),
-                accountID: "acct_test"
-            )
-        }
         return RubyWhisperBackendAPIClient(
             configuration: configuration,
-            sessionStore: MemorySessionStore(session: session),
+            sessionStore: sessionStore,
             transport: transport,
             now: { Date(timeIntervalSince1970: 1_800_000_000) }
+        )
+    }
+
+    private static func refreshSnapshot(
+        statusCode: Int,
+        body: Data,
+        sessionStore: MemorySessionStore = MemorySessionStore(session: sessionMaterial(token: "session_placeholder_redacted_snapshot"))
+    ) async throws -> RubyWhisperDesktopAccountSnapshot {
+        let transport = CapturingTransport(stubs: [
+            .init(statusCode: statusCode, headers: ["Cache-Control": "no-store"], body: body),
+        ])
+        let client = try makeClient(sessionStore: sessionStore, transport: transport)
+        let snapshot = await client.refreshAccountSnapshot()
+        expect(transport.requests.count == 1, "account snapshot refresh should call transport once")
+        return snapshot
+    }
+
+    private static func makeAccountResponse(
+        accountStatus: RubyWhisperDesktopAccountStatus = .active,
+        planState: RubyWhisperDesktopPlanState,
+        canTranscribe: Bool,
+        failureCode: RubyWhisperBackendErrorCode? = nil
+    ) -> RubyWhisperDesktopAccountResponse {
+        RubyWhisperDesktopAccountResponse(
+            ok: failureCode == nil,
+            email: "user@example.test",
+            termsAccepted: accountStatus == .active,
+            accountStatus: accountStatus,
+            canTranscribe: canTranscribe,
+            planState: planState,
+            preflightPolicy: "allow_if_started_under_limit",
+            trialWordsUsed: 100,
+            trialWordsRemaining: 4900,
+            trialWordsLimit: 5000,
+            isTrialLow: false,
+            isTrialExhausted: planState == .trialExhausted,
+            monthlyWordsUsed: 100,
+            monthlyPeriodStart: "2026-05-01",
+            lifetimeWordsUsed: 100,
+            billingPortalAvailable: false,
+            billingPortalUrl: nil,
+            failureCode: failureCode
+        )
+    }
+
+    private static func sessionMaterial(token: String) -> DesktopSessionMaterial {
+        DesktopSessionMaterial(
+            accessToken: token,
+            refreshToken: "refresh_placeholder_redacted",
+            expiresAt: Date(timeIntervalSince1970: 4_102_444_800),
+            accountID: "acct_test"
         )
     }
 }
