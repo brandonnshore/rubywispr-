@@ -482,6 +482,8 @@ struct SettingsView: View {
 
             Group {
                 switch appState.selectedSettingsTab {
+                case .account:
+                    AccountSettingsView()
                 case .general, .none:
                     GeneralSettingsView()
                 case .prompts:
@@ -495,6 +497,105 @@ struct SettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+// MARK: - Account Settings
+
+struct AccountSettingsView: View {
+    @EnvironmentObject var appState: AppState
+
+    private var showsSignOut: Bool {
+        appState.authCoordinatorState.canTranscribe ||
+            appState.authCoordinatorState == .signedInTermsRequired ||
+            appState.authCoordinatorState == .trialExhausted ||
+            appState.authCoordinatorState == .paymentFailed ||
+            appState.authCoordinatorState == .blocked
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Account")
+                    .font(.largeTitle.bold())
+
+                SettingsCard("Status", icon: appState.authStateSystemImage) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(appState.authStateTitle)
+                                .font(.headline)
+                            Spacer()
+                            Text(appState.authCoordinatorState.rawValue)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+
+                        if appState.authCoordinatorState == .accountRefreshing {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Loading account")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if let email = appState.authAccountSnapshot.email?.trimmingCharacters(in: .whitespacesAndNewlines),
+                           !email.isEmpty {
+                            accountRow("Email", value: email)
+                        }
+
+                        if let recovery = appState.authAccountSnapshot.recovery {
+                            accountRow("Recovery", value: recovery.rawValue)
+                        }
+
+                        if let failureCode = appState.authAccountSnapshot.failureCode {
+                            accountRow("Failure code", value: failureCode.rawValue)
+                        }
+
+                        HStack(spacing: 8) {
+                            if appState.authCoordinatorState.isLoginBridgePending {
+                                Button {
+                                    appState.cancelDesktopSignIn()
+                                } label: {
+                                    Label("Cancel Sign In", systemImage: "xmark.circle")
+                                }
+                            } else {
+                                Button {
+                                    appState.refreshDesktopAccountState()
+                                } label: {
+                                    Label("Refresh Account", systemImage: "arrow.clockwise")
+                                }
+                                .disabled(appState.authCoordinatorState == .accountRefreshing)
+                            }
+
+                            if showsSignOut {
+                                Button {
+                                    _ = appState.logoutDesktopAccount()
+                                } label: {
+                                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func accountRow(_ title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+            Spacer()
+            Text(value)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
         }
     }
 }

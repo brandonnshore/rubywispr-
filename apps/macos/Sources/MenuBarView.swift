@@ -91,6 +91,41 @@ struct MenuBarView: View {
                 Divider()
             }
 
+            HStack(spacing: 8) {
+                Label(appState.authStateTitle, systemImage: appState.authStateSystemImage)
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                Text(appState.authStateDetail)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+
+            if appState.authCoordinatorState.isLoginBridgePending {
+                Button("Cancel Sign In") {
+                    appState.cancelDesktopSignIn()
+                }
+            } else {
+                Button("Refresh Account") {
+                    appState.refreshDesktopAccountState()
+                }
+                .disabled(appState.authCoordinatorState == .accountRefreshing)
+            }
+
+            if appState.authCoordinatorState.canTranscribe ||
+                appState.authCoordinatorState == .signedInTermsRequired ||
+                appState.authCoordinatorState == .trialExhausted ||
+                appState.authCoordinatorState == .paymentFailed ||
+                appState.authCoordinatorState == .blocked {
+                Button("Sign Out") {
+                    _ = appState.logoutDesktopAccount()
+                }
+            }
+
+            Divider()
+
             // Status
             if appState.isRecording {
                 Label("Recording...", systemImage: "record.circle")
