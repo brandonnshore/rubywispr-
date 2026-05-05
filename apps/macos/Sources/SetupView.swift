@@ -54,7 +54,7 @@ struct SetupView: View {
     var onComplete: () -> Void
     @EnvironmentObject var appState: AppState
     @Environment(\.openURL) private var openURL
-    private let freeflowRepoURL = URL(string: "https://github.com/zachlatta/freeflow")!
+    private let upstreamRepoURL = URL(string: "https://github.com/zachlatta/freeflow")!
     private enum SetupStep: Int, CaseIterable {
         case welcome = 0
         case apiKey
@@ -286,9 +286,9 @@ struct SetupView: View {
                     .clipShape(Circle())
 
                     Button {
-                        openURL(freeflowRepoURL)
+                        openURL(upstreamRepoURL)
                     } label: {
-                        Text("zachlatta/freeflow")
+                        Text("Upstream source")
                             .font(.system(.caption, design: .monospaced).weight(.medium))
                     }
                     .buttonStyle(.plain)
@@ -313,11 +313,11 @@ struct SetupView: View {
                     .background(Capsule().fill(Color.yellow.opacity(0.14)))
 
                     Button {
-                        openURL(freeflowRepoURL)
+                        openURL(upstreamRepoURL)
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "star")
-                            Text("Star")
+                            Image(systemName: "arrow.up.right")
+                            Text("Source")
                         }
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10)
