@@ -131,7 +131,7 @@ struct TestCaseExporter {
             ] as [String: Any],
             "pipeline": pipeline,
             "settings": [
-                "custom_vocabulary": item.customVocabulary,
+                "custom_vocabulary": "",
                 "system_prompt": item.systemPrompt ?? "",
                 "context_system_prompt": item.contextSystemPrompt ?? ""
             ] as [String: Any]

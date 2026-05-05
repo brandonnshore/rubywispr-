@@ -693,7 +693,7 @@ struct GeneralSettingsView: View {
     @State private var isValidatingKey = false
     @State private var keyValidationError: String?
     @State private var keyValidationSuccess = false
-    @State private var customVocabularyInput: String = ""
+    @State private var dictionaryFlow = PersonalDictionarySettingsFlow()
     @State private var micPermissionGranted = false
     @State private var showMutedHint = false
     @State private var copiedBuildInfo = false
@@ -833,7 +833,7 @@ struct GeneralSettingsView: View {
                 SettingsCard("Sound Volume", icon: "speaker.wave.2.fill") {
                     soundVolumeSection
                 }
-                SettingsCard("Custom Vocabulary", icon: "text.book.closed.fill") {
+                SettingsCard("Dictionary", icon: "text.book.closed.fill") {
                     vocabularySection
                 }
                 SettingsCard("Permissions", icon: "lock.shield.fill") {
@@ -850,7 +850,6 @@ struct GeneralSettingsView: View {
             apiBaseURLInput = appState.apiBaseURL
             transcriptionAPIURLInput = appState.transcriptionAPIURL
             transcriptionAPIKeyInput = appState.transcriptionAPIKey
-            customVocabularyInput = appState.customVocabulary
             checkMicPermission()
             appState.refreshLaunchAtLoginStatus()
         }
@@ -1394,28 +1393,147 @@ struct GeneralSettingsView: View {
         }
     }
 
-    // MARK: Custom Vocabulary
+    // MARK: Dictionary
 
     private var vocabularySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Words and phrases to preserve during post-processing.")
+            Text(PersonalDictionarySettingsFlow.localOnlyCopy)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            TextEditor(text: $customVocabularyInput)
-                .font(.system(.body, design: .monospaced))
-                .frame(minHeight: 80, maxHeight: 140)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                )
-                .onChange(of: customVocabularyInput) { newValue in
-                    appState.customVocabulary = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            Toggle(isOn: Binding(
+                get: { appState.isPersonalDictionaryEnabled },
+                set: { appState.setPersonalDictionaryEnabled($0) }
+            )) {
+                Text("Use dictionary during cleanup")
+            }
+            .accessibilityHint("Turns local dictionary use on or off without syncing or deleting saved terms.")
+
+            if !appState.isPersonalDictionaryEnabled {
+                Label(PersonalDictionarySettingsFlow.disabledCopy, systemImage: "pause.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if appState.personalDictionaryTerms.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "text.badge.plus")
+                        .foregroundStyle(.secondary)
+                    Text(PersonalDictionarySettingsFlow.emptyStateCopy)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.45))
+                .cornerRadius(6)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(appState.personalDictionaryTerms) { term in
+                        dictionaryTermRow(term)
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    TextField("Name or term", text: Binding(
+                        get: { dictionaryFlow.draftTerm },
+                        set: { dictionaryFlow.updateDraft($0) }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1)
+                    .accessibilityLabel(dictionaryFlow.isEditing ? "Edited dictionary term" : "New dictionary term")
+                    .onSubmit {
+                        submitDictionaryTerm()
+                    }
+
+                    Button {
+                        submitDictionaryTerm()
+                    } label: {
+                        Label(dictionaryFlow.submitLabel, systemImage: dictionaryFlow.isEditing ? "checkmark" : "plus")
+                    }
+
+                    if dictionaryFlow.isEditing {
+                        Button {
+                            dictionaryFlow.cancelEditing()
+                        } label: {
+                            Label(dictionaryFlow.cancelLabel, systemImage: "xmark")
+                        }
+                    }
                 }
 
-            Text("Separate entries with commas, new lines, or semicolons.")
+                if let validationMessage = dictionaryFlow.validationMessage {
+                    Label(validationMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Text("Up to \(PersonalDictionaryStore.maxActiveTerms) terms. Each term can be \(PersonalDictionaryStore.maxTermScalarLength) characters.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private func dictionaryTermRow(_ term: PersonalDictionaryTerm) -> some View {
+        HStack(spacing: 8) {
+            Text(term.term)
+                .font(.system(.body, design: .rounded))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                .accessibilityLabel("Dictionary term")
+
+            Button {
+                dictionaryFlow.beginEditing(term)
+            } label: {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.borderless)
+            .help("Edit term")
+            .accessibilityLabel("Edit dictionary term")
+
+            Button(role: .destructive) {
+                deleteDictionaryTerm(term)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("Delete term")
+            .accessibilityLabel("Delete dictionary term")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color(nsColor: .textBackgroundColor).opacity(0.55))
+        .cornerRadius(6)
+    }
+
+    private func submitDictionaryTerm() {
+        do {
+            if let editingTermID = dictionaryFlow.editingTermID {
+                try appState.editPersonalDictionaryTerm(id: editingTermID, rawTerm: dictionaryFlow.draftTerm)
+            } else {
+                try appState.addPersonalDictionaryTerm(dictionaryFlow.draftTerm)
+            }
+            dictionaryFlow.finishSubmit()
+        } catch {
+            dictionaryFlow.setValidationError(error)
+        }
+    }
+
+    private func deleteDictionaryTerm(_ term: PersonalDictionaryTerm) {
+        do {
+            try appState.deletePersonalDictionaryTerm(id: term.id)
+            if dictionaryFlow.editingTermID == term.id {
+                dictionaryFlow.cancelEditing()
+            }
+        } catch {
+            dictionaryFlow.setValidationError(error)
         }
     }
 
@@ -2227,24 +2345,6 @@ struct RunLogEntryView: View {
                         }
                     }
 
-                    // Custom vocabulary
-                    if !item.customVocabulary.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Custom Vocabulary")
-                                .font(.caption.weight(.semibold))
-                            FlowLayout(spacing: 4) {
-                                ForEach(parseVocabulary(item.customVocabulary), id: \.self) { word in
-                                    Text(word)
-                                        .font(.caption2)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 3)
-                                        .background(Color.accentColor.opacity(0.12))
-                                        .cornerRadius(4)
-                                }
-                            }
-                        }
-                    }
-
                     // Pipeline steps
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Pipeline")
@@ -2422,12 +2522,6 @@ struct RunLogEntryView: View {
         .onReceive(appState.$retryingItemIDs) { ids in
             isRetrying = ids.contains(item.id)
         }
-    }
-
-    private func parseVocabulary(_ text: String) -> [String] {
-        text.components(separatedBy: CharacterSet(charactersIn: ",;\n"))
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
     }
 
     private func copyTranscriptToPasteboard() {
