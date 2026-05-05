@@ -9,6 +9,9 @@ RubyWhisper will run as a native macOS app plus one Next.js web/backend applicat
 
 The server stores product metadata only. It must never persist audio, raw transcripts, cleaned transcripts, clipboard contents, surrounding app text, or local Recent Wisprs.
 
+The desktop Keychain session boundary and typed RubyWhisper backend API client
+contract live in `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`.
+
 ## Architecture Overview
 
 ```text
@@ -214,6 +217,9 @@ Rules:
 
 - Desktop app must not contain Groq, Stripe, Supabase service-role, or Clerk secret keys.
 - Desktop app stores session credentials in Keychain.
+- Desktop Keychain access, logout clearing, sensitive-data rules, and backend
+  API retry boundaries are defined in
+  `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`.
 - Production secrets require human approval before first deployment.
 - `.env.local` and private env source files must never be inspected or committed.
 
@@ -270,6 +276,8 @@ Auth mode:
 - Browser-based login.
 - Desktop app receives/validates auth through the secure app login bridge
   defined in `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`.
+- Desktop session persistence and RubyWhisper backend API request attachment are
+  defined in `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`.
 
 ### Supabase
 
