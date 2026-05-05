@@ -562,12 +562,14 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     let audioRecorder = AudioRecorder()
     let authStateOwner: DesktopAuthStateOwner
+    let desktopLoginBridge: DesktopLoginBridge
     let firstRunOnboardingCoordinator: FirstRunOnboardingCoordinator
     let hotkeyManager = HotkeyManager()
     let overlayManager = RecordingOverlayManager()
     private var accessibilityTimer: Timer?
     private var audioLevelCancellable: AnyCancellable?
     private var authStateCancellables: Set<AnyCancellable> = []
+    private var desktopLoginTimeoutTask: Task<Void, Never>?
     private var debugOverlayTimer: Timer?
     private var recordingInitializationTimer: DispatchSourceTimer?
     private var transcriptionTask: Task<Void, Never>?
@@ -605,6 +607,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
             sessionStore: desktopSessionStore,
             accountSnapshotLoader: Self.makeDesktopAccountSnapshotLoader(sessionStore: desktopSessionStore)
         )
+        let desktopLoginBridge = DesktopLoginBridge(stateOwner: authStateOwner)
         let firstRunOnboardingCoordinator = FirstRunOnboardingCoordinator()
         let hasCompletedSetup = UserDefaults.standard.bool(forKey: "hasCompletedSetup")
         let apiKey = Self.loadStoredAPIKey(account: apiKeyStorageKey)
@@ -743,6 +746,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.voiceMacros = initialMacros
         self.pipelineHistory = savedHistory
         self.authStateOwner = authStateOwner
+        self.desktopLoginBridge = desktopLoginBridge
         self.firstRunOnboardingCoordinator = firstRunOnboardingCoordinator
         self.authCoordinatorState = authStateOwner.coordinatorState
         self.authAccountSnapshot = authStateOwner.accountSnapshot
@@ -862,6 +866,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     deinit {
+        desktopLoginTimeoutTask?.cancel()
         removeAudioDeviceObservers()
         AppState.writeRecordingStateFlag(false)
     }
@@ -1050,6 +1055,19 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     var authStateTitle: String {
+        if authCoordinatorState == .signedOut {
+            switch authStateOwner.lastLoginBridgeOutcome {
+            case .timedOut:
+                return "Sign-in timed out"
+            case .launchFailed:
+                return "Sign-in unavailable"
+            case .invalidCallback:
+                return "Invalid sign-in callback"
+            default:
+                break
+            }
+        }
+
         switch authCoordinatorState {
         case .signedOut:
             return "Signed out"
@@ -1075,6 +1093,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     var authStateDetail: String {
+        if authStateOwner.lastLoginBridgeOutcome.isFailure {
+            return authStateOwner.lastLoginBridgeOutcome.safeDescription
+        }
+
         if let email = authAccountSnapshot.email?.trimmingCharacters(in: .whitespacesAndNewlines),
            !email.isEmpty,
            authCoordinatorState.canTranscribe || authCoordinatorState == .signedInTermsRequired {
@@ -1106,13 +1128,62 @@ final class AppState: ObservableObject, @unchecked Sendable {
         authStateOwner.refreshAccountSnapshotInBackground()
     }
 
+    @discardableResult
+    func startDesktopSignIn() -> DesktopLoginLaunchResult {
+        let result = desktopLoginBridge.startLogin()
+        if result.outcome == .browserPending {
+            errorMessage = nil
+            scheduleDesktopLoginTimeout(until: result.expiresAt)
+        } else if result.outcome == .launchFailed {
+            errorMessage = "Could not open the sign-in page. Check the backend URL and try again."
+            desktopLoginTimeoutTask?.cancel()
+        }
+        return result
+    }
+
+    @discardableResult
+    func handleDesktopLoginCallback(url: URL) -> DesktopLoginCallbackResult {
+        let result = desktopLoginBridge.handleCallbackURL(url)
+        if !desktopLoginBridge.hasPendingAttempt {
+            desktopLoginTimeoutTask?.cancel()
+        }
+        if result.outcome.isFailure {
+            errorMessage = "Sign-in callback was not accepted. Start sign-in again."
+        } else {
+            errorMessage = nil
+        }
+        return result
+    }
+
     func cancelDesktopSignIn() {
-        authStateOwner.cancelSignIn()
+        desktopLoginTimeoutTask?.cancel()
+        _ = desktopLoginBridge.cancelPendingAttempt()
     }
 
     @discardableResult
     func logoutDesktopAccount() -> DesktopAuthSessionClearResult {
-        authStateOwner.logout()
+        desktopLoginTimeoutTask?.cancel()
+        return authStateOwner.logout()
+    }
+
+    private func scheduleDesktopLoginTimeout(until expiresAt: Date?) {
+        desktopLoginTimeoutTask?.cancel()
+        guard let expiresAt else { return }
+
+        desktopLoginTimeoutTask = Task { [weak self] in
+            let delay = max(0, expiresAt.timeIntervalSinceNow)
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await self?.handleDesktopLoginTimeout()
+        }
+    }
+
+    @MainActor
+    private func handleDesktopLoginTimeout() {
+        let outcome = desktopLoginBridge.expirePendingAttemptIfNeeded()
+        if outcome == .timedOut {
+            errorMessage = "Sign-in timed out. Start sign-in again."
+        }
     }
 
     private var resolvedTranscriptionLanguage: String? {

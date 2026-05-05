@@ -1,6 +1,52 @@
 import Combine
 import Foundation
 
+enum DesktopLoginBridgeOutcome: Equatable {
+    case idle
+    case launching
+    case browserPending
+    case callbackAccepted
+    case alreadySignedIn
+    case canceled
+    case timedOut
+    case launchFailed
+    case invalidCallback(DesktopLoginBridgeFailureReason)
+
+    var isFailure: Bool {
+        switch self {
+        case .timedOut, .launchFailed, .invalidCallback:
+            return true
+        case .idle, .launching, .browserPending, .callbackAccepted, .alreadySignedIn, .canceled:
+            return false
+        }
+    }
+
+    var safeDescription: String {
+        switch self {
+        case .idle: return "idle"
+        case .launching: return "launching"
+        case .browserPending: return "browser_pending"
+        case .callbackAccepted: return "callback_accepted"
+        case .alreadySignedIn: return "already_signed_in"
+        case .canceled: return "canceled"
+        case .timedOut: return "timed_out"
+        case .launchFailed: return "launch_failed"
+        case .invalidCallback(let reason): return reason.rawValue
+        }
+    }
+}
+
+enum DesktopLoginBridgeFailureReason: String, Equatable {
+    case invalidRoute = "invalid_route"
+    case missingState = "missing_state"
+    case noPendingAttempt = "no_pending_attempt"
+    case mismatchedState = "mismatched_state"
+    case expiredState = "expired_state"
+    case replayedState = "replayed_state"
+    case missingExchangeCode = "missing_exchange_code"
+    case canceledByBrowser = "canceled_by_browser"
+}
+
 enum DesktopAuthCoordinatorState: Equatable, RawRepresentable, Codable, CustomStringConvertible {
     case signedOut
     case loginLaunching
@@ -135,6 +181,7 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
     @Published private(set) var coordinatorState: DesktopAuthCoordinatorState
     @Published private(set) var isRefreshingAccount = false
     @Published private(set) var lastClearResult: DesktopAuthSessionClearResult?
+    @Published private(set) var lastLoginBridgeOutcome: DesktopLoginBridgeOutcome = .idle
 
     private let sessionStore: DesktopSessionStoring
     private let accountSnapshotLoader: () async -> RubyWhisperDesktopAccountSnapshot
@@ -195,15 +242,18 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
         refreshTask = nil
         isRefreshingAccount = false
         lastClearResult = nil
+        lastLoginBridgeOutcome = .launching
         accountSnapshot = .signedOut
         coordinatorState = .loginLaunching
     }
 
     func markBrowserPending() {
+        lastLoginBridgeOutcome = .browserPending
         coordinatorState = .browserPending
     }
 
     func markHandoffPending() {
+        lastLoginBridgeOutcome = .callbackAccepted
         coordinatorState = .handoffPending
     }
 
@@ -216,8 +266,43 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
         refreshTask?.cancel()
         refreshTask = nil
         isRefreshingAccount = false
+        lastLoginBridgeOutcome = .canceled
         accountSnapshot = .signedOut
         coordinatorState = .canceled
+    }
+
+    func markAlreadySignedIn() {
+        lastLoginBridgeOutcome = .alreadySignedIn
+    }
+
+    func markSignInLaunchFailed() {
+        sessionGeneration += 1
+        refreshTask?.cancel()
+        refreshTask = nil
+        isRefreshingAccount = false
+        lastLoginBridgeOutcome = .launchFailed
+        accountSnapshot = .signedOut
+        coordinatorState = .signedOut
+    }
+
+    func markSignInTimedOut() {
+        sessionGeneration += 1
+        refreshTask?.cancel()
+        refreshTask = nil
+        isRefreshingAccount = false
+        lastLoginBridgeOutcome = .timedOut
+        accountSnapshot = .signedOut
+        coordinatorState = .signedOut
+    }
+
+    func rejectSignInCallback(reason: DesktopLoginBridgeFailureReason) {
+        sessionGeneration += 1
+        refreshTask?.cancel()
+        refreshTask = nil
+        isRefreshingAccount = false
+        lastLoginBridgeOutcome = .invalidCallback(reason)
+        accountSnapshot = .signedOut
+        coordinatorState = .signedOut
     }
 
     func refreshAccountSnapshotInBackground() {
@@ -247,6 +332,7 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
         coordinatorState = .signedOut
         isRefreshingAccount = false
         lastClearResult = result
+        lastLoginBridgeOutcome = .idle
         return accountSnapshot
     }
 

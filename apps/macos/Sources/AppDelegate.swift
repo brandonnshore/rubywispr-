@@ -48,6 +48,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.stopHotkeyMonitoring(reason: .appQuit)
     }
 
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            _ = appState.handleDesktopLoginCallback(url: url)
+        }
+    }
+
     func applicationDidResignActive(_ notification: Notification) {
         appState.handleAppDeactivationForHotkeySafety()
     }

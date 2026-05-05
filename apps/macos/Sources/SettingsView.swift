@@ -562,6 +562,20 @@ struct AccountSettingsView: View {
                                 } label: {
                                     Label("Cancel Sign In", systemImage: "xmark.circle")
                                 }
+                            } else if appState.authCoordinatorState == .signedOut ||
+                                        appState.authCoordinatorState == .canceled ||
+                                        appState.authCoordinatorState == .error {
+                                Button {
+                                    appState.startDesktopSignIn()
+                                } label: {
+                                    Label("Sign In", systemImage: "safari")
+                                }
+
+                                Button {
+                                    appState.refreshDesktopAccountState()
+                                } label: {
+                                    Label("Refresh Account", systemImage: "arrow.clockwise")
+                                }
                             } else {
                                 Button {
                                     appState.refreshDesktopAccountState()
