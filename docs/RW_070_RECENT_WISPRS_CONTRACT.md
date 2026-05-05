@@ -268,9 +268,10 @@ RW-070B local store:
   clear, disable, successful insertion writes, failed insertion writes, and
   no-write failure cases.
 - Validation seam: store adapter, clock, settings, backend/API spies.
-- Suggested commands after Mac source import:
-  `swift test --filter RecentWisprs` or
-  `xcodebuild test -scheme RubyWhisper -only-testing:RubyWhisperTests/RecentWisprsStoreTests`.
+- Suggested validation after adding a test target: run the matching command for
+  the test harness introduced by that implementation ticket. The current
+  imported `apps/macos` source has no SwiftPM package, Xcode project, workspace,
+  scheme, or repo-local macOS test command.
 
 RW-070C history UI:
 
