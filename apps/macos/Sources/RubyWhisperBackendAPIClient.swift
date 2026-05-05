@@ -176,7 +176,7 @@ final class RubyWhisperBackendAPIClient: DesktopLoginHandoffExchanging {
     }
 
     func transcribe(_ transcriptionRequest: RubyWhisperDesktopTranscriptionRequest) async throws -> RubyWhisperDesktopTranscriptionResponse {
-        let body = try transcriptionRequest.httpBody()
+        let body = try transcriptionRequest.httpBody(metadata: transcriptionRequestMetadata())
         var request = try authenticatedRequest(path: "/api/desktop/transcribe", method: "POST")
 
         request.setValue(transcriptionRequest.contentType, forHTTPHeaderField: "Content-Type")
@@ -188,6 +188,15 @@ final class RubyWhisperBackendAPIClient: DesktopLoginHandoffExchanging {
 
         let (data, response) = try await send(request, body: body)
         return try decodeResponse(data, response: response, as: RubyWhisperDesktopTranscriptionResponse.self)
+    }
+
+    private func transcriptionRequestMetadata() -> RubyWhisperDesktopTranscriptionRequestMetadata {
+        RubyWhisperDesktopTranscriptionRequestMetadata(
+            appVersion: configuration.appVersion,
+            appChannel: configuration.appChannel,
+            osVersion: configuration.osVersion,
+            platform: configuration.platform
+        )
     }
 
     private func send(_ request: URLRequest, body: Data?) async throws -> (Data, HTTPURLResponse) {
@@ -584,11 +593,32 @@ struct RubyWhisperDesktopTranscriptionResponse: Decodable, Equatable {
     var osVersion: String?
 }
 
+struct RubyWhisperDesktopTranscriptionRequestMetadata: Equatable {
+    var appVersion: String?
+    var appChannel: String?
+    var osVersion: String?
+    var platform: String
+
+    init(
+        appVersion: String? = nil,
+        appChannel: String? = nil,
+        osVersion: String? = nil,
+        platform: String = "macos"
+    ) {
+        self.appVersion = appVersion?.nilIfBlank
+        self.appChannel = appChannel?.nilIfBlank
+        self.osVersion = osVersion?.nilIfBlank
+        self.platform = platform.nilIfBlank ?? "macos"
+    }
+}
+
 struct RubyWhisperDesktopTranscriptionRequest: Equatable {
     enum Body: Equatable {
         case binary(Data)
-        case multipart(audio: Data, filename: String = "audio.bin", context: String? = nil, dictionaryTerms: [String] = [])
+        case multipart(audio: Data, context: String? = nil, dictionaryTerms: [String] = [])
     }
+
+    private static let safeMultipartAudioFilename = "audio.bin"
 
     var body: Body
     var audioMimeType: String
@@ -619,24 +649,66 @@ struct RubyWhisperDesktopTranscriptionRequest: Equatable {
         }
     }
 
-    func httpBody() throws -> Data {
+    func httpBody(metadata: RubyWhisperDesktopTranscriptionRequestMetadata = RubyWhisperDesktopTranscriptionRequestMetadata()) throws -> Data {
+        guard audioDurationMs > 0 else {
+            throw RubyWhisperBackendClientError.invalidRequest("Audio duration must be positive.")
+        }
+
         switch body {
         case .binary(let data):
             guard !data.isEmpty else {
                 throw RubyWhisperBackendClientError.invalidRequest("Audio body is empty.")
             }
             return data
-        case .multipart(let audio, let filename, let context, let dictionaryTerms):
+        case .multipart(let audio, let context, let dictionaryTerms):
             guard !audio.isEmpty else {
                 throw RubyWhisperBackendClientError.invalidRequest("Audio body is empty.")
             }
             return buildMultipartBody(
                 audio: audio,
-                filename: filename,
+                metadata: metadata,
                 context: context,
                 dictionaryTerms: dictionaryTerms
             )
         }
+    }
+
+    func redactedDiagnosticSummary(metadata: RubyWhisperDesktopTranscriptionRequestMetadata = RubyWhisperDesktopTranscriptionRequestMetadata()) -> [String: String] {
+        var summary = [
+            "route": "POST /api/desktop/transcribe",
+            "body": "<redacted>",
+            "headers": "<redacted>",
+            "audio": "<redacted>",
+            "audioDurationMs": String(audioDurationMs),
+            "audioMimeType": audioMimeType,
+            "cleanupEnabled": String(cleanupEnabled),
+            "contextAwareCleanupEnabled": String(contextAwareCleanupEnabled),
+            "platform": metadata.platform,
+        ]
+
+        if let appVersion = metadata.appVersion {
+            summary["appVersion"] = appVersion
+        }
+        if let appChannel = metadata.appChannel {
+            summary["appChannel"] = appChannel
+        }
+        if let osVersion = metadata.osVersion {
+            summary["osVersion"] = osVersion
+        }
+
+        switch body {
+        case .binary(let audio):
+            summary["payloadKind"] = "binary"
+            summary["audioByteCount"] = String(audio.count)
+        case .multipart(let audio, let context, let dictionaryTerms):
+            summary["payloadKind"] = "multipart"
+            summary["audioByteCount"] = String(audio.count)
+            summary["multipartFilename"] = "<redacted>"
+            summary["contextIncluded"] = String(cleanupEnabled && contextAwareCleanupEnabled && context?.nilIfBlank != nil)
+            summary["dictionaryTermCount"] = String(cleanupEnabled ? dictionaryTerms.compactMap(\.nilIfBlank).count : 0)
+        }
+
+        return summary
     }
 
     private var multipartBoundary: String {
@@ -645,7 +717,7 @@ struct RubyWhisperDesktopTranscriptionRequest: Equatable {
 
     private func buildMultipartBody(
         audio: Data,
-        filename: String,
+        metadata: RubyWhisperDesktopTranscriptionRequestMetadata,
         context: String?,
         dictionaryTerms: [String]
     ) -> Data {
@@ -655,6 +727,16 @@ struct RubyWhisperDesktopTranscriptionRequest: Equatable {
         appendField("audioMimeType", audioMimeType, to: &data)
         appendField("cleanupEnabled", String(cleanupEnabled), to: &data)
         appendField("contextAwareCleanupEnabled", String(contextAwareCleanupEnabled), to: &data)
+        appendField("platform", metadata.platform, to: &data)
+        if let appVersion = metadata.appVersion {
+            appendField("appVersion", appVersion, to: &data)
+        }
+        if let appChannel = metadata.appChannel {
+            appendField("appChannel", appChannel, to: &data)
+        }
+        if let osVersion = metadata.osVersion {
+            appendField("osVersion", osVersion, to: &data)
+        }
         if cleanupEnabled,
            contextAwareCleanupEnabled,
            let context = context?.nilIfBlank {
@@ -667,7 +749,7 @@ struct RubyWhisperDesktopTranscriptionRequest: Equatable {
         }
 
         data.append("--\(multipartBoundary)\r\n")
-        data.append("Content-Disposition: form-data; name=\"audio\"; filename=\"\(filename.nilIfBlank ?? "audio.bin")\"\r\n")
+        data.append("Content-Disposition: form-data; name=\"audio\"; filename=\"\(Self.safeMultipartAudioFilename)\"\r\n")
         data.append("Content-Type: \(audioMimeType)\r\n\r\n")
         data.append(audio)
         data.append("\r\n--\(multipartBoundary)--\r\n")

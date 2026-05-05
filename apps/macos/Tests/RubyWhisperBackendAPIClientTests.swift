@@ -81,6 +81,8 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testBinaryTranscriptionRequestMapping()
             try await testMultipartTranscriptionRequestMapping()
             try await testMultipartTranscriptionOmitsDisabledContextAndDictionary()
+            try await testTranscriptionRequestRedactedDiagnosticSummary()
+            try await testTranscriptionRequestRejectsInvalidDurationWithoutContent()
             try await testTranscriptionBackendErrorMappingUsesStableRecovery()
             print("RubyWhisperBackendAPIClientTests passed")
         } catch {
@@ -555,7 +557,6 @@ private struct RubyWhisperBackendAPIClientTests {
             RubyWhisperDesktopTranscriptionRequest(
                 body: .multipart(
                     audio: audio,
-                    filename: "recording.wav",
                     context: "Synthetic app context.",
                     dictionaryTerms: ["term_placeholder_alpha", "term_placeholder_beta"]
                 ),
@@ -568,8 +569,18 @@ private struct RubyWhisperBackendAPIClientTests {
         let body = String(data: captured.body ?? Data(), encoding: .utf8) ?? ""
         expect(captured.request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true, "multipart transcription should set multipart content type")
         expect(body.contains("name=\"audio\""), "multipart body should include audio part")
+        expect(body.contains("filename=\"audio.bin\""), "multipart filename should be content-free")
+        expect(!body.contains("recording.wav"), "multipart body should not include caller or user-derived filenames")
         expect(body.contains("name=\"audioDurationMs\""), "multipart body should include duration metadata")
         expect(body.contains("2345"), "multipart body should include duration value")
+        expect(body.contains("name=\"appVersion\""), "multipart body should include backend-parsed app version metadata")
+        expect(body.contains("0.1.0-test"), "multipart body should include app version value")
+        expect(body.contains("name=\"osVersion\""), "multipart body should include backend-parsed OS metadata")
+        expect(body.contains("macOS synthetic"), "multipart body should include OS version value")
+        expect(body.contains("name=\"platform\""), "multipart body should include platform metadata")
+        expect(body.contains("macos"), "multipart body should include platform value")
+        expect(body.contains("name=\"appChannel\""), "multipart body should include channel metadata when configured")
+        expect(body.contains("test"), "multipart body should include channel value")
         expect(body.contains("name=\"context\""), "multipart body should include optional context field")
         expect(body.contains("name=\"dictionaryTerms\""), "multipart body should include dictionary terms")
     }
@@ -608,7 +619,6 @@ private struct RubyWhisperBackendAPIClientTests {
             RubyWhisperDesktopTranscriptionRequest(
                 body: .multipart(
                     audio: audio,
-                    filename: "recording.wav",
                     context: "context_placeholder_omitted",
                     dictionaryTerms: ["term_placeholder_omitted"]
                 ),
@@ -631,7 +641,6 @@ private struct RubyWhisperBackendAPIClientTests {
             RubyWhisperDesktopTranscriptionRequest(
                 body: .multipart(
                     audio: audio,
-                    filename: "recording.wav",
                     context: "context_placeholder_context_disabled",
                     dictionaryTerms: ["term_placeholder_context_disabled"]
                 ),
@@ -647,6 +656,69 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(!contextDisabledBody.contains("name=\"context\""), "multipart body should omit context when context-aware cleanup is disabled")
         expect(!contextDisabledBody.contains("context_placeholder_context_disabled"), "multipart body should omit disabled context content")
         expect(contextDisabledBody.contains("name=\"dictionaryTerms\""), "multipart body may include dictionary terms when cleanup remains enabled")
+    }
+
+    private static func testTranscriptionRequestRedactedDiagnosticSummary() async throws {
+        let audio = Data("audio_payload_placeholder_private".utf8)
+        let request = RubyWhisperDesktopTranscriptionRequest(
+            body: .multipart(
+                audio: audio,
+                context: "context_placeholder_private",
+                dictionaryTerms: ["term_placeholder_private", " "]
+            ),
+            audioMimeType: "audio/wav",
+            audioDurationMs: 2468
+        )
+        let metadata = RubyWhisperDesktopTranscriptionRequestMetadata(
+            appVersion: "0.1.0-test",
+            appChannel: "test",
+            osVersion: "macOS synthetic",
+            platform: "macos"
+        )
+
+        let summary = request.redactedDiagnosticSummary(metadata: metadata)
+        let renderedSummary = summary
+            .map { "\($0.key)=\($0.value)" }
+            .sorted()
+            .joined(separator: "\n")
+
+        expect(summary["route"] == "POST /api/desktop/transcribe", "summary should include route without URL query data")
+        expect(summary["body"] == "<redacted>", "summary should redact body")
+        expect(summary["headers"] == "<redacted>", "summary should redact headers")
+        expect(summary["audio"] == "<redacted>", "summary should redact audio")
+        expect(summary["multipartFilename"] == "<redacted>", "summary should redact multipart filename")
+        expect(summary["audioByteCount"] == String(audio.count), "summary may include audio byte count")
+        expect(summary["dictionaryTermCount"] == "1", "summary may include dictionary term count only")
+        expect(summary["contextIncluded"] == "true", "summary may include context inclusion boolean")
+        expect(!renderedSummary.contains("audio_payload_placeholder_private"), "summary should not include audio bytes")
+        expect(!renderedSummary.contains("context_placeholder_private"), "summary should not include context content")
+        expect(!renderedSummary.contains("term_placeholder_private"), "summary should not include dictionary content")
+        expect(!renderedSummary.contains("Authorization"), "summary should not include auth header names")
+        expect(!renderedSummary.contains("Bearer"), "summary should not include bearer values")
+        expect(!renderedSummary.contains("filename="), "summary should not include multipart filenames")
+    }
+
+    private static func testTranscriptionRequestRejectsInvalidDurationWithoutContent() async throws {
+        let request = RubyWhisperDesktopTranscriptionRequest(
+            body: .multipart(
+                audio: Data("audio_payload_placeholder_invalid_duration".utf8),
+                context: "context_placeholder_invalid_duration",
+                dictionaryTerms: ["term_placeholder_invalid_duration"]
+            ),
+            audioMimeType: "audio/wav",
+            audioDurationMs: 0
+        )
+
+        do {
+            _ = try request.httpBody()
+            expect(false, "invalid duration should not build a request body")
+        } catch let error as RubyWhisperBackendClientError {
+            let description = String(describing: error)
+            expect(description.contains("Audio duration must be positive."), "invalid duration should throw a stable content-free error")
+            expect(!description.contains("audio_payload_placeholder_invalid_duration"), "invalid duration error should not include audio")
+            expect(!description.contains("context_placeholder_invalid_duration"), "invalid duration error should not include context")
+            expect(!description.contains("term_placeholder_invalid_duration"), "invalid duration error should not include dictionary terms")
+        }
     }
 
     private static func testTranscriptionBackendErrorMappingUsesStableRecovery() async throws {
