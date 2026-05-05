@@ -83,6 +83,7 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testMultipartTranscriptionOmitsDisabledContextAndDictionary()
             try await testTranscriptionRequestRedactedDiagnosticSummary()
             try await testTranscriptionRequestRejectsInvalidDurationWithoutContent()
+            try await testTranscriptionSuccessMapsCleanedTextAndUsageOnly()
             try await testTranscriptionBackendErrorMappingUsesStableRecovery()
             print("RubyWhisperBackendAPIClientTests passed")
         } catch {
@@ -721,7 +722,115 @@ private struct RubyWhisperBackendAPIClientTests {
         }
     }
 
+    private static func testTranscriptionSuccessMapsCleanedTextAndUsageOnly() async throws {
+        let transport = CapturingTransport(stubs: [
+            .init(
+                statusCode: 200,
+                headers: ["Cache-Control": "no-store"],
+                body: Data("""
+                {
+                  "ok": true,
+                  "requestId": "req_test_success_mapping",
+                  "cleanedText": "  Cleaned text only.  ",
+                  "cleanedWordCount": 3,
+                  "trialWordsRemaining": 4997,
+                  "trialWordsUsed": 3,
+                  "trialWordsLimit": 5000,
+                  "planState": "trial_active",
+                  "audioDurationMs": 1234,
+                  "provider": "groq",
+                  "providerLatencyMs": 42,
+                  "appVersion": "0.1.0-test",
+                  "osVersion": "macOS synthetic"
+                }
+                """.utf8)
+            ),
+        ])
+        let client = try makeClient(token: "session_placeholder_redacted_success_mapping", transport: transport)
+
+        let success = try await client.uploadTranscription(
+            RubyWhisperDesktopTranscriptionRequest(
+                body: .binary(Data([0x52, 0x57, 0x05])),
+                audioMimeType: "audio/wav",
+                audioDurationMs: 1234
+            )
+        )
+
+        expect(success.requestId == "req_test_success_mapping", "success should preserve opaque request ID")
+        expect(success.cleanedText == "Cleaned text only.", "success should return trimmed cleaned text")
+        expect(success.cleanedWordCount == 3, "success should preserve cleaned word count metadata")
+        expect(success.usageMetadata.trialWordsRemaining == 4997, "success should map usage remaining metadata")
+        expect(success.usageMetadata.trialWordsUsed == 3, "success should map usage used metadata")
+        expect(success.usageMetadata.trialWordsLimit == 5000, "success should map usage limit metadata")
+        expect(success.usageMetadata.planState == .trialActive, "success should map account plan metadata")
+        expect(success.usageMetadata.audioDurationMs == 1234, "success should map duration metadata")
+    }
+
     private static func testTranscriptionBackendErrorMappingUsesStableRecovery() async throws {
+        let cases: [(name: String, statusCode: Int, code: String, state: RubyWhisperDesktopState, recovery: RubyWhisperDesktopRecoveryAction, retryable: Bool, retryAfterSeconds: Int?)] = [
+            ("signed out", 401, "signed_out", .signedOut, .openSignIn, false, nil),
+            ("terms required", 403, "terms_required", .signedInTermsRequired, .openTermsAcceptance, false, nil),
+            ("trial exhausted", 402, "trial_exhausted", .trialExhausted, .openCheckout, false, nil),
+            ("subscription required", 402, "subscription_required", .trialExhausted, .openCheckout, false, nil),
+            ("payment failed", 402, "payment_failed", .paymentFailed, .openBilling, false, nil),
+            ("account blocked", 403, "account_blocked", .blocked, .openAccount, false, nil),
+            ("rate limited", 429, "rate_limited", .error, .retryAfter, true, 30),
+            ("duration limit", 413, "duration_limit_reached", .durationLimitReached, .startNewWhisper, false, nil),
+            ("invalid audio", 422, "invalid_audio", .error, .recordAgain, false, nil),
+            ("provider error", 503, "provider_error", .providerError, .retry, true, nil),
+            ("network error", 503, "network_error", .networkError, .retry, true, nil),
+            ("service unavailable", 503, "service_unavailable", .error, .retry, true, nil),
+            ("internal error", 500, "internal_error", .error, .retryOrContactSupport, true, nil),
+        ]
+
+        for testCase in cases {
+            let metadata = testCase.retryAfterSeconds.map { ",\"metadata\":{\"retryAfterSeconds\":\($0)}" } ?? ""
+            let transport = CapturingTransport(stubs: [
+                .init(
+                    statusCode: testCase.statusCode,
+                    headers: ["Cache-Control": "no-store"],
+                    body: Data("""
+                    {
+                      "ok": false,
+                      "requestId": "req_test_transcription_error",
+                      "errorCode": "\(testCase.code)"\(metadata)
+                    }
+                    """.utf8)
+                ),
+            ])
+            let client = try makeClient(token: "session_placeholder_redacted_error_\(testCase.code)", transport: transport)
+
+            do {
+                _ = try await client.transcribe(
+                    RubyWhisperDesktopTranscriptionRequest(
+                        body: .binary(Data([0x52, 0x57, 0x04])),
+                        audioMimeType: "audio/wav",
+                        audioDurationMs: 4567
+                    )
+                )
+                expect(false, "\(testCase.name) should throw backend error")
+            } catch RubyWhisperBackendClientError.backend(let error) {
+                expect(error.code.rawValue == testCase.code, "\(testCase.name) should preserve canonical code")
+                expect(error.desktopState == testCase.state, "\(testCase.name) should map desktop state")
+                expect(error.recovery == testCase.recovery, "\(testCase.name) should map recovery")
+                expect(error.retryable == testCase.retryable, "\(testCase.name) should map retryability")
+                expect(error.metadata.retryAfterSeconds == testCase.retryAfterSeconds, "\(testCase.name) should map retry delay metadata")
+
+                let failure = RubyWhisperDesktopTranscriptionFailure(error: error)
+                expect(failure.state == testCase.state, "\(testCase.name) upload failure should map desktop state")
+                expect(failure.recovery == testCase.recovery, "\(testCase.name) upload failure should map recovery")
+                expect(failure.retryable == testCase.retryable, "\(testCase.name) upload failure should map retryability")
+                expect(failure.sameAudioRetryAllowed == false, "\(testCase.name) upload failure should not allow blind same-audio retry")
+
+                let description = String(describing: RubyWhisperBackendClientError.backend(error))
+                expect(!description.contains("Synthetic disabled payload text."), "\(testCase.name) diagnostics should not include cleaned text")
+                expect(!description.contains("Authorization"), "\(testCase.name) diagnostics should not include auth headers")
+                expect(!description.contains("Bearer"), "\(testCase.name) diagnostics should not include bearer values")
+            }
+        }
+    }
+
+    private static func testLegacyPartialTranscriptionErrorMappingUsesStableRecovery() async throws {
         let cases: [(name: String, statusCode: Int, code: String, state: RubyWhisperDesktopState, recovery: RubyWhisperDesktopRecoveryAction, retryable: Bool)] = [
             ("rate limited", 429, "rate_limited", .error, .retryAfter, true),
             ("duration limit", 413, "duration_limit_reached", .durationLimitReached, .startNewWhisper, false),

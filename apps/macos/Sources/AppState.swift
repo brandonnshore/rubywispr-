@@ -563,6 +563,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     let authStateOwner: DesktopAuthStateOwner
     let desktopLoginBridge: DesktopLoginBridge
     let firstRunOnboardingCoordinator: FirstRunOnboardingCoordinator
+    private let desktopBackendClient: RubyWhisperBackendAPIClient?
     let hotkeyManager = HotkeyManager()
     let overlayManager = RecordingOverlayManager()
     private lazy var recordingDurationMonitor: RecordingDurationMonitor = {
@@ -781,6 +782,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.personalDictionaryStore = personalDictionaryStore
         self.authStateOwner = authStateOwner
         self.desktopLoginBridge = desktopLoginBridge
+        self.desktopBackendClient = desktopBackendClient
         self.firstRunOnboardingCoordinator = firstRunOnboardingCoordinator
         self.authCoordinatorState = authStateOwner.coordinatorState
         self.authAccountSnapshot = authStateOwner.accountSnapshot
@@ -1165,13 +1167,88 @@ final class AppState: ObservableObject, @unchecked Sendable {
         return trimmed.isEmpty ? apiKey : trimmed
     }
 
-    func makeTranscriptionService() throws -> TranscriptionService {
-        try TranscriptionService(
-            apiKey: resolvedTranscriptionAPIKey,
-            baseURL: resolvedTranscriptionBaseURL,
-            transcriptionModel: transcriptionModel,
-            language: resolvedTranscriptionLanguage
+    func transcribeTransientRecordingArtifact(
+        _ artifact: TransientRecordingArtifact,
+        context: AppContext? = nil
+    ) async throws -> RubyWhisperDesktopTranscriptionSuccess {
+        guard let desktopBackendClient else {
+            throw RubyWhisperBackendClientError.invalidBaseURL("RubyWhisper backend client is unavailable.")
+        }
+
+        let uploadGeneration = authStateOwner.authenticatedRequestGeneration
+        let audio = try Data(contentsOf: artifact.fileURL)
+        try Task.checkCancellation()
+        guard authStateOwner.authenticatedRequestGeneration == uploadGeneration else {
+            throw CancellationError()
+        }
+        let request = RubyWhisperDesktopTranscriptionRequest(
+            body: .multipart(
+                audio: audio,
+                context: context?.contextSummary,
+                dictionaryTerms: personalDictionaryStore.termsForCleanupPayload()
+            ),
+            audioMimeType: Self.audioMimeType(for: artifact.metadata),
+            audioDurationMs: artifact.metadata.durationMs,
+            cleanupEnabled: true,
+            contextAwareCleanupEnabled: context != nil
         )
+
+        do {
+            let success = try await desktopBackendClient.uploadTranscription(request)
+            try Task.checkCancellation()
+            guard authStateOwner.authenticatedRequestGeneration == uploadGeneration else {
+                throw CancellationError()
+            }
+            authStateOwner.applyTranscriptionUsageMetadata(success.usageMetadata)
+            return success
+        } catch RubyWhisperBackendClientError.backend(let backendError) {
+            try Task.checkCancellation()
+            guard authStateOwner.authenticatedRequestGeneration == uploadGeneration else {
+                throw CancellationError()
+            }
+            _ = authStateOwner.applyTranscriptionBackendError(backendError)
+            throw RubyWhisperDesktopTranscriptionFailure(
+                error: backendError,
+                sameAudioRetryAllowed: false
+            )
+        }
+    }
+
+    private static func audioMimeType(for metadata: RecordingArtifactMetadata) -> String {
+        let format = metadata.format.lowercased()
+        if format.contains("wav") {
+            return "audio/wav"
+        }
+        if format.contains("mpeg") || format.contains("mp3") {
+            return "audio/mpeg"
+        }
+        if format.contains("mp4") || format.contains("m4a") {
+            return "audio/mp4"
+        }
+        return "application/octet-stream"
+    }
+
+    private static func statusText(for failure: RubyWhisperDesktopTranscriptionFailure) -> String {
+        switch failure.state {
+        case .signedOut:
+            return "Sign in required"
+        case .signedInTermsRequired:
+            return "Accept Terms"
+        case .trialExhausted:
+            return "Trial exhausted"
+        case .paymentFailed:
+            return "Payment failed"
+        case .blocked:
+            return "Account blocked"
+        case .durationLimitReached:
+            return "Duration limit"
+        case .providerError:
+            return "Transcription unavailable"
+        case .networkError:
+            return "Network error"
+        case .error, .trialActive, .paidActive, .friendOfRubyActive, .unknown:
+            return "Error"
+        }
     }
 
     var authStateTitle: String {
@@ -2902,33 +2979,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// Await the realtime WebSocket's final transcript. If it errors out (or
-    /// was never started) fall back to the file-based POST so the user still
-    /// gets a transcript. Runs the realtime commit and file upload in that
-    /// strict order to avoid paying for both when realtime succeeds.
-    private static func resolveRawTranscript(
-        realtimeService: RealtimeTranscriptionService?,
-        fileService: TranscriptionService,
-        fileURL: URL
-    ) async throws -> String {
-        if let realtimeService {
-            do {
-                try Task.checkCancellation()
-                return try await withTaskCancellationHandler {
-                    try await realtimeService.commitAndAwaitFinal()
-                } onCancel: {
-                    realtimeService.cancel()
-                }
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                try Task.checkCancellation()
-                return try await fileService.transcribe(fileURL: fileURL)
-            }
-        }
-        return try await fileService.transcribe(fileURL: fileURL)
-    }
-
     private func stopAndTranscribe() {
         let accountGateDecision = authCoordinatorState.dictationAccountGateDecision
         guard accountGateDecision.allowsDictation else {
@@ -2987,27 +3037,15 @@ final class AppState: ObservableObject, @unchecked Sendable {
             }
 
             self.activeTransientRecordingArtifact = artifact
-            let transcriptionFileURL = artifact.fileURL
             self.statusText = "Transcribing..."
-            self.debugStatusMessage = "Transcribing audio"
-
-        let postProcessingService = PostProcessingService(
-            apiKey: apiKey,
-            baseURL: apiBaseURL,
-            preferredModel: postProcessingModel,
-            preferredFallbackModel: postProcessingFallbackModel
-        )
-
-            let activeRealtime = self.realtimeService
-            self.realtimeService = nil
-            self.audioRecorder.onPCM16Samples = nil
+            self.debugStatusMessage = "Uploading audio"
+            self.tearDownRealtimeService()
             self.transcriptionTask?.cancel()
             guard self.isTranscribing else {
                 artifact.delete()
                 if self.activeTransientRecordingArtifact === artifact {
                     self.activeTransientRecordingArtifact = nil
                 }
-                activeRealtime?.cancel()
                 self.endCriticalDictationActivity()
                 self.refreshAvailableMicrophonesIfNeeded()
                 return
@@ -3015,21 +3053,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
             self.transcriptionTask = Task {
                 defer {
                     artifact.delete()
-                    activeRealtime?.cancel()
                 }
                 do {
-                    let transcriptionService = try self.makeTranscriptionService()
-                    async let transcript = Self.resolveRawTranscript(
-                        realtimeService: activeRealtime,
-                        fileService: transcriptionService,
-                        fileURL: transcriptionFileURL
-                    )
-                    let rawTranscript = try await transcript
-                    let parsedTranscript = Self.parseTranscriptCommands(
-                        from: rawTranscript,
-                        pressEnterCommandEnabled: self.isPressEnterVoiceCommandEnabled
-                    )
-                    try Task.checkCancellation()
                     let appContext: AppContext
                     if let sessionContext {
                         appContext = sessionContext
@@ -3039,17 +3064,13 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         appContext = self.fallbackContextAtStop()
                     }
                     try Task.checkCancellation()
-                    await MainActor.run { [weak self] in
-                        self?.debugStatusMessage = "Running post-processing"
-                    }
-                    let result = await self.processTranscript(
-                        parsedTranscript.transcript,
-                        intent: sessionIntent,
-                        context: appContext,
-                        postProcessingService: postProcessingService,
-                        customVocabulary: self.customVocabulary,
-                        customSystemPrompt: self.customSystemPrompt,
-                        outputLanguage: self.outputLanguage
+                    let uploadSuccess = try await self.transcribeTransientRecordingArtifact(
+                        artifact,
+                        context: appContext
+                    )
+                    let parsedTranscript = Self.parseTranscriptCommands(
+                        from: uploadSuccess.cleanedText,
+                        pressEnterCommandEnabled: self.isPressEnterVoiceCommandEnabled
                     )
                     try Task.checkCancellation()
 
@@ -3064,20 +3085,16 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         self.lastContextWindowTitle = appContext.windowTitle ?? ""
                         self.lastContextSelectedText = appContext.selectedText ?? ""
                         self.lastContextLLMPrompt = appContext.contextPrompt ?? ""
-                        let trimmedRawTranscript = parsedTranscript.transcript
-                        let trimmedFinalTranscript = result.finalTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let processingStatus = Self.statusMessage(
-                            for: result.outcome,
-                            parsedTranscript: parsedTranscript
-                        )
-                        self.lastPostProcessingPrompt = result.prompt
-                        self.lastRawTranscript = trimmedRawTranscript
+                        let trimmedFinalTranscript = parsedTranscript.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let processingStatus = "RubyWhisper upload succeeded"
+                        self.lastPostProcessingPrompt = ""
+                        self.lastRawTranscript = ""
                         self.lastPostProcessedTranscript = trimmedFinalTranscript
                         self.lastPostProcessingStatus = processingStatus
                         self.recordPipelineHistoryEntry(
-                            rawTranscript: trimmedRawTranscript,
+                            rawTranscript: "",
                             postProcessedTranscript: trimmedFinalTranscript,
-                            postProcessingPrompt: result.prompt,
+                            postProcessingPrompt: "",
                             systemPrompt: Self.resolvedSystemPrompt(self.customSystemPrompt),
                             context: appContext,
                             processingStatus: processingStatus,
@@ -3095,14 +3112,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         let enterOnlyStatusText = "Pressed Enter"
                         let shouldPressEnterAfterPaste = parsedTranscript.shouldPressEnterAfterPaste
 
-                        let shouldPersistRawDictationFallback: Bool
-                        switch result.outcome {
-                        case .postProcessingFailedFallback:
-                            shouldPersistRawDictationFallback = !trimmedFinalTranscript.isEmpty
-                        default:
-                            shouldPersistRawDictationFallback = false
-                        }
-
                         if trimmedFinalTranscript.isEmpty {
                             self.statusText = shouldPressEnterAfterPaste ? enterOnlyStatusText : "Nothing to transcribe"
                             self.clearPendingOverlayDismissToken()
@@ -3114,13 +3123,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             }
                         } else {
                             self.statusText = completionStatusText
-                            if shouldPersistRawDictationFallback {
-                                self.scheduleOverlayDismissAfterFailureIndicator(after: 2.5)
-                            } else {
-                                self.clearPendingOverlayDismissToken()
-                                if !self.showPostTranscriptionUpdateReminderIfNeeded() {
-                                    self.overlayManager.dismiss()
-                                }
+                            self.clearPendingOverlayDismissToken()
+                            if !self.showPostTranscriptionUpdateReminderIfNeeded() {
+                                self.overlayManager.dismiss()
                             }
 
                             let pendingClipboardRestore = self.writeTranscriptToPasteboard(trimmedFinalTranscript)
@@ -3162,15 +3167,17 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         if self.activeTransientRecordingArtifact === artifact {
                             self.activeTransientRecordingArtifact = nil
                         }
-                        self.errorMessage = error.localizedDescription
+                        let failure = error as? RubyWhisperDesktopTranscriptionFailure
+                        self.errorMessage = failure?.message ?? error.localizedDescription
                         self.isTranscribing = false
                         self.endCriticalDictationActivity()
-                        self.statusText = "Error"
+                        self.statusText = failure.map(Self.statusText(for:)) ?? "Error"
                         self.overlayManager.dismiss()
                         self.lastPostProcessedTranscript = ""
                         self.lastRawTranscript = ""
                         self.lastContextSummary = ""
-                        self.lastPostProcessingStatus = "Error: \(error.localizedDescription)"
+                        self.lastPostProcessingStatus = failure.map { "Upload failed: \($0.code.rawValue)" }
+                            ?? "Upload failed"
                         self.lastPostProcessingPrompt = ""
                         self.lastContextScreenshotDataURL = resolvedContext.screenshotDataURL
                         self.lastContextScreenshotStatus = resolvedContext.screenshotError
@@ -3181,7 +3188,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             postProcessingPrompt: "",
                             systemPrompt: Self.resolvedSystemPrompt(self.customSystemPrompt),
                             context: resolvedContext,
-                            processingStatus: "Error: \(error.localizedDescription)",
+                            processingStatus: failure.map { "Upload failed: \($0.code.rawValue)" }
+                                ?? "Upload failed",
                             intent: sessionIntent
                         )
                         self.refreshAvailableMicrophonesIfNeeded()

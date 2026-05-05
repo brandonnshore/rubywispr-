@@ -88,6 +88,7 @@ private struct DesktopAuthStateOwnerTests {
         await testAccountSnapshotsMapToCoordinatorStates()
         await testDictationAccountGateKeepsRecoveryStatesDistinct()
         await testAccountRefreshFailureIsDistinctFromSignedOut()
+        await testTranscriptionUsageAndErrorsUpdateAccountState()
         await testDiagnosticsDoNotExposeAuthMaterial()
         print("DesktopAuthStateOwnerTests passed")
     }
@@ -321,6 +322,57 @@ private struct DesktopAuthStateOwnerTests {
         expect(owner.coordinatorState == .error, "refresh failure should be distinct from signed_out coordinator state")
         expect(owner.lastClearResult == nil, "refresh failure should not be treated as logout/session clear")
         expect(store.read() != nil, "refresh failure should not delete local session material")
+    }
+
+    private static func testTranscriptionUsageAndErrorsUpdateAccountState() async {
+        let store = MemorySessionStore(session: sessionMaterial(token: "session_placeholder_redacted_upload_state"))
+        let loader = AccountSnapshotLoader(nextSnapshot: activeSnapshot)
+        let owner = DesktopAuthStateOwner(
+            sessionStore: store,
+            initialSnapshot: activeSnapshot,
+            accountSnapshotLoader: { await loader.load() }
+        )
+
+        owner.applyTranscriptionUsageMetadata(RubyWhisperDesktopTranscriptionUsageMetadata(
+            cleanedWordCount: 4,
+            trialWordsRemaining: 0,
+            trialWordsUsed: 5000,
+            trialWordsLimit: 5000,
+            planState: .trialExhausted,
+            audioDurationMs: 1200
+        ))
+
+        expect(owner.accountSnapshot.state == .trialExhausted, "upload usage metadata should update exhausted plan state")
+        expect(owner.accountSnapshot.canTranscribe == false, "exhausted upload metadata should disable future dictation")
+        expect(owner.accountSnapshot.recovery == .openCheckout, "exhausted upload metadata should route checkout recovery")
+        expect(owner.coordinatorState == .trialExhausted, "upload usage metadata should update coordinator state")
+        expect(store.read() != nil, "usage metadata updates should not clear session")
+
+        _ = owner.applyTranscriptionBackendError(RubyWhisperBackendError(
+            code: .paymentFailed,
+            httpStatus: 402,
+            message: "Update billing to continue.",
+            recovery: .openBilling,
+            desktopState: .paymentFailed,
+            retryable: false
+        ))
+
+        expect(owner.accountSnapshot.state == .paymentFailed, "upload billing error should update account state")
+        expect(owner.coordinatorState == .paymentFailed, "upload billing error should update coordinator state")
+        expect(store.read() != nil, "billing errors should not clear session")
+
+        _ = owner.applyTranscriptionBackendError(RubyWhisperBackendError(
+            code: .signedOut,
+            httpStatus: 401,
+            message: "Sign in to use RubyWhisper.",
+            recovery: .openSignIn,
+            desktopState: .signedOut,
+            retryable: false
+        ))
+
+        expect(owner.accountSnapshot.state == .signedOut, "upload signed_out should clear account state")
+        expect(owner.coordinatorState == .signedOut, "upload signed_out should publish signed_out")
+        expect(store.read() == nil, "upload signed_out should clear durable session material")
     }
 
     private static func testDiagnosticsDoNotExposeAuthMaterial() async {

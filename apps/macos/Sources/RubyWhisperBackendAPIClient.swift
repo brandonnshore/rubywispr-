@@ -190,6 +190,12 @@ final class RubyWhisperBackendAPIClient: DesktopLoginHandoffExchanging {
         return try decodeResponse(data, response: response, as: RubyWhisperDesktopTranscriptionResponse.self)
     }
 
+    func uploadTranscription(
+        _ transcriptionRequest: RubyWhisperDesktopTranscriptionRequest
+    ) async throws -> RubyWhisperDesktopTranscriptionSuccess {
+        try await transcribe(transcriptionRequest).desktopSuccess()
+    }
+
     private func transcriptionRequestMetadata() -> RubyWhisperDesktopTranscriptionRequestMetadata {
         RubyWhisperDesktopTranscriptionRequestMetadata(
             appVersion: configuration.appVersion,
@@ -591,6 +597,77 @@ struct RubyWhisperDesktopTranscriptionResponse: Decodable, Equatable {
     var providerLatencyMs: Int?
     var appVersion: String?
     var osVersion: String?
+
+    func desktopSuccess() throws -> RubyWhisperDesktopTranscriptionSuccess {
+        guard ok else {
+            throw RubyWhisperBackendClientError.invalidResponse("Desktop transcription response was not accepted.")
+        }
+
+        return RubyWhisperDesktopTranscriptionSuccess(
+            requestId: requestId,
+            cleanedText: cleanedText.trimmingCharacters(in: .whitespacesAndNewlines),
+            cleanedWordCount: cleanedWordCount,
+            usageMetadata: RubyWhisperDesktopTranscriptionUsageMetadata(
+                cleanedWordCount: cleanedWordCount,
+                trialWordsRemaining: trialWordsRemaining,
+                trialWordsUsed: trialWordsUsed,
+                trialWordsLimit: trialWordsLimit,
+                planState: planState,
+                audioDurationMs: audioDurationMs
+            )
+        )
+    }
+}
+
+struct RubyWhisperDesktopTranscriptionSuccess: Equatable {
+    var requestId: String
+    var cleanedText: String
+    var cleanedWordCount: Int
+    var usageMetadata: RubyWhisperDesktopTranscriptionUsageMetadata
+}
+
+struct RubyWhisperDesktopTranscriptionUsageMetadata: Equatable {
+    var cleanedWordCount: Int
+    var trialWordsRemaining: Int?
+    var trialWordsUsed: Int?
+    var trialWordsLimit: Int?
+    var planState: RubyWhisperDesktopPlanState?
+    var audioDurationMs: Int?
+}
+
+struct RubyWhisperDesktopTranscriptionFailure: Error, Equatable {
+    var code: RubyWhisperBackendErrorCode
+    var state: RubyWhisperDesktopState
+    var recovery: RubyWhisperDesktopRecoveryAction
+    var retryable: Bool
+    var sameAudioRetryAllowed: Bool
+    var message: String
+    var requestId: String?
+    var httpStatus: Int?
+    var retryAfterSeconds: Int?
+    var audioDurationMs: Int?
+    var durationLimitMs: Int?
+
+    init(
+        error: RubyWhisperBackendError,
+        sameAudioRetryAllowed: Bool = false
+    ) {
+        let fallback = RubyWhisperBackendError.defaultMapping(
+            code: error.code,
+            statusCode: error.httpStatus ?? 0
+        )
+        self.code = error.code
+        self.state = error.desktopState ?? fallback.desktopState ?? .error
+        self.recovery = error.recovery ?? fallback.recovery ?? .retryOrContactSupport
+        self.retryable = error.retryable ?? fallback.retryable ?? false
+        self.sameAudioRetryAllowed = sameAudioRetryAllowed && self.retryable
+        self.message = error.message ?? fallback.message ?? "RubyWhisper backend request failed."
+        self.requestId = error.requestId
+        self.httpStatus = error.httpStatus
+        self.retryAfterSeconds = error.metadata.retryAfterSeconds
+        self.audioDurationMs = error.metadata.audioDurationMs
+        self.durationLimitMs = error.metadata.durationLimitMs
+    }
 }
 
 struct RubyWhisperDesktopTranscriptionRequestMetadata: Equatable {
@@ -799,6 +876,7 @@ struct RubyWhisperBackendError: Error, Equatable {
     var recovery: RubyWhisperDesktopRecoveryAction?
     var desktopState: RubyWhisperDesktopState?
     var retryable: Bool?
+    var metadata: RubyWhisperBackendErrorMetadata = .empty
 
     static func defaultMapping(statusCode: Int) -> RubyWhisperBackendError {
         switch statusCode {
@@ -978,6 +1056,27 @@ struct RubyWhisperBackendError: Error, Equatable {
             return fallback
         }
     }
+}
+
+struct RubyWhisperBackendErrorMetadata: Decodable, Equatable {
+    var planState: RubyWhisperDesktopPlanState?
+    var trialWordsRemaining: Int?
+    var trialWordsLimit: Int?
+    var monthlyWordsRemaining: Int?
+    var requestCount: Int?
+    var retryAfterSeconds: Int?
+    var windowStart: String?
+    var windowEnd: String?
+    var limit: Int?
+    var durationLimitMs: Int?
+    var audioDurationMs: Int?
+    var appVersion: String?
+    var osVersion: String?
+    var provider: String?
+    var providerLatencyMs: Int?
+    var totalLatencyMs: Int?
+
+    static let empty = RubyWhisperBackendErrorMetadata()
 }
 
 enum RubyWhisperBackendErrorCode: Equatable, RawRepresentable, Codable {
@@ -1253,6 +1352,7 @@ private struct RubyWhisperBackendErrorEnvelope: Decodable {
     var error: ErrorBody?
     var errorCode: RubyWhisperBackendErrorCode?
     var message: String?
+    var metadata: RubyWhisperBackendErrorMetadata?
 
     func mappedError(statusCode: Int) -> RubyWhisperBackendError {
         let statusFallback = RubyWhisperBackendError.defaultMapping(statusCode: statusCode)
@@ -1265,7 +1365,8 @@ private struct RubyWhisperBackendErrorEnvelope: Decodable {
             message: error?.message ?? message ?? fallback.message,
             recovery: error?.recovery ?? fallback.recovery,
             desktopState: error?.desktopState ?? fallback.desktopState,
-            retryable: error?.retryable ?? fallback.retryable
+            retryable: error?.retryable ?? fallback.retryable,
+            metadata: metadata ?? .empty
         )
     }
 }
