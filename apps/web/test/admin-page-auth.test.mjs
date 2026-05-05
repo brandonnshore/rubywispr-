@@ -140,11 +140,16 @@ test("admin page renders admin content only for active admins", async () => {
   assert.match(markup, /Plan and subscription status/);
   assert.match(markup, /Request and error counts/);
   assert.match(markup, /Friend of Ruby batches/);
+  assert.match(markup, /Create batch/);
+  assert.match(markup, /aria-label="Create Friend of Ruby batch"/);
+  assert.match(markup, /Live redemption smoke remains/);
+  assert.match(markup, /RUB-197/);
   assert.doesNotMatch(markup, /Tables pending/);
   assert.doesNotMatch(markup, /Admin access denied/);
   assert.match(source, /export\s+const\s+dynamic\s*=\s*["']force-dynamic["']/);
   assert.match(source, /requireRubyWhisperAdminForPage/);
   assert.match(source, /readRubyWhisperAdminDashboardSnapshot/);
+  assert.match(source, /createFriendOfRubyBatchFromAdmin/);
   assert.doesNotMatch(source, /\buseAuth\b|\buseUser\b|\bSignedIn\b|\bSignedOut\b|\bProtect\b/);
 });
 
@@ -167,6 +172,27 @@ test("admin page renders mocked source metadata without private content fields",
   assert.match(markup, /FRIENDS-2026/);
   assert.doesNotMatch(markup, /req_rw_private_001|stripePromotionCodeId|promo_/i);
   assert.doesNotMatch(markup, privateContentPattern);
+});
+
+test("admin page renders sanitized Friend of Ruby batch creation feedback", async () => {
+  const pageModule = await loadAdminPageModule({
+    readDashboardSnapshot: async () => createMockDashboardSnapshot(),
+    requireAdminForPage: async () =>
+      createAllowedAdminResult("user_rw_synthetic_admin_001"),
+  });
+
+  const markup = renderToStaticMarkup(
+    await pageModule.default({
+      searchParams: Promise.resolve({
+        friendOfRubyBatch: "metadata_unavailable",
+      }),
+    }),
+  );
+
+  assert.match(markup, /Friend of Ruby batch metadata could not be stored\./);
+  assert.match(markup, /role="status"/);
+  assert.match(markup, /aria-live="polite"/);
+  assert.doesNotMatch(markup, /private backend detail|promo_|sk_test|secret/i);
 });
 
 test("admin page denies signed-in non-admins without rendering admin content", async () => {
@@ -341,6 +367,10 @@ function createAdminPageRequire({
       case "@/lib/admin/dashboard":
         return {
           readRubyWhisperAdminDashboardSnapshot: readDashboardSnapshot,
+        };
+      case "./actions":
+        return {
+          createFriendOfRubyBatchFromAdmin: async () => undefined,
         };
       default:
         throw new Error(`Unexpected admin page dependency ${specifier}`);

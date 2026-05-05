@@ -23,6 +23,13 @@ const adminFriendOfRubyBatchRoutePath = path.join(
   "batches",
   "route.ts",
 );
+const adminFriendOfRubyAdminActionsPath = path.join(
+  webRoot,
+  "src",
+  "app",
+  "admin",
+  "actions.ts",
+);
 const forbiddenPrivateAdminBatchPattern =
   /private backend detail|rawTranscript|transcript|audio|payment_method|card|invoice|sk_test|secret|user_rw_synthetic_member_001/i;
 
@@ -339,6 +346,135 @@ test("admin Friend of Ruby batch route remains server-only and metadata-only", a
   }
 });
 
+test("admin Friend of Ruby dashboard action submits server-owned batch creation", async () => {
+  const { calls, moduleExports } = await loadAdminFriendOfRubyAdminActionsModule({
+    routeResponse: async () =>
+      Response.json(
+        {
+          ok: true,
+          batch: {
+            id: "11111111-1111-4111-8111-111111111111",
+            codeLabel: "FRIENDS-2026",
+            expiresAt: "2027-05-04T00:00:00.000Z",
+            maxRedemptions: 10,
+          },
+        },
+        { status: 201 },
+      ),
+  });
+  const formData = new FormData();
+
+  formData.set("codeLabel", "FRIENDS-2026");
+  formData.set("expiresAt", "2027-05-04T00:00:00.000Z");
+  formData.set("maxRedemptions", "10");
+
+  await assertRejectsRedirect(
+    moduleExports.createFriendOfRubyBatchFromAdmin(formData),
+    "/admin?friendOfRubyBatch=created",
+  );
+
+  assert.deepEqual(calls.revalidate, ["/admin"]);
+  assert.deepEqual(calls.route, [
+    {
+      body: {
+        codeLabel: "FRIENDS-2026",
+        expiresAt: "2027-05-04T00:00:00.000Z",
+        maxRedemptions: 10,
+      },
+      method: "POST",
+      pathname: "/api/admin/friend-of-ruby/batches",
+    },
+  ]);
+});
+
+test("admin Friend of Ruby dashboard action maps route failures to sanitized admin states", async () => {
+  const scenarios = [
+    {
+      expected: "/admin?friendOfRubyBatch=invalid",
+      response: Response.json(
+        {
+          ok: false,
+          error: {
+            code: "admin_friend_of_ruby_batch_invalid",
+            message: "Friend of Ruby batch input is not valid.",
+          },
+        },
+        { status: 400 },
+      ),
+    },
+    {
+      expected: "/admin?friendOfRubyBatch=forbidden",
+      response: Response.json(
+        {
+          ok: false,
+          error: {
+            code: "admin_forbidden",
+            message: "This account is not a RubyWhisper admin.",
+          },
+        },
+        { status: 403 },
+      ),
+    },
+    {
+      expected: "/admin?friendOfRubyBatch=stripe_unavailable",
+      response: Response.json(
+        {
+          ok: false,
+          error: {
+            code: "admin_friend_of_ruby_stripe_failed",
+            message: "Unable to create Friend of Ruby promotion code.",
+          },
+        },
+        { status: 503 },
+      ),
+    },
+    {
+      expected: "/admin?friendOfRubyBatch=metadata_unavailable",
+      response: Response.json(
+        {
+          ok: false,
+          error: {
+            code: "admin_friend_of_ruby_batch_create_failed",
+            message: "Unable to create Friend of Ruby batch metadata.",
+          },
+        },
+        { status: 503 },
+      ),
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const { moduleExports } = await loadAdminFriendOfRubyAdminActionsModule({
+      routeResponse: async () => scenario.response.clone(),
+    });
+    const formData = new FormData();
+
+    formData.set("codeLabel", "https://example.invalid/private-value");
+    formData.set("maxRedemptions", "10");
+
+    await assertRejectsRedirect(
+      moduleExports.createFriendOfRubyBatchFromAdmin(formData),
+      scenario.expected,
+    );
+  }
+});
+
+test("admin Friend of Ruby dashboard action remains server-only and metadata-only", async () => {
+  const source = await readFile(adminFriendOfRubyAdminActionsPath, "utf8");
+
+  assert.match(source, /^["']use server["'];/);
+  assert.match(source, /createFriendOfRubyBatch/);
+  assert.match(source, /revalidatePath\(["']\/admin["']\)/);
+  assert.match(source, /\/api\/admin\/friend-of-ruby\/batches/);
+  assert.match(source, /friendOfRubyBatch=created/);
+  assert.doesNotMatch(source, /\bprice_[A-Za-z0-9_]+\b/);
+  assert.doesNotMatch(source, /\bSTRIPE_[A-Z0-9_]+\b/);
+  assert.doesNotMatch(source, /\bsk_(?:live|test)_/);
+  assert.doesNotMatch(source, /\bcus_[A-Za-z0-9_]+\b/);
+  assert.doesNotMatch(source, /\bpayment_method\b|\bcard\b|\binvoice\b/);
+  assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
+});
+
 async function loadAdminFriendOfRubyBatchRouteModule() {
   const source = await readFile(adminFriendOfRubyBatchRoutePath, "utf8");
   const compiled = ts.transpileModule(source, {
@@ -367,6 +503,79 @@ async function loadAdminFriendOfRubyBatchRouteModule() {
   );
 
   return commonJsModule.exports;
+}
+
+async function loadAdminFriendOfRubyAdminActionsModule(overrides = {}) {
+  const source = await readFile(adminFriendOfRubyAdminActionsPath, "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: adminFriendOfRubyAdminActionsPath,
+  });
+  const calls = {
+    revalidate: [],
+    route: [],
+  };
+  const commonJsModule = { exports: {} };
+
+  vm.runInNewContext(
+    compiled.outputText,
+    {
+      FormData,
+      Request,
+      Response,
+      URL,
+      exports: commonJsModule.exports,
+      module: commonJsModule,
+      require: createAdminFriendOfRubyAdminActionsRequire(calls, overrides),
+    },
+    {
+      filename: adminFriendOfRubyAdminActionsPath,
+    },
+  );
+
+  return {
+    calls,
+    moduleExports: commonJsModule.exports,
+  };
+}
+
+function createAdminFriendOfRubyAdminActionsRequire(calls, overrides) {
+  return function requireAdminFriendOfRubyAdminActionsModule(specifier) {
+    switch (specifier) {
+      case "next/cache":
+        return {
+          revalidatePath: (pathName) => {
+            calls.revalidate.push(pathName);
+          },
+        };
+      case "next/navigation":
+        return {
+          redirect: (url) => {
+            throw Object.assign(new Error("NEXT_REDIRECT"), { url });
+          },
+        };
+      case "../api/admin/friend-of-ruby/batches/route":
+        return {
+          POST: async (request) => {
+            const url = new URL(request.url);
+            calls.route.push({
+              body: await request.json(),
+              method: request.method,
+              pathname: url.pathname,
+            });
+
+            return overrides.routeResponse
+              ? overrides.routeResponse(request)
+              : Response.json({ ok: false }, { status: 503 });
+          },
+        };
+      default:
+        throw new Error(`Unexpected admin Friend of Ruby action dependency ${specifier}`);
+    }
+  };
 }
 
 function createRouteModuleRequire() {
@@ -565,4 +774,16 @@ function createCreatedBatchMetadataResult() {
 
 function toPlainObject(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+async function assertRejectsRedirect(promise, expectedUrl) {
+  await assert.rejects(
+    promise,
+    (error) => {
+      assert.equal(error.message, "NEXT_REDIRECT");
+      assert.equal(error.url, expectedUrl);
+
+      return true;
+    },
+  );
 }
