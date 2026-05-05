@@ -824,6 +824,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 self?.handleUpdateOverlayPressed()
             }
         }
+        overlayManager.onRecoveryActionPressed = { [weak self] action in
+            DispatchQueue.main.async {
+                self?.handleRecordingIslandRecoveryAction(action)
+            }
+        }
 
         // Clear any stale recording flag left over from an unclean exit.
         AppState.writeRecordingStateFlag(false)
@@ -2313,6 +2318,111 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private func handleOverlayStopButtonPressed() {
         guard isRecording, activeRecordingTriggerMode == .toggle else { return }
         stopAndTranscribe()
+    }
+
+    @discardableResult
+    private func handleRecordingIslandRecoveryAction(_ action: RecordingIslandAction) -> Bool {
+        clearPendingOverlayDismissToken()
+        debugStatusMessage = "Island recovery action: \(action.rawValue)"
+
+        switch action {
+        case .stopRecording:
+            handleOverlayStopButtonPressed()
+            return true
+        case .cancelIfSafe, .waitOrCancel:
+            if isTranscribing {
+                cancelTranscription()
+                return true
+            }
+            return true
+        case .openOnboardingStep:
+            selectedSettingsTab = .general
+            NotificationCenter.default.post(name: .showSetup, object: nil)
+            overlayManager.dismiss()
+            return true
+        case .openSignIn:
+            let result = startDesktopSignIn()
+            overlayManager.dismiss()
+            return result.outcome == .browserPending || result.outcome == .alreadySignedIn
+        case .openTermsAcceptance:
+            overlayManager.dismiss()
+            return performDesktopAccountRecoveryAction(.openTermsAcceptance)
+        case .openCheckout:
+            overlayManager.dismiss()
+            return performDesktopAccountRecoveryAction(.openCheckout)
+        case .openBilling:
+            overlayManager.dismiss()
+            return performDesktopAccountRecoveryAction(.openBilling)
+        case .openAccount:
+            overlayManager.dismiss()
+            return performDesktopAccountRecoveryAction(.openAccount)
+        case .openSystemSettingsMicrophone:
+            openMicrophoneSettings()
+            overlayManager.dismiss()
+            return true
+        case .openSystemSettingsAccessibility:
+            openAccessibilitySettings()
+            overlayManager.dismiss()
+            return true
+        case .openHotkeySettings:
+            openHotkeySettings()
+            overlayManager.dismiss()
+            return true
+        case .retryHotkeyRegistration:
+            retryHotkeyRegistration()
+            return true
+        case .retryAfter, .retry, .retryOrContactSupport:
+            refreshDesktopAccountState()
+            statusText = "Try again"
+            overlayManager.dismiss()
+            return true
+        case .copyCleanedText:
+            return copyRecoveredCleanedTextToPasteboard()
+        case .retryInsertion:
+            return retryRecoveredInsertion()
+        case .recordAgain, .startNewWhisper:
+            statusText = "Ready"
+            overlayManager.dismiss()
+            return true
+        }
+    }
+
+    @discardableResult
+    private func copyRecoveredCleanedTextToPasteboard() -> Bool {
+        let trimmedText = lastTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            statusText = "No text to copy"
+            debugStatusMessage = "Island recovery action: copy_cleaned_text empty"
+            return false
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(trimmedText, forType: .string)
+        statusText = "Copied"
+        overlayManager.showSuccess()
+        scheduleOverlayDismissAfterSuccess(after: 1.2)
+        return true
+    }
+
+    @discardableResult
+    private func retryRecoveredInsertion() -> Bool {
+        let trimmedText = lastTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            statusText = "Click a text box first"
+            debugStatusMessage = "Island recovery action: retry_insertion empty"
+            return false
+        }
+
+        let pendingClipboardRestore = writeTranscriptToPasteboard(trimmedText)
+        overlayManager.showInserting()
+        pasteAtCursorWhenShortcutReleased { [weak self] in
+            guard let self else { return }
+            self.restoreClipboardIfNeeded(pendingClipboardRestore)
+            self.overlayManager.showSuccess()
+            self.scheduleOverlayDismissAfterSuccess(after: 1.2)
+        }
+        return true
     }
 
     private func cancelToggleShortcutSession() {

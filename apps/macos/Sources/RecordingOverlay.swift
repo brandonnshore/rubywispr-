@@ -74,6 +74,7 @@ final class RecordingOverlayManager {
 
     var onStopButtonPressed: (() -> Void)?
     var onUpdateOverlayPressed: (() -> Void)?
+    var onRecoveryActionPressed: ((RecordingIslandAction) -> Void)?
 
     private var screenHasNotch: Bool {
         guard let screen = NSScreen.main else { return false }
@@ -338,6 +339,9 @@ final class RecordingOverlayManager {
                 },
                 onUpdateOverlayPressed: { [weak self] in
                     self?.onUpdateOverlayPressed?()
+                },
+                onRecoveryActionPressed: { [weak self] action in
+                    self?.onRecoveryActionPressed?(action)
                 }
             )
             .padding(.top, screenHasNotch ? notchOverlap : 0)
@@ -679,6 +683,7 @@ struct RecordingOverlayView: View {
     @ObservedObject var state: RecordingOverlayState
     let onStopButtonPressed: () -> Void
     let onUpdateOverlayPressed: () -> Void
+    let onRecoveryActionPressed: (RecordingIslandAction) -> Void
 
     private let leadingAccessoryWidth: CGFloat = 24
     private let trailingAccessoryWidth: CGFloat = 32
@@ -694,7 +699,10 @@ struct RecordingOverlayView: View {
     var body: some View {
         Group {
             if state.phase == .feedback {
-                IslandFeedbackView(presentation: state.islandPresentation)
+                IslandFeedbackView(
+                    presentation: state.islandPresentation,
+                    onRecoveryActionPressed: onRecoveryActionPressed
+                )
             } else if state.phase == .updateAvailable {
                 UpdateAvailableOverlayView(onPress: onUpdateOverlayPressed)
             } else {
@@ -794,6 +802,7 @@ struct IslandProgressView: View {
 
 struct IslandFeedbackView: View {
     let presentation: RecordingIslandPresentation
+    let onRecoveryActionPressed: (RecordingIslandAction) -> Void
 
     var body: some View {
         HStack(spacing: 7) {
@@ -807,10 +816,36 @@ struct IslandFeedbackView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.72)
+                .minimumScaleFactor(0.68)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let primaryAction = presentation.primaryAction {
+                recoveryButton(for: primaryAction, isPrimary: true)
+            }
+
+            if let secondaryAction = presentation.secondaryAction {
+                recoveryButton(for: secondaryAction, isPrimary: false)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func recoveryButton(for action: RecordingIslandAction, isPrimary: Bool) -> some View {
+        Button(action: { onRecoveryActionPressed(action) }) {
+            Text(action.compactTitle)
+                .font(.system(size: 10, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .foregroundStyle(isPrimary ? Color.black : Color.white)
+                .padding(.horizontal, 7)
+                .frame(height: 21)
+                .background(
+                    Capsule().fill(isPrimary ? Color.white : Color.white.opacity(0.18))
+                )
+        }
+        .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityLabel(action.compactTitle)
     }
 
     private var iconBackground: Color {

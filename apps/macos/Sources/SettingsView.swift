@@ -672,6 +672,24 @@ struct DebugSettingsView: View {
                         }
                     }
                 }
+
+                SettingsCard("Recovery Proof States", icon: "rectangle.on.rectangle") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Show synthetic island recovery states with placeholder-only copy.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 148), spacing: 8)], spacing: 8) {
+                            ForEach(RecordingIslandStateMachine.syntheticRecoveryProofStateNames, id: \.rawValue) { stateName in
+                                Button(stateName.rawValue) {
+                                    _ = appState.showDebugIslandState(stateName.rawValue)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                }
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
