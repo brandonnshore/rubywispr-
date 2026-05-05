@@ -2150,6 +2150,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
         mode: RecordingTriggerMode
     ) {
         guard case .blocked(let reason) = decision else { return }
+        overlayManager.showBlockedHotkey(
+            reason: reason,
+            authState: authCoordinatorState,
+            onboardingStep: firstRunOnboardingStep
+        )
         if !(reason == .recorderBusy && isRecording) {
             resetBlockedHotkeyStartState(resetActiveSession: mode == .toggle)
         }
@@ -2182,11 +2187,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
             activeTransientRecordingArtifact = nil
             statusText = "Record again"
             debugStatusMessage = "Hotkey blocked: \(reason.rawValue)"
-            overlayManager.dismiss()
+            overlayManager.showSyntheticIslandState(.unsafeRetryRequired)
         case .durationLimitReached:
             statusText = "Duration limit"
             debugStatusMessage = "Hotkey blocked: \(reason.rawValue)"
-            overlayManager.showFailureIndicator()
+            overlayManager.showDurationLimitReached()
         }
     }
 
@@ -2250,6 +2255,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         currentSessionIntent = .dictation
         statusText = decision.statusText
         debugStatusMessage = "Dictation blocked: \(decision.debugReason)"
+        overlayManager.showAccountGate(authCoordinatorState)
 
         switch decision {
         case .signInRequired:
@@ -2850,7 +2856,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
         endCriticalDictationActivity()
         errorMessage = formattedRecordingStartError(error)
         statusText = "Error"
-        overlayManager.dismiss()
+        if let recorderError = error as? AudioRecorderError,
+           case .failedToBeginFileRecording = recorderError {
+            overlayManager.showSyntheticIslandState(.invalidAudio)
+        } else {
+            overlayManager.showMicrophoneRecovery()
+        }
         refreshAvailableMicrophonesIfNeeded()
     }
 
@@ -3187,7 +3198,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             self.statusText = shouldPressEnterAfterPaste ? enterOnlyStatusText : "Nothing to transcribe"
                             self.clearPendingOverlayDismissToken()
                             if !self.showPostTranscriptionUpdateReminderIfNeeded() {
-                                self.overlayManager.dismiss()
+                                self.overlayManager.showSuccess()
+                                self.scheduleOverlayDismissAfterSuccess(after: 1.2)
                             }
                             if shouldPressEnterAfterPaste {
                                 self.pressEnterWhenShortcutReleased()
@@ -3195,18 +3207,27 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         } else {
                             self.statusText = completionStatusText
                             self.clearPendingOverlayDismissToken()
-                            if !self.showPostTranscriptionUpdateReminderIfNeeded() {
-                                self.overlayManager.dismiss()
-                            }
+                            let updateReminderShown = self.showPostTranscriptionUpdateReminderIfNeeded()
 
                             let pendingClipboardRestore = self.writeTranscriptToPasteboard(trimmedFinalTranscript)
+                            if !updateReminderShown {
+                                self.overlayManager.showInserting()
+                            }
                             self.pasteAtCursorWhenShortcutReleased {
                                 if shouldPressEnterAfterPaste {
                                     self.pressEnterAfterPaste {
                                         self.restoreClipboardIfNeeded(pendingClipboardRestore)
+                                        if !updateReminderShown {
+                                            self.overlayManager.showSuccess()
+                                            self.scheduleOverlayDismissAfterSuccess(after: 1.2)
+                                        }
                                     }
                                 } else {
                                     self.restoreClipboardIfNeeded(pendingClipboardRestore)
+                                    if !updateReminderShown {
+                                        self.overlayManager.showSuccess()
+                                        self.scheduleOverlayDismissAfterSuccess(after: 1.2)
+                                    }
                                 }
                             }
                         }
@@ -3246,7 +3267,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         self.isTranscribing = false
                         self.endCriticalDictationActivity()
                         self.statusText = failure.map(Self.statusText(for:)) ?? "Error"
-                        self.overlayManager.dismiss()
+                        if let failure {
+                            self.overlayManager.showUploadFailure(failure)
+                        } else {
+                            self.overlayManager.showFailureIndicator()
+                        }
                         self.lastPostProcessedTranscript = ""
                         self.lastRawTranscript = ""
                         self.clearUploadContextState()
@@ -3302,7 +3327,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func handleRecordingDurationSnapshot(_ snapshot: RecordingDurationSnapshot) {
-        guard snapshot.state == .capReached, isRecording else { return }
+        guard isRecording else { return }
+        overlayManager.updateRecordingDuration(snapshot)
+        guard snapshot.state == .capReached else { return }
         stopRecordingForDurationLimitReached()
     }
 
@@ -3332,7 +3359,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         statusText = "Duration limit"
         debugStatusMessage = "Hotkey blocked: \(HotkeyRecordingGateBlockReason.durationLimitReached.rawValue)"
         errorMessage = "Recordings are limited to 10 minutes. Start a new whisper."
-        overlayManager.showFailureIndicator()
+        overlayManager.showDurationLimitReached()
         playAlertSound(named: "Basso")
 
         audioRecorder.stopRecording { [weak self] artifact in
@@ -3691,6 +3718,21 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
+    @discardableResult
+    func showDebugIslandState(_ rawStateName: String) -> Bool {
+        guard AppBuild.isDevBundle,
+              let state = RecordingIslandStateName(rawValue: rawStateName) else {
+            return false
+        }
+        debugOverlayTimer?.invalidate()
+        debugOverlayTimer = nil
+        isDebugOverlayActive = false
+        clearPendingOverlayDismissToken()
+        overlayManager.showSyntheticIslandState(state)
+        debugStatusMessage = RecordingIslandStateMachine.syntheticPresentation(for: state).safeLogSummary
+        return true
+    }
+
     @MainActor
     private func handleUpdateOverlayPressed() {
         clearPendingOverlayDismissToken()
@@ -3709,6 +3751,16 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let dismissToken = UUID()
         pendingOverlayDismissToken = dismissToken
         overlayManager.showFailureIndicator()
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.pendingOverlayDismissToken == dismissToken else { return }
+            self.pendingOverlayDismissToken = nil
+            self.overlayManager.dismiss()
+        }
+    }
+
+    private func scheduleOverlayDismissAfterSuccess(after delay: TimeInterval) {
+        let dismissToken = UUID()
+        pendingOverlayDismissToken = dismissToken
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self, self.pendingOverlayDismissToken == dismissToken else { return }
             self.pendingOverlayDismissToken = nil

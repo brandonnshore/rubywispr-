@@ -5,6 +5,7 @@ import AppKit
 
 final class RecordingOverlayState: ObservableObject {
     @Published var phase: OverlayPhase = .recording
+    @Published var islandPresentation: RecordingIslandPresentation = RecordingIslandStateMachine.hiddenIdle()
     @Published var audioLevel: Float = 0.0
     @Published var recordingTriggerMode: RecordingTriggerMode = .hold
     @Published var isCommandMode = false
@@ -23,7 +24,7 @@ enum OverlayPhase {
 
 private enum RecordingOverlayGeometry {
     static let compactWidth: CGFloat = 180
-    static let recoveryWidth: CGFloat = 190
+    static let recoveryWidth: CGFloat = 228
     static let baseHeight: CGFloat = 38
     static let screenMargin: CGFloat = 8
 }
@@ -99,6 +100,10 @@ final class RecordingOverlayManager {
         DispatchQueue.main.async {
             self.overlayState.recordingTriggerMode = mode
             self.overlayState.isCommandMode = isCommandMode
+            self.overlayState.islandPresentation = RecordingIslandStateMachine.recording(
+                mode: mode,
+                durationSnapshot: RecordingDurationSnapshot.inactive(policy: .production)
+            )
             self.overlayState.phase = .initializing
             self.overlayState.audioLevel = 0
             self.showOverlayPanel(animatedResize: false)
@@ -109,6 +114,10 @@ final class RecordingOverlayManager {
         DispatchQueue.main.async {
             self.overlayState.recordingTriggerMode = mode
             self.overlayState.isCommandMode = isCommandMode
+            self.overlayState.islandPresentation = RecordingIslandStateMachine.recording(
+                mode: mode,
+                durationSnapshot: RecordingDurationSnapshot.inactive(policy: .production)
+            )
             self.overlayState.phase = .recording
             self.overlayState.audioLevel = 0
             self.showOverlayPanel(animatedResize: true)
@@ -119,6 +128,10 @@ final class RecordingOverlayManager {
         DispatchQueue.main.async {
             self.overlayState.recordingTriggerMode = mode
             self.overlayState.isCommandMode = isCommandMode
+            self.overlayState.islandPresentation = RecordingIslandStateMachine.recording(
+                mode: mode,
+                durationSnapshot: RecordingDurationSnapshot.inactive(policy: .production)
+            )
             self.overlayState.phase = .recording
             self.updateOverlayLayout(animated: true)
         }
@@ -127,7 +140,24 @@ final class RecordingOverlayManager {
     func setRecordingTriggerMode(_ mode: RecordingTriggerMode, animated: Bool) {
         DispatchQueue.main.async {
             self.overlayState.recordingTriggerMode = mode
+            if self.overlayState.islandPresentation.state.isRecordingState {
+                self.overlayState.islandPresentation = RecordingIslandStateMachine.recording(
+                    mode: mode,
+                    durationSnapshot: RecordingDurationSnapshot.inactive(policy: .production)
+                )
+            }
             self.updateOverlayLayout(animated: animated)
+        }
+    }
+
+    func updateRecordingDuration(_ snapshot: RecordingDurationSnapshot) {
+        DispatchQueue.main.async {
+            let mode = snapshot.mode ?? self.overlayState.recordingTriggerMode
+            self.overlayState.recordingTriggerMode = mode
+            self.showIslandPresentation(
+                RecordingIslandStateMachine.recording(mode: mode, durationSnapshot: snapshot),
+                animatedResize: true
+            )
         }
     }
 
@@ -139,13 +169,96 @@ final class RecordingOverlayManager {
 
     func showTranscribing() {
         DispatchQueue.main.async {
-            self.setTranscribingPhase()
+            self.showIslandPresentation(RecordingIslandStateMachine.processingUpload(), animatedResize: true)
         }
     }
 
     func showFailureIndicator() {
         DispatchQueue.main.async {
-            self.showFeedbackPanel()
+            self.showIslandPresentation(
+                RecordingIslandStateMachine.syntheticPresentation(for: .serviceError),
+                animatedResize: true
+            )
+        }
+    }
+
+    func showBlockedHotkey(
+        reason: HotkeyRecordingGateBlockReason,
+        authState: DesktopAuthCoordinatorState,
+        onboardingStep: FirstRunOnboardingStep
+    ) {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(
+                RecordingIslandStateMachine.blockedHotkey(
+                    reason: reason,
+                    authState: authState,
+                    onboardingStep: onboardingStep
+                ),
+                animatedResize: true
+            )
+        }
+    }
+
+    func showAccountGate(_ authState: DesktopAuthCoordinatorState) {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(
+                RecordingIslandStateMachine.account(authState),
+                animatedResize: true
+            )
+        }
+    }
+
+    func showUploadFailure(_ failure: RubyWhisperDesktopTranscriptionFailure) {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(
+                RecordingIslandStateMachine.uploadFailure(failure),
+                animatedResize: true
+            )
+        }
+    }
+
+    func showDurationLimitReached() {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(
+                RecordingIslandStateMachine.syntheticPresentation(for: .durationLimitReached),
+                animatedResize: true
+            )
+        }
+    }
+
+    func showMicrophoneRecovery() {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(
+                RecordingIslandStateMachine.syntheticPresentation(for: .microphoneRecovery),
+                animatedResize: true
+            )
+        }
+    }
+
+    func showInserting() {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(RecordingIslandStateMachine.inserting(), animatedResize: true)
+        }
+    }
+
+    func showSuccess() {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(RecordingIslandStateMachine.success(), animatedResize: true)
+        }
+    }
+
+    func showInsertionFailed() {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(RecordingIslandStateMachine.insertionFailed(), animatedResize: true)
+        }
+    }
+
+    func showSyntheticIslandState(_ state: RecordingIslandStateName) {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(
+                RecordingIslandStateMachine.syntheticPresentation(for: state),
+                animatedResize: true
+            )
         }
     }
 
@@ -213,11 +326,6 @@ final class RecordingOverlayManager {
         resize(panel: panel, to: frame, animated: animated)
     }
 
-    private func setTranscribingPhase() {
-        overlayState.phase = .transcribing
-        showOverlayPanel(animatedResize: true)
-    }
-
     private func makeOverlayContent(frame: NSRect) -> NSView {
         makeNotchContent(
             width: frame.width,
@@ -271,22 +379,48 @@ final class RecordingOverlayManager {
     }
 
     private var overlayWidth: CGFloat {
-        let baseWidth = overlayState.phase == .updateAvailable
+        let baseWidth = overlayState.phase == .updateAvailable || overlayState.islandPresentation.usesRecoveryLayout
             ? RecordingOverlayGeometry.recoveryWidth
             : RecordingOverlayGeometry.compactWidth
         guard screenHasNotch else { return baseWidth }
         return max(notchWidth, baseWidth)
     }
 
-    private func showFeedbackPanel() {
-        overlayState.phase = .feedback
-        showOverlayPanel(animatedResize: true)
+    private func showIslandPresentation(
+        _ presentation: RecordingIslandPresentation,
+        animatedResize: Bool
+    ) {
+        overlayState.islandPresentation = presentation
+        if !presentation.isVisible {
+            dismissAll()
+            return
+        }
+
+        switch presentation.state {
+        case .recordingHold, .recordingToggle, .nearingDurationLimit:
+            overlayState.phase = .recording
+        case .accountRefreshing, .processingUploading, .inserting:
+            overlayState.phase = .transcribing
+        case .success, .onboardingBlocked, .signedOut, .termsRequired,
+             .trialExhausted, .paymentFailed, .accountBlocked,
+             .microphoneRecovery, .accessibilityRecovery, .hotkeyUnavailable,
+             .hotkeyConflict, .recorderBusy, .durationLimitReached,
+             .insertionFailed, .rateLimited, .networkError, .providerError,
+             .invalidAudio, .serviceError, .unsafeRetryRequired:
+            overlayState.phase = .feedback
+        case .hiddenIdle:
+            dismissAll()
+            return
+        }
+
+        showOverlayPanel(animatedResize: animatedResize)
     }
 
     private func dismissAll() {
         preserveCurrentAnchor()
         overlayState.isCommandMode = false
         overlayState.updateVersion = ""
+        overlayState.islandPresentation = RecordingIslandStateMachine.hiddenIdle()
         if let panel = overlayWindow {
             panel.orderOut(nil)
             overlayWindow = nil
@@ -550,7 +684,7 @@ struct RecordingOverlayView: View {
     private let trailingAccessoryWidth: CGFloat = 32
 
     private var showsLiveRecordingContent: Bool {
-        state.phase == .recording
+        state.islandPresentation.showsVisualizer
     }
 
     private var showsStopButton: Bool {
@@ -560,7 +694,7 @@ struct RecordingOverlayView: View {
     var body: some View {
         Group {
             if state.phase == .feedback {
-                FailureIndicatorView()
+                IslandFeedbackView(presentation: state.islandPresentation)
             } else if state.phase == .updateAvailable {
                 UpdateAvailableOverlayView(onPress: onUpdateOverlayPressed)
             } else {
@@ -577,7 +711,7 @@ struct RecordingOverlayView: View {
                             )
                                 .transition(.opacity)
                         } else {
-                            ProcessingIndicatorView()
+                            IslandProgressView(presentation: state.islandPresentation)
                                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
                         }
                     }
@@ -617,6 +751,7 @@ struct RecordingOverlayView: View {
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.phase)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.recordingTriggerMode)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.isCommandMode)
+        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.islandPresentation.state)
     }
 }
 
@@ -631,14 +766,70 @@ struct CommandModeIndicator: View {
     }
 }
 
-struct FailureIndicatorView: View {
+struct IslandProgressView: View {
+    let presentation: RecordingIslandPresentation
+
     var body: some View {
-        Image(systemName: "xmark")
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: 20, height: 20)
-            .background(Circle().fill(Color.red.opacity(0.92)))
+        ZStack {
+            ProcessingIndicatorView()
+
+            HStack {
+                Image(systemName: presentation.systemImageName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(width: 22)
+
+                Spacer(minLength: 0)
+
+                Text(presentation.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .frame(maxWidth: 92, alignment: .trailing)
+            }
+        }
+    }
+}
+
+struct IslandFeedbackView: View {
+    let presentation: RecordingIslandPresentation
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: presentation.systemImageName)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(iconBackground))
+
+            Text(presentation.title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var iconBackground: Color {
+        switch presentation.state {
+        case .success:
+            return Color.green.opacity(0.9)
+        case .recorderBusy:
+            return Color.white.opacity(0.2)
+        case .onboardingBlocked, .signedOut, .termsRequired, .trialExhausted,
+             .paymentFailed, .accountBlocked, .microphoneRecovery,
+             .accessibilityRecovery, .hotkeyUnavailable, .hotkeyConflict,
+             .durationLimitReached, .insertionFailed, .rateLimited,
+             .networkError, .providerError, .invalidAudio, .serviceError,
+             .unsafeRetryRequired:
+            return Color.red.opacity(0.92)
+        case .hiddenIdle, .accountRefreshing, .recordingHold, .recordingToggle,
+             .nearingDurationLimit, .processingUploading, .inserting:
+            return Color.white.opacity(0.2)
+        }
     }
 }
 
