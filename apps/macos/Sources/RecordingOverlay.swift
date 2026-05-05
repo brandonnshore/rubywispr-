@@ -91,6 +91,10 @@ final class RecordingOverlayManager {
         return screen.frame.maxY - screen.visibleFrame.maxY
     }
 
+    private var shouldReduceMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
     func showInitializing(mode: RecordingTriggerMode = .hold, isCommandMode: Bool = false) {
         DispatchQueue.main.async {
             self.overlayState.recordingTriggerMode = mode
@@ -185,6 +189,12 @@ final class RecordingOverlayManager {
         panel.alphaValue = 1
         panel.orderFrontRegardless()
 
+        guard !shouldReduceMotion else {
+            panel.setFrame(frame, display: true)
+            overlayWindow = panel
+            return
+        }
+
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.18
             context.timingFunction = CAMediaTimingFunction(controlPoints: 0.34, 1.56, 0.64, 1.0)
@@ -227,7 +237,7 @@ final class RecordingOverlayManager {
     }
 
     private func resize(panel: NSPanel, to frame: NSRect, animated: Bool) {
-        guard animated else {
+        guard animated, !shouldReduceMotion else {
             panel.setFrame(frame, display: true)
             return
         }
@@ -316,6 +326,7 @@ struct WaveformBar: View {
 struct WaveformView: View {
     let audioLevel: Float
     var showsActivityPulse = false
+    var reduceMotion = false
 
     private static let barCount = 9
     private static let multipliers: [CGFloat] = [0.35, 0.55, 0.75, 0.9, 1.0, 0.9, 0.75, 0.55, 0.35]
@@ -323,7 +334,9 @@ struct WaveformView: View {
 
     var body: some View {
         Group {
-            if showsActivityPulse {
+            if reduceMotion {
+                reducedMotionBars()
+            } else if showsActivityPulse {
                 TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
                     waveformBars(pulseTime: context.date.timeIntervalSinceReferenceDate)
                 }
@@ -332,6 +345,17 @@ struct WaveformView: View {
             }
         }
         .frame(height: 20)
+    }
+
+    private func reducedMotionBars() -> some View {
+        let level = CGFloat(max(min(audioLevel, 1), 0))
+        let tickLevel = (level * 4).rounded(.down) / 4
+
+        return HStack(spacing: 3) {
+            ForEach(0..<Self.barCount, id: \.self) { index in
+                WaveformBar(amplitude: min(tickLevel * Self.multipliers[index], 1.0))
+            }
+        }
     }
 
     private func waveformBars(pulseTime: TimeInterval?) -> some View {
@@ -437,12 +461,19 @@ private struct ProcessingPill: View {
 }
 
 struct ProcessingIndicatorView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsExtendedSpinner = false
     @State private var rotation: Double = 0
 
     var body: some View {
         ZStack {
-            if showsExtendedSpinner {
+            if reduceMotion {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .frame(height: 20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if showsExtendedSpinner {
                 Circle()
                     .trim(from: 0.1, to: 0.9)
                     .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
@@ -463,6 +494,7 @@ struct ProcessingIndicatorView: View {
             }
         }
         .task {
+            guard !reduceMotion else { return }
             showsExtendedSpinner = false
             do {
                 try await Task.sleep(nanoseconds: 1_000_000_000)
@@ -476,6 +508,7 @@ struct ProcessingIndicatorView: View {
 }
 
 struct InitializingDotsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var activeDot = 0
     @State private var timer: Timer?
 
@@ -485,10 +518,14 @@ struct InitializingDotsView: View {
                 Circle()
                     .fill(.white.opacity(activeDot == index ? 0.9 : 0.25))
                     .frame(width: 4.5, height: 4.5)
-                    .animation(.easeInOut(duration: 0.4), value: activeDot)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: activeDot)
             }
         }
         .onAppear {
+            guard !reduceMotion else {
+                activeDot = 1
+                return
+            }
             timer?.invalidate()
             timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
                 DispatchQueue.main.async {
@@ -504,6 +541,7 @@ struct InitializingDotsView: View {
 }
 
 struct RecordingOverlayView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var state: RecordingOverlayState
     let onStopButtonPressed: () -> Void
     let onUpdateOverlayPressed: () -> Void
@@ -534,7 +572,8 @@ struct RecordingOverlayView: View {
                         } else if showsLiveRecordingContent {
                             WaveformView(
                                 audioLevel: state.audioLevel,
-                                showsActivityPulse: state.phase == .recording
+                                showsActivityPulse: state.phase == .recording,
+                                reduceMotion: reduceMotion
                             )
                                 .transition(.opacity)
                         } else {
@@ -565,7 +604,7 @@ struct RecordingOverlayView: View {
                                         .background(Circle().fill(Color.red.opacity(0.92)))
                                 }
                                 .buttonStyle(.plain)
-                                .transition(.move(edge: .trailing).combined(with: .opacity))
+                                .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                             }
                         }
                         .frame(width: trailingAccessoryWidth, alignment: .trailing)
@@ -575,9 +614,9 @@ struct RecordingOverlayView: View {
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: state.phase)
-        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: state.recordingTriggerMode)
-        .animation(.spring(response: 0.28, dampingFraction: 0.8), value: state.isCommandMode)
+        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.phase)
+        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.recordingTriggerMode)
+        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.isCommandMode)
     }
 }
 
