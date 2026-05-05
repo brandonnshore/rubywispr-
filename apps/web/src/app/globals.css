@@ -235,7 +235,8 @@ h1 {
 .rw-button,
 .email-auth-form button,
 .account-acceptance-form button,
-.account-billing-actions button {
+.account-billing-actions button,
+.admin-friend-form button {
   display: inline-flex;
   min-height: 48px;
   width: fit-content;
@@ -258,7 +259,8 @@ h1 {
 .rw-button:hover,
 .email-auth-form button:hover:not(:disabled),
 .account-acceptance-form button:hover:not(:disabled),
-.account-billing-actions button:hover:not(:disabled) {
+.account-billing-actions button:hover:not(:disabled),
+.admin-friend-form button:hover:not(:disabled) {
   border-color: var(--rw-color-accent-hover);
   background: var(--rw-color-accent-hover);
   color: var(--rw-color-accent-contrast);
@@ -279,7 +281,8 @@ h1 {
 }
 
 .rw-field,
-.email-auth-form input {
+.email-auth-form input,
+.admin-friend-field input {
   min-height: 48px;
   border: 1px solid var(--rw-color-border-strong);
   border-radius: var(--rw-radius-medium);
@@ -1636,6 +1639,37 @@ h1 {
   padding: var(--rw-space-3);
 }
 
+.admin-friend-form {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.2fr) minmax(140px, 0.8fr) minmax(220px, 1fr)
+    auto;
+  gap: var(--rw-space-3);
+  align-items: end;
+}
+
+.admin-friend-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-friend-field label {
+  color: var(--rw-color-text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.admin-feedback,
+.admin-manual-gate {
+  border: 1px solid var(--rw-color-border);
+  border-radius: var(--rw-radius-small);
+  background: var(--rw-color-surface-subtle);
+  padding: var(--rw-space-3);
+}
+
 @media (max-width: 520px) {
   .rw-page-shell,
   .surface-shell {
@@ -1674,6 +1708,8 @@ h1 {
   }
 
   .rw-button,
+  .admin-friend-form,
+  .admin-friend-form button,
   .account-acceptance-form button,
   .account-action-row,
   .account-action-row .rw-button,
@@ -1684,6 +1720,10 @@ h1 {
   }
 
   .account-metadata-list {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-friend-form {
     grid-template-columns: 1fr;
   }
 }

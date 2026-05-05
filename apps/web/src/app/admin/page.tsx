@@ -15,16 +15,29 @@ import {
   type RubyWhisperAdminDashboardSnapshot,
 } from "@/lib/admin/dashboard";
 
+import { createFriendOfRubyBatchFromAdmin } from "./actions";
+
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+type AdminPageProps = Readonly<{
+  searchParams?: Promise<
+    Readonly<{
+      friendOfRubyBatch?: string | string[];
+    }>
+  >;
+}>;
+
+export default async function AdminPage({ searchParams }: AdminPageProps = {}) {
   const adminAuthorization = await requireRubyWhisperAdminForPage();
 
   if (!adminAuthorization.ok) {
     return <AdminAccessDenied />;
   }
 
-  const dashboardSnapshot = await readRubyWhisperAdminDashboardSnapshot();
+  const [dashboardSnapshot, friendOfRubyBatchMessage] = await Promise.all([
+    readRubyWhisperAdminDashboardSnapshot(),
+    resolveFriendOfRubyBatchMessage(searchParams),
+  ]);
 
   return (
     <main className="surface-shell admin-shell">
@@ -47,7 +60,10 @@ export default async function AdminPage() {
           request counters, billing event status, and Friend of Ruby batches.
         </p>
         {dashboardSnapshot.ok ? (
-          <AdminDashboard snapshot={dashboardSnapshot.snapshot} />
+          <AdminDashboard
+            friendOfRubyBatchMessage={friendOfRubyBatchMessage}
+            snapshot={dashboardSnapshot.snapshot}
+          />
         ) : (
           <AdminDashboardUnavailable />
         )}
@@ -85,8 +101,10 @@ function AdminAccessDenied() {
 }
 
 function AdminDashboard({
+  friendOfRubyBatchMessage,
   snapshot,
 }: Readonly<{
+  friendOfRubyBatchMessage: string | null;
   snapshot: RubyWhisperAdminDashboardSnapshot;
 }>) {
   return (
@@ -122,7 +140,10 @@ function AdminDashboard({
       />
       <RequestsSection section={snapshot.transcriptionRequests} />
       <StripeWebhookEventsSection section={snapshot.stripeWebhookEvents} />
-      <FriendOfRubyBatchesSection section={snapshot.friendOfRubyBatches} />
+      <FriendOfRubyBatchesSection
+        message={friendOfRubyBatchMessage}
+        section={snapshot.friendOfRubyBatches}
+      />
     </div>
   );
 }
@@ -311,8 +332,10 @@ function StripeWebhookEventsSection({
 }
 
 function FriendOfRubyBatchesSection({
+  message,
   section,
 }: Readonly<{
+  message: string | null;
   section: AdminDashboardSection<AdminDashboardFriendOfRubyBatchRow>;
 }>) {
   const batches = section.ok ? section.rows : [];
@@ -325,6 +348,63 @@ function FriendOfRubyBatchesSection({
       section={section}
       summary={`${batches.length} sampled, ${expiring} with expiration metadata.`}
     >
+      <form
+        action={createFriendOfRubyBatchFromAdmin}
+        aria-label="Create Friend of Ruby batch"
+        className="admin-friend-form"
+      >
+        <div className="admin-friend-field">
+          <label htmlFor="friend-of-ruby-code-label">Code label</label>
+          <input
+            id="friend-of-ruby-code-label"
+            maxLength={64}
+            name="codeLabel"
+            placeholder="FRIENDS-2026"
+            required
+            type="text"
+          />
+        </div>
+        <div className="admin-friend-field">
+          <label htmlFor="friend-of-ruby-max-redemptions">
+            Max redemptions
+          </label>
+          <input
+            id="friend-of-ruby-max-redemptions"
+            max={10000}
+            min={1}
+            name="maxRedemptions"
+            required
+            type="number"
+          />
+        </div>
+        <div className="admin-friend-field">
+          <label htmlFor="friend-of-ruby-expires-at">Expires at</label>
+          <input
+            id="friend-of-ruby-expires-at"
+            name="expiresAt"
+            placeholder="2027-05-04T00:00:00.000Z"
+            type="text"
+          />
+        </div>
+        <button type="submit">Create batch</button>
+      </form>
+      {message ? (
+        <p className="admin-feedback" role="status" aria-live="polite">
+          {message}
+        </p>
+      ) : null}
+      <p className="admin-manual-gate">
+        Live redemption smoke remains{" "}
+        <a
+          className="route-text-link"
+          href="https://linear.app/rubyadvisory/issue/RUB-197/rw-029f-run-live-stripe-friend-of-ruby-promotion-code-redemption-smoke"
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          RUB-197
+        </a>
+        .
+      </p>
       <MetadataTable
         columns={["Code label", "Max redemptions", "Expires", "Created by", "Created"]}
         emptyLabel="No Friend of Ruby batch metadata rows found."
@@ -482,4 +562,34 @@ function safeCount(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(0, Math.floor(value))
     : 0;
+}
+
+async function resolveFriendOfRubyBatchMessage(
+  searchParams: AdminPageProps["searchParams"],
+) {
+  const params = searchParams ? await searchParams : undefined;
+  const value = normalizeSearchParam(params?.friendOfRubyBatch);
+
+  switch (value) {
+    case "created":
+      return "Friend of Ruby batch created. Recent metadata has been refreshed.";
+    case "forbidden":
+      return "Friend of Ruby batch creation is available only to active admins.";
+    case "invalid":
+      return "Friend of Ruby batch input is not valid.";
+    case "metadata_unavailable":
+      return "Friend of Ruby batch metadata could not be stored.";
+    case "signed_out":
+      return "Sign in before creating a Friend of Ruby batch.";
+    case "stripe_unavailable":
+      return "Friend of Ruby promotion code creation is unavailable.";
+    case "unavailable":
+      return "Friend of Ruby batch creation is unavailable.";
+    default:
+      return null;
+  }
+}
+
+function normalizeSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }
