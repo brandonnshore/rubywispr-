@@ -13,6 +13,7 @@ extends:
 - `TECHNICAL_INFRASTRUCTURE.md#Local Mac Storage`
 - `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
+- `docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`
 - `docs/USAGE_QUOTA_CONTRACT.md`
 
 ## Ownership Boundary
@@ -178,6 +179,9 @@ and `billingPortalUrl: null` as expected.
 Purpose: submit one authenticated desktop recording for entitlement checks,
 provider transcription/cleanup through the RubyWhisper backend, usage metadata
 updates, and final cleaned text return.
+
+Recording artifact lifecycle, request assembly, retry, and duplicate-billing
+rules are defined in `docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`.
 
 Request:
 

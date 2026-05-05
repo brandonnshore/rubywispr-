@@ -413,6 +413,8 @@ Exact endpoints are provisional.
 ### `POST /api/desktop/transcribe`
 
 Client contract: `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md#post-apidesktoptranscribe`.
+Recording upload flow contract:
+`docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`.
 
 Auth:
 
