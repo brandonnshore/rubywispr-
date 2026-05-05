@@ -314,6 +314,7 @@ test("desktop transcribe route maps parser failures to shared no-store responses
     assert.equal(response.headers.get("Cache-Control"), "no-store");
     assert.equal(body.error.code, parseResult.code);
     assert.deepEqual(body.metadata, parseResult.metadata);
+    assert.equal(body.requestId, undefined);
     assert.deepEqual(
       toPlainObject(calls).map((call) => call.operation),
       [
@@ -326,6 +327,25 @@ test("desktop transcribe route maps parser failures to shared no-store responses
         "parseRequest",
       ],
     );
+
+    if (parseResult.code === "duration_limit_reached") {
+      assert.equal(response.status, 413);
+      assert.deepEqual(body.error, {
+        code: "duration_limit_reached",
+        desktopState: "duration_limit_reached",
+        message: "Recordings are limited to 10 minutes.",
+        recovery: "start_new_whisper",
+        retryable: false,
+      });
+      assert.deepEqual(Object.keys(body.metadata).sort(), [
+        "audioDurationMs",
+        "durationLimitMs",
+      ]);
+      assert.doesNotMatch(
+        JSON.stringify(body),
+        /audioMimeType|audio\/|transcript|cleaned|context|dictionary|provider|payload|user_rw_synthetic/i,
+      );
+    }
   }
 });
 
