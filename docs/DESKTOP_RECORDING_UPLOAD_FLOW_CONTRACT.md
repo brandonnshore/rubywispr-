@@ -72,8 +72,8 @@ Required sequence:
    material, or metadata containing user content in URLs.
 7. Treat backend success and error responses as `Cache-Control: no-store`.
 8. On success, insert `cleanedText` into the focused field. If insertion fails,
-   preserve cleaned text only under the approved local Recent Wisprs/recovery
-   policy.
+   preserve cleaned text only under
+   `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 9. On any terminal success, failure, cancel, logout, or app shutdown path,
    delete or release the transient audio artifact and any in-memory request body
    buffers.
@@ -189,7 +189,7 @@ contract's auth, Terms, account, microphone, and Accessibility gates pass.
 
 The recording island must not show transcript content. It may show short
 recoverable state copy and actions. Local recovery surfaces may show cleaned
-text only under the approved Recent Wisprs/recovery policy. Island state names,
+text only under `docs/RW_070_RECENT_WISPRS_CONTRACT.md`. Island state names,
 copy/action boundaries, and visual proof rules are defined in
 `docs/RW_066_RECORDING_ISLAND_VISUALIZER_CONTRACT.md`.
 
@@ -240,8 +240,9 @@ Approved local policies for v0.1:
 - Keychain may store only session material as defined in
   `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`.
 - Recent Wisprs/recovery may store final cleaned text only under its local
-  retention and user-control policy. It must not store audio or backend/provider
-  payloads.
+  retention and user-control policy in
+  `docs/RW_070_RECENT_WISPRS_CONTRACT.md`. It must not store audio or
+  backend/provider payloads.
 - App settings may store booleans and local preferences such as cleanup enabled,
   context-aware cleanup enabled, and whether dictionary support is enabled. They
   must not store provider secrets.

@@ -408,6 +408,9 @@ Required work:
 - Implement local Recent Wisprs with 7-day retention default.
 - Include failed insertions in Recent Wisprs.
 - Allow user to disable or clear local Recent Wisprs.
+- Follow `docs/RW_070_RECENT_WISPRS_CONTRACT.md` for the Recent Wisprs data
+  model, insertion status semantics, retention cleanup, clear/disable behavior,
+  no-backend-sync boundary, and metadata-only validation evidence.
 - Implement local personal dictionary/custom vocabulary.
 - Implement cleanup toggle in Advanced.
 - Implement context-aware cleanup toggle, on by default after Terms/Privacy acceptance.
@@ -425,6 +428,10 @@ Acceptance criteria:
 - User can copy Recent Wisprs.
 - Local history expires after 7 days by default.
 - User can clear history.
+- User can disable local history; disabled history prevents new persistent
+  Recent Wisprs writes.
+- Successful and failed insertions store only final text locally, and no Recent
+  Wisprs content is sent to backend or Supabase.
 - User can add/edit/delete dictionary terms locally.
 - User can turn cleanup/context behavior off in Advanced.
 

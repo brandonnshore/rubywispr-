@@ -189,6 +189,9 @@ Retention:
 - Recent Wisprs default retention is 7 days.
 - User can clear local history.
 - User can disable local history.
+- Recent Wisprs data model, retention cleanup, insertion status semantics,
+  clear/disable behavior, and no-sync boundary are defined in
+  `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 
 ## Secrets Management
 

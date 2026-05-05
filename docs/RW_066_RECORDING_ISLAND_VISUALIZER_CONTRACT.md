@@ -98,7 +98,7 @@ or add a reviewed extension to this contract before shipping.
 | `processing_uploading` | Recording stopped and upload/transcription is in progress. | Compact processing state appears immediately after stop. | `cancel_if_safe` only before request acceptance ambiguity; otherwise wait. | Do not show transcript, partial transcript, provider payloads, request body, or filenames. |
 | `inserting` | Backend success returned `cleanedText` and the app is inserting into the focused field. | Compact insertion progress state. | Wait. | Cleaned text is used only for insertion/local recovery; it is not displayed in the island. |
 | `success` | Text inserted successfully or test whisper completed successfully. | Brief subtle acknowledgement, then hide or return to onboarding ready state. | None, or `open_recent_wisprs` only outside compact acknowledgement. | No transcript/cleaned text in success copy, screenshots, analytics, or support evidence. |
-| `insertion_failed` | Backend success returned cleaned text but direct insertion failed or no text field was focused. | Recovery says `Click a text box first.` and offers copy/retry insertion where safe. Clipboard sub-states are defined in `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`. | `copy_cleaned_text` or `retry_insertion`. | The island itself does not display cleaned text. Cleaned text may exist only in approved local recovery/Recent Wisprs policy. Clipboard contents are never sent backend. |
+| `insertion_failed` | Backend success returned cleaned text but direct insertion failed or no text field was focused. | Recovery says `Click a text box first.` and offers copy/retry insertion where safe. Clipboard sub-states are defined in `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`. | `copy_cleaned_text` or `retry_insertion`. | The island itself does not display cleaned text. Cleaned text may exist only under `docs/RW_070_RECENT_WISPRS_CONTRACT.md`. Clipboard contents are never sent backend. |
 | `rate_limited` | Backend returns `rate_limited`. | Recovery shows retry availability using a delay bucket or countdown. | `retry_after`. | Retry only if duplicate-risk rules allow; no request payload details. |
 | `network_error` | Local network failure or backend-compatible network error. | Recoverable network state. | `retry` when safe, otherwise `start_new_whisper`. | Same-audio retry only before bytes left the app; otherwise delete audio and require a new recording. |
 | `provider_error` | Backend returns `provider_error`. | Recoverable provider state. | `retry` when backend/upload contract says duplicate risk is impossible. | Provider category/latency metadata only; no provider request or response bodies. |
@@ -225,8 +225,8 @@ Forbidden island actions:
 Copy recovery rule:
 
 `copy_cleaned_text` may copy only final cleaned text that already exists under
-the approved local Recent Wisprs/recovery policy. The island may expose the copy
-action, but the compact island must not render the cleaned text itself.
+`docs/RW_070_RECENT_WISPRS_CONTRACT.md`. The island may expose the copy action,
+but the compact island must not render the cleaned text itself.
 
 ## Visual Proof And Manual QA Rules
 

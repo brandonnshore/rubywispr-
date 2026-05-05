@@ -269,16 +269,20 @@ Advanced:
 
 Requirements:
 
-- Shows final cleaned text only.
+- Shows final cleaned text only, following
+  `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 - Includes successful and failed insertions.
 - 7-day retention default.
 - Prominent `Copy Whisper` or `Copy Transcript` button.
 - Timestamp.
 - Optional destination app if available without privacy risk.
 - Clear all action.
+- Disabled-history state and local history control from settings.
 - Empty state.
 
-Do not show raw transcript in v0.1 unless implementation already produces it locally and privacy/product approves showing it.
+Do not show raw transcript in v0.1. Do not show audio, cleanup prompts,
+clipboard content, surrounding app text, screenshots, URLs, document/window
+titles, or server-side history.
 
 ## Component Inventory
 

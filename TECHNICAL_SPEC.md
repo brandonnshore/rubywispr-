@@ -165,7 +165,10 @@ FR-020 Recent Wisprs: The app must store final cleaned Recent Wisprs locally for
 - Acceptance criteria: successful and failed insertions appear in Recent Wisprs; old items expire.
 - Validate by running: local storage tests and manual history test.
 - Required tests: retention and clear-history tests.
-- Security/privacy: local only; no server sync in v0.1.
+- Security/privacy: local only; no server sync in v0.1. Canonical data model,
+  retention, clear/disable behavior, insertion status semantics, no-sync
+  boundary, and downstream test seams are defined in
+  `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 
 FR-021 Personal dictionary: The app must support local personal dictionary terms.
 
@@ -589,6 +592,10 @@ WHEN clipboard fallback is used, THE SYSTEM SHALL follow `docs/RW_069_CLIPBOARD_
 
 WHEN a whisper is completed, THE SYSTEM SHALL store the final cleaned text locally for Recent Wisprs unless local history is disabled.
 
+WHEN local Recent Wisprs history is cleared, THE SYSTEM SHALL delete all local Recent Wisprs without calling backend services.
+
+WHEN local Recent Wisprs history is disabled, THE SYSTEM SHALL stop creating persistent Recent Wisprs until the user enables local history again.
+
 WHEN cleanup is disabled, THE SYSTEM SHALL return transcription without cleanup as the final text.
 
 WHEN context-aware cleanup is disabled, THE SYSTEM SHALL omit surrounding context from the backend request.
@@ -619,6 +626,9 @@ WHEN an admin page is requested, THE SYSTEM SHALL verify admin role server-side 
 - No support/admin access to transcript content.
 - Local Recent Wisprs store final cleaned text only.
 - Local Recent Wisprs expire after 7 days by default.
+- Recent Wisprs retention, clear/disable controls, insertion status semantics,
+  metadata-only evidence, and no-sync backend boundary are defined in
+  `docs/RW_070_RECENT_WISPRS_CONTRACT.md`.
 - Personal dictionary local-only in v0.1.
 - Terms/Privacy acceptance before first dictation.
 
@@ -666,7 +676,9 @@ Automated:
 - Stripe webhook tests.
 - Admin authorization tests.
 - Logging redaction tests.
-- Settings/history/dictionary local persistence tests.
+- Settings/history/dictionary local persistence tests, including the
+  `docs/RW_070_RECENT_WISPRS_CONTRACT.md` seams for retention cleanup, clear
+  history, disabled history, insertion status, and no-backend-sync assertions.
 - Backend provider mock tests.
 
 Manual:

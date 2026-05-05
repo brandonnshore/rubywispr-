@@ -126,7 +126,8 @@ future desktop support upload endpoint explicitly accepts sanitized diagnostics.
 | `desktop_offline` | `network_error` | `retry` | Check your internet connection and try again. | No server log unless request arrived |
 
 The desktop app may keep final cleaned text in local Recent Wisprs according to
-the local history policy. Backend routes must never store that content.
+`docs/RW_070_RECENT_WISPRS_CONTRACT.md`. Backend routes must never store that
+content.
 
 ## Spec Coverage
 
