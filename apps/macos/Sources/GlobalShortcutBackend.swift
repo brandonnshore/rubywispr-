@@ -17,7 +17,7 @@ enum GlobalShortcutBackendError: LocalizedError {
     }
 }
 
-final class GlobalShortcutBackend {
+final class GlobalShortcutBackend: HotkeyBackending {
     private var eventTap: CFMachPort?
     private var eventTapRunLoopSource: CFRunLoopSource?
     private var fnKeyIsDown = false

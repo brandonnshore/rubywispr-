@@ -26,7 +26,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize test-session-store test-backend-client
+.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-hotkey-manager
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -146,3 +146,21 @@ test-backend-client:
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Tests/RubyWhisperBackendAPIClientTests.swift
 	$(BUILD_DIR)/tests/RubyWhisperBackendAPIClientTests
+
+test-hotkey-manager:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-o $(BUILD_DIR)/tests/HotkeyManagerTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Sources/AppName.swift \
+		Sources/ModifierKeyEventState.swift \
+		Sources/ShortcutBinding.swift \
+		Sources/ShortcutCore/ShortcutModels.swift \
+		Sources/ShortcutCore/ShortcutMatcher.swift \
+		Sources/GlobalShortcutBackend.swift \
+		Sources/HotkeyManager.swift \
+		Tests/HotkeyManagerTests.swift
+	$(BUILD_DIR)/tests/HotkeyManagerTests
+
+test: test-session-store test-backend-client test-hotkey-manager
