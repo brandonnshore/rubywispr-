@@ -18,14 +18,23 @@ const syntheticBackendFixturesPath = path.join(
 );
 const sourceFileExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
 const sensitiveSourceRoots = [
+  path.join(srcRoot, "app", "(public)", "privacy"),
+  path.join(srcRoot, "app", "(public)", "support"),
+  path.join(srcRoot, "app", "admin"),
   path.join(srcRoot, "app", "api"),
+  path.join(srcRoot, "lib", "account"),
+  path.join(srcRoot, "lib", "admin"),
   path.join(srcRoot, "lib", "api"),
   path.join(srcRoot, "lib", "auth"),
+  path.join(srcRoot, "lib", "billing"),
   path.join(srcRoot, "lib", "cleanup"),
   path.join(srcRoot, "lib", "desktop-transcribe"),
+  path.join(srcRoot, "lib", "friend-of-ruby"),
   path.join(srcRoot, "lib", "observability"),
   path.join(srcRoot, "lib", "providers"),
+  path.join(srcRoot, "lib", "rate-limit"),
   path.join(srcRoot, "lib", "supabase"),
+  path.join(srcRoot, "lib", "usage"),
   path.join(srcRoot, "proxy.ts"),
 ];
 const approvedPrivacyLoggerPath = path.join(
@@ -82,7 +91,7 @@ const liveLookingFixturePatterns = [
   },
 ];
 
-test("sensitive backend source cannot add ad hoc logging or private stringification", async () => {
+test("sensitive web/backend source cannot add ad hoc logging or private stringification", async () => {
   const violations = [];
 
   for (const filePath of await listSensitiveSourceFiles()) {
