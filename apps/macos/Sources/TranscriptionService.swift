@@ -1,7 +1,7 @@
 import Foundation
 import os.log
 
-private let transcriptionLog = OSLog(subsystem: "com.zachlatta.freeflow", category: "Transcription")
+private let transcriptionLog = OSLog(subsystem: "com.rubyadvisory.rubywhisper", category: "Transcription")
 
 class TranscriptionService {
     private let apiKey: String

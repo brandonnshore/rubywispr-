@@ -18,7 +18,8 @@ Imported app source and build inputs:
 - `Sources/**`
 - `Makefile`
 - `Info.plist`
-- `FreeFlow.entitlements`
+- `FreeFlow.entitlements`, renamed to `RubyWhisper.entitlements` during the
+  RUB-222 metadata rebrand
 - `Resources/AppIcon-*.png`
 - `Resources/AppIcon*.icns`
 - `.gitignore`
@@ -55,12 +56,12 @@ hoc signing, which is the repeatable local developer path.
 Build output:
 
 ```text
-apps/macos/build/FreeFlow Dev.app
+apps/macos/build/RubyWhisper.app
 ```
 
-The output name, bundle identifier, entitlements filename, and some resources
-still reflect the imported FreeFlow harness until later RubyWhisper rebrand and
-release-packaging tickets change them.
+The output name, bundle identifier, entitlements filename, and resources use
+RubyWhisper development placeholders until later release-packaging tickets set
+approved production values.
 
 `xcodebuild` is not authoritative for this imported source. There is no Xcode
 project, workspace, Swift package, or scheme under `apps/macos`; `xcodebuild -list`
