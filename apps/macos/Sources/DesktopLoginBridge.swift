@@ -104,6 +104,7 @@ struct DesktopLoginLaunchResult: Equatable {
 
 struct DesktopLoginCallbackResult: Equatable {
     var outcome: DesktopLoginBridgeOutcome
+    var handoff: DesktopLoginHandoff?
 }
 
 final class DesktopLoginBridge {
@@ -111,6 +112,7 @@ final class DesktopLoginBridge {
 
     private let configurationLoader: () throws -> DesktopLoginBridgeConfiguration
     private let stateOwner: DesktopAuthStateOwner
+    private let handoffExchanger: DesktopLoginHandoffExchanging
     private let browserOpener: BrowserOpener
     private let now: () -> Date
     private let uuid: () -> UUID
@@ -120,12 +122,14 @@ final class DesktopLoginBridge {
     init(
         configurationLoader: @escaping () throws -> DesktopLoginBridgeConfiguration = { try DesktopLoginBridgeConfiguration.load() },
         stateOwner: DesktopAuthStateOwner,
+        handoffExchanger: DesktopLoginHandoffExchanging = DesktopLoginHandoffUnavailableExchanger(),
         browserOpener: @escaping BrowserOpener = { NSWorkspace.shared.open($0) },
         now: @escaping () -> Date = Date.init,
         uuid: @escaping () -> UUID = UUID.init
     ) {
         self.configurationLoader = configurationLoader
         self.stateOwner = stateOwner
+        self.handoffExchanger = handoffExchanger
         self.browserOpener = browserOpener
         self.now = now
         self.uuid = uuid
@@ -173,53 +177,63 @@ final class DesktopLoginBridge {
     func handleCallbackURL(_ url: URL) -> DesktopLoginCallbackResult {
         guard callbackRouteMatches(url) else {
             rejectPendingAttempt(reason: .invalidRoute)
-            return DesktopLoginCallbackResult(outcome: .invalidCallback(.invalidRoute))
+            return DesktopLoginCallbackResult(outcome: .invalidCallback(.invalidRoute), handoff: nil)
         }
 
         let query = callbackQueryItems(url)
         guard let callbackState = query["state"]?.nilIfBlank else {
             rejectPendingAttempt(reason: .missingState)
-            return DesktopLoginCallbackResult(outcome: .invalidCallback(.missingState))
+            return DesktopLoginCallbackResult(outcome: .invalidCallback(.missingState), handoff: nil)
         }
 
         if consumedStates.contains(callbackState) {
             rejectPendingAttempt(reason: .replayedState)
-            return DesktopLoginCallbackResult(outcome: .invalidCallback(.replayedState))
+            return DesktopLoginCallbackResult(outcome: .invalidCallback(.replayedState), handoff: nil)
         }
 
         guard let attempt = pendingAttempt else {
             stateOwner.rejectSignInCallback(reason: .noPendingAttempt)
-            return DesktopLoginCallbackResult(outcome: .invalidCallback(.noPendingAttempt))
+            return DesktopLoginCallbackResult(outcome: .invalidCallback(.noPendingAttempt), handoff: nil)
         }
 
         guard callbackState == attempt.state else {
             rejectPendingAttempt(reason: .mismatchedState)
-            return DesktopLoginCallbackResult(outcome: .invalidCallback(.mismatchedState))
+            return DesktopLoginCallbackResult(outcome: .invalidCallback(.mismatchedState), handoff: nil)
         }
 
         guard attempt.expiresAt > now() else {
             pendingAttempt = nil
             rememberConsumedState(callbackState)
             stateOwner.markSignInTimedOut()
-            return DesktopLoginCallbackResult(outcome: .timedOut)
+            return DesktopLoginCallbackResult(outcome: .timedOut, handoff: nil)
         }
 
         if browserCanceled(query) {
             pendingAttempt = nil
             rememberConsumedState(callbackState)
             stateOwner.cancelSignIn()
-            return DesktopLoginCallbackResult(outcome: .canceled)
+            return DesktopLoginCallbackResult(outcome: .canceled, handoff: nil)
         }
 
-        guard query["code"]?.nilIfBlank != nil else {
+        guard let exchangeCode = query["code"]?.nilIfBlank else {
             rejectPendingAttempt(reason: .missingExchangeCode)
-            return DesktopLoginCallbackResult(outcome: .invalidCallback(.missingExchangeCode))
+            return DesktopLoginCallbackResult(outcome: .invalidCallback(.missingExchangeCode), handoff: nil)
         }
 
         pendingAttempt = nil
         rememberConsumedState(callbackState)
         stateOwner.markHandoffPending()
-        return DesktopLoginCallbackResult(outcome: .callbackAccepted)
+        let handoff = DesktopLoginHandoff(
+            attemptID: attempt.id,
+            state: attempt.state,
+            exchangeCode: exchangeCode,
+            nonceVerifier: attempt.nonceVerifier
+        )
+        return DesktopLoginCallbackResult(outcome: .callbackAccepted, handoff: handoff)
+    }
+
+    func completeLoginHandoff(_ handoff: DesktopLoginHandoff) async -> RubyWhisperDesktopAccountSnapshot {
+        await stateOwner.completeLoginHandoff(handoff, exchanger: handoffExchanger)
     }
 
     @discardableResult
@@ -347,6 +361,20 @@ final class DesktopLoginBridge {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+struct DesktopLoginHandoffUnavailableExchanger: DesktopLoginHandoffExchanging {
+    func exchangeLoginHandoff(_ handoff: DesktopLoginHandoff) async throws -> DesktopSessionMaterial {
+        throw RubyWhisperBackendClientError.backend(
+            RubyWhisperBackendError(
+                code: .serviceUnavailable,
+                message: "RubyWhisper login is temporarily unavailable.",
+                recovery: .retry,
+                desktopState: .signedOut,
+                retryable: true
+            )
+        )
     }
 }
 

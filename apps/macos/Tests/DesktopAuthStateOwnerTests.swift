@@ -13,6 +13,7 @@ private func expect(_ condition: @autoclosure () -> Bool, _ message: String) -> 
 private final class MemorySessionStore: DesktopSessionStoring {
     private var session: DesktopSessionMaterial?
     private(set) var deleteCount = 0
+    private(set) var replaceCount = 0
 
     init(session: DesktopSessionMaterial?) {
         self.session = session
@@ -27,12 +28,37 @@ private final class MemorySessionStore: DesktopSessionStoring {
     }
 
     func replace(with session: DesktopSessionMaterial) throws {
+        replaceCount += 1
         self.session = session
     }
 
     func delete() throws {
         deleteCount += 1
         session = nil
+    }
+}
+
+private final class HandoffExchanger: DesktopLoginHandoffExchanging {
+    enum Result {
+        case success(DesktopSessionMaterial)
+        case failure(Error)
+    }
+
+    private(set) var handoffs: [DesktopLoginHandoff] = []
+    var result: Result
+
+    init(result: Result) {
+        self.result = result
+    }
+
+    func exchangeLoginHandoff(_ handoff: DesktopLoginHandoff) async throws -> DesktopSessionMaterial {
+        handoffs.append(handoff)
+        switch result {
+        case .success(let session):
+            return session
+        case .failure(let error):
+            throw error
+        }
     }
 }
 
@@ -56,6 +82,8 @@ private struct DesktopAuthStateOwnerTests {
         await testLogoutClearsSessionAndInMemoryAccountState()
         await testMissingSessionFailsClosedWithoutTransport()
         await testSignedOutRefreshClearsLocalSession()
+        await testLoginHandoffStoresSessionThenRefreshesAccount()
+        await testLoginHandoffFailureClearsSessionAndUsesStableState()
         await testLoginBridgeShellStatesUseContractNames()
         await testAccountSnapshotsMapToCoordinatorStates()
         await testAccountRefreshFailureIsDistinctFromSignedOut()
@@ -123,6 +151,59 @@ private struct DesktopAuthStateOwnerTests {
         expect(owner.coordinatorState == .signedOut, "revoked session should publish signed_out coordinator state")
         expect(store.read() == nil, "revoked session should delete durable session material")
         expect(owner.lastClearResult?.reason == .signedOutResponse, "revoked session should record signed_out clear reason")
+    }
+
+    private static func testLoginHandoffStoresSessionThenRefreshesAccount() async {
+        let exchangedSession = sessionMaterial(token: "session_placeholder_redacted_exchanged")
+        let store = MemorySessionStore(session: nil)
+        let loader = AccountSnapshotLoader(nextSnapshot: activeSnapshot)
+        let exchanger = HandoffExchanger(result: .success(exchangedSession))
+        let owner = DesktopAuthStateOwner(
+            sessionStore: store,
+            accountSnapshotLoader: { await loader.load() }
+        )
+
+        owner.beginSignIn()
+        owner.markHandoffPending()
+        let snapshot = await owner.completeLoginHandoff(syntheticHandoff, exchanger: exchanger)
+
+        expect(exchanger.handoffs.count == 1, "login handoff should be exchanged once")
+        expect(store.replaceCount == 1, "exchanged session should be written through session store replace")
+        expect(store.read() == exchangedSession, "session store should hold exchanged session material")
+        expect(loader.callCount == 1, "successful session exchange should immediately refresh account")
+        expect(snapshot.state == .trialActive, "successful handoff should return refreshed account snapshot")
+        expect(owner.coordinatorState == .trialActive, "successful handoff should publish account state")
+    }
+
+    private static func testLoginHandoffFailureClearsSessionAndUsesStableState() async {
+        let store = MemorySessionStore(session: sessionMaterial(token: "session_placeholder_redacted_stale"))
+        let exchanger = HandoffExchanger(result: .failure(RubyWhisperBackendClientError.backend(
+            RubyWhisperBackendError(
+                code: .serviceUnavailable,
+                message: "RubyWhisper login is temporarily unavailable.",
+                recovery: .retry,
+                desktopState: .signedOut,
+                retryable: true
+            )
+        )))
+        let loader = AccountSnapshotLoader(nextSnapshot: activeSnapshot)
+        let owner = DesktopAuthStateOwner(
+            sessionStore: store,
+            accountSnapshotLoader: { await loader.load() }
+        )
+
+        owner.beginSignIn()
+        owner.markHandoffPending()
+        let snapshot = await owner.completeLoginHandoff(syntheticHandoff, exchanger: exchanger)
+
+        expect(snapshot.state == .signedOut, "handoff exchange service errors should fail closed")
+        expect(snapshot.failureCode == .serviceUnavailable, "handoff exchange failure should keep stable backend failure code")
+        expect(snapshot.recovery == .retry, "handoff exchange failure should preserve stable recovery")
+        expect(owner.coordinatorState == .error, "retryable handoff failure should publish recoverable error state")
+        expect(owner.lastLoginBridgeOutcome == .exchangeFailed, "handoff failure should publish safe exchange failure outcome")
+        expect(owner.lastClearResult?.reason == .loginHandoffFailed, "handoff failure should record clear reason")
+        expect(store.read() == nil, "handoff failure should clear stale durable session material")
+        expect(loader.callCount == 0, "failed handoff should not refresh account")
     }
 
     private static func testLoginBridgeShellStatesUseContractNames() async {
@@ -295,6 +376,15 @@ private struct DesktopAuthStateOwnerTests {
             refreshToken: "refresh_placeholder_redacted",
             expiresAt: Date(timeIntervalSince1970: 4_102_444_800),
             accountID: "acct_test"
+        )
+    }
+
+    private static var syntheticHandoff: DesktopLoginHandoff {
+        DesktopLoginHandoff(
+            attemptID: UUID(uuidString: "00000000-0000-0000-0000-000000000061")!,
+            state: "state_placeholder_redacted",
+            exchangeCode: "exchange_placeholder_redacted",
+            nonceVerifier: "nonce_placeholder_redacted"
         )
     }
 }
