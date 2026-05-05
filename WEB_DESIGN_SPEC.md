@@ -241,6 +241,9 @@ Hotkeys:
 - Show toggle `Command+Fn`.
 - Explain both are always available.
 - If customization lands later, keep UI ready but do not require customization in v0.1.
+- Show degraded/conflict recovery states from
+  `docs/RW_064_GLOBAL_HOTKEY_CONTRACT.md` when macOS or the selected base cannot
+  capture the expected bindings.
 
 Appearance:
 

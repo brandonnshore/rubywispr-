@@ -14,6 +14,7 @@ RubyWhisper desktop user from signed out to ready for dictation. It extends:
 - `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
 - `docs/DESKTOP_RECORDING_UPLOAD_FLOW_CONTRACT.md`
+- `docs/RW_064_GLOBAL_HOTKEY_CONTRACT.md`
 
 ## Ownership Boundary
 
@@ -76,6 +77,9 @@ activation, or background dictation from these states:
 
 Hotkey activation before `ready` may open or refocus onboarding at the first
 unsatisfied state, but it must not start capture.
+
+Normal hotkey registration, gating, and conflict recovery are defined in
+`docs/RW_064_GLOBAL_HOTKEY_CONTRACT.md`.
 
 ## Gate Order
 
