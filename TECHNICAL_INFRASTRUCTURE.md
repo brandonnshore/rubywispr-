@@ -334,8 +334,8 @@ make -C apps/macos clean all CODESIGN_IDENTITY=-
 
 This is the authoritative repo-local macOS Debug/ad hoc build command. It uses
 the imported Makefile, direct `swiftc`, and ad hoc codesigning to produce
-`apps/macos/build/FreeFlow Dev.app`. The app name and bundle identifier still
-match the imported FreeFlow harness until a later rebrand ticket changes them.
+`apps/macos/build/RubyWhisper.app` with the development bundle identifier
+`com.rubyadvisory.rubywhisper.dev`.
 
 `xcodebuild` is not an authoritative local development command for the imported
 macOS source. `apps/macos` has no Xcode project, workspace, Swift package, or
@@ -366,8 +366,9 @@ npm run build
   ```
 
   The authoritative build entrypoint is the Makefile in `apps/macos`, not
-  `xcodebuild`. The command builds `apps/macos/build/FreeFlow Dev.app` with an
-  ad hoc signature (`Signature=adhoc`) and does not create a signed release,
+  `xcodebuild`. The command builds `apps/macos/build/RubyWhisper.app` with an
+  ad hoc signature (`Signature=adhoc`) and the development bundle identifier
+  `com.rubyadvisory.rubywhisper.dev`. It does not create a signed release,
   notarized artifact, DMG, CI runner, or test target. Downstream Mac
   implementation tickets should cite this command unless they explicitly add a
   new Xcode or SwiftPM project contract.
