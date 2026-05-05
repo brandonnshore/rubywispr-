@@ -21,6 +21,13 @@ enum OverlayPhase {
 
 // MARK: - Panel Helpers
 
+private enum RecordingOverlayGeometry {
+    static let compactWidth: CGFloat = 180
+    static let recoveryWidth: CGFloat = 190
+    static let baseHeight: CGFloat = 38
+    static let screenMargin: CGFloat = 8
+}
+
 private func makeOverlayPanel(width: CGFloat, height: CGFloat) -> NSPanel {
     let panel = NSPanel(
         contentRect: NSRect(x: 0, y: 0, width: width, height: height),
@@ -32,8 +39,9 @@ private func makeOverlayPanel(width: CGFloat, height: CGFloat) -> NSPanel {
     panel.isOpaque = false
     panel.hasShadow = true
     panel.level = .screenSaver
-    panel.ignoresMouseEvents = true
-    panel.collectionBehavior = [.canJoinAllSpaces]
+    panel.ignoresMouseEvents = false
+    panel.isMovableByWindowBackground = true
+    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     panel.isReleasedWhenClosed = false
     panel.hidesOnDeactivate = false
     return panel
@@ -61,7 +69,7 @@ private func makeNotchContent<V: View>(
 final class RecordingOverlayManager {
     private var overlayWindow: NSPanel?
     private let overlayState = RecordingOverlayState()
-    private var lockedOverlayWidth: CGFloat?
+    private var overlayTopCenterAnchor: NSPoint?
 
     var onStopButtonPressed: (() -> Void)?
     var onUpdateOverlayPressed: (() -> Void)?
@@ -83,14 +91,8 @@ final class RecordingOverlayManager {
         return screen.frame.maxY - screen.visibleFrame.maxY
     }
 
-    private var overlayAcceptsMouseEvents: Bool {
-        (overlayState.phase == .recording && overlayState.recordingTriggerMode == .toggle)
-            || overlayState.phase == .updateAvailable
-    }
-
     func showInitializing(mode: RecordingTriggerMode = .hold, isCommandMode: Bool = false) {
         DispatchQueue.main.async {
-            self.lockedOverlayWidth = nil
             self.overlayState.recordingTriggerMode = mode
             self.overlayState.isCommandMode = isCommandMode
             self.overlayState.phase = .initializing
@@ -101,7 +103,6 @@ final class RecordingOverlayManager {
 
     func showRecording(mode: RecordingTriggerMode = .hold, isCommandMode: Bool = false) {
         DispatchQueue.main.async {
-            self.lockedOverlayWidth = nil
             self.overlayState.recordingTriggerMode = mode
             self.overlayState.isCommandMode = isCommandMode
             self.overlayState.phase = .recording
@@ -112,7 +113,6 @@ final class RecordingOverlayManager {
 
     func transitionToRecording(mode: RecordingTriggerMode = .hold, isCommandMode: Bool = false) {
         DispatchQueue.main.async {
-            self.lockedOverlayWidth = nil
             self.overlayState.recordingTriggerMode = mode
             self.overlayState.isCommandMode = isCommandMode
             self.overlayState.phase = .recording
@@ -147,7 +147,6 @@ final class RecordingOverlayManager {
 
     func showUpdateAvailable(version: String) {
         DispatchQueue.main.async {
-            self.lockedOverlayWidth = nil
             self.overlayState.isCommandMode = false
             self.overlayState.updateVersion = version
             self.overlayState.phase = .updateAvailable
@@ -162,10 +161,11 @@ final class RecordingOverlayManager {
     }
 
     private func showOverlayPanel(animatedResize: Bool) {
+        preserveCurrentAnchor()
         let frame = overlayFrame
 
         if let panel = overlayWindow {
-            panel.ignoresMouseEvents = !overlayAcceptsMouseEvents
+            panel.ignoresMouseEvents = false
             panel.contentView = makeOverlayContent(frame: frame)
             resize(panel: panel, to: frame, animated: animatedResize)
             panel.alphaValue = 1
@@ -175,7 +175,7 @@ final class RecordingOverlayManager {
 
         let panel = makeOverlayPanel(width: frame.width, height: frame.height)
         panel.hasShadow = false
-        panel.ignoresMouseEvents = !overlayAcceptsMouseEvents
+        panel.ignoresMouseEvents = false
         panel.contentView = makeOverlayContent(frame: frame)
 
         guard let screen = NSScreen.main else { return }
@@ -196,14 +196,14 @@ final class RecordingOverlayManager {
 
     private func updateOverlayLayout(animated: Bool) {
         guard let panel = overlayWindow else { return }
+        preserveCurrentAnchor()
         let frame = overlayFrame
-        panel.ignoresMouseEvents = !overlayAcceptsMouseEvents
+        panel.ignoresMouseEvents = false
         panel.contentView = makeOverlayContent(frame: frame)
         resize(panel: panel, to: frame, animated: animated)
     }
 
     private func setTranscribingPhase() {
-        lockedOverlayWidth = overlayWindow?.frame.width ?? overlayWidth
         overlayState.phase = .transcribing
         showOverlayPanel(animatedResize: true)
     }
@@ -243,60 +243,58 @@ final class RecordingOverlayManager {
         guard let screen = NSScreen.main else { return .zero }
         let width = overlayWidth
         let overlap = screenHasNotch ? notchOverlap : 0
-        let height: CGFloat = 38 + overlap
-        let x = screen.frame.midX - width / 2
-        let y = screen.frame.maxY - height
+        let height: CGFloat = RecordingOverlayGeometry.baseHeight + overlap
+        let anchor = overlayTopCenterAnchor ?? defaultTopCenterAnchor(on: screen)
+        let proposedX = anchor.x - width / 2
+        let proposedY = anchor.y - height
+        let x = clamp(
+            proposedX,
+            minimum: screen.visibleFrame.minX + RecordingOverlayGeometry.screenMargin,
+            maximum: screen.visibleFrame.maxX - width - RecordingOverlayGeometry.screenMargin
+        )
+        let y = clamp(
+            proposedY,
+            minimum: screen.visibleFrame.minY + RecordingOverlayGeometry.screenMargin,
+            maximum: screen.frame.maxY - height
+        )
         return NSRect(x: x, y: y, width: width, height: height)
     }
 
     private var overlayWidth: CGFloat {
-        if let lockedOverlayWidth, overlayState.phase == .transcribing {
-            return lockedOverlayWidth
-        }
-
-        if overlayState.phase == .feedback {
-            let feedbackWidth: CGFloat = 92
-            guard screenHasNotch else { return feedbackWidth }
-            return max(notchWidth, feedbackWidth)
-        }
-
-        if overlayState.phase == .updateAvailable {
-            let updateWidth: CGFloat = 190
-            guard screenHasNotch else { return updateWidth }
-            return max(notchWidth, updateWidth)
-        }
-
-        let commandModeWidth: CGFloat = 180
-        let toggleWidth: CGFloat = 150
-        let defaultWidth: CGFloat = 92
-        let baseWidth: CGFloat
-
-        if overlayState.isCommandMode {
-            baseWidth = commandModeWidth
-        } else if overlayState.phase == .recording && overlayState.recordingTriggerMode == .toggle {
-            baseWidth = toggleWidth
-        } else {
-            baseWidth = defaultWidth
-        }
-
+        let baseWidth = overlayState.phase == .updateAvailable
+            ? RecordingOverlayGeometry.recoveryWidth
+            : RecordingOverlayGeometry.compactWidth
         guard screenHasNotch else { return baseWidth }
         return max(notchWidth, baseWidth)
     }
 
     private func showFeedbackPanel() {
-        lockedOverlayWidth = nil
         overlayState.phase = .feedback
         showOverlayPanel(animatedResize: true)
     }
 
     private func dismissAll() {
-        lockedOverlayWidth = nil
+        preserveCurrentAnchor()
         overlayState.isCommandMode = false
         overlayState.updateVersion = ""
         if let panel = overlayWindow {
             panel.orderOut(nil)
             overlayWindow = nil
         }
+    }
+
+    private func preserveCurrentAnchor() {
+        guard let panel = overlayWindow else { return }
+        overlayTopCenterAnchor = NSPoint(x: panel.frame.midX, y: panel.frame.maxY)
+    }
+
+    private func defaultTopCenterAnchor(on screen: NSScreen) -> NSPoint {
+        NSPoint(x: screen.frame.midX, y: screen.frame.maxY)
+    }
+
+    private func clamp(_ value: CGFloat, minimum: CGFloat, maximum: CGFloat) -> CGFloat {
+        guard minimum <= maximum else { return minimum }
+        return min(max(value, minimum), maximum)
     }
 }
 
