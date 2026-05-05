@@ -691,7 +691,7 @@ test("desktop transcribe route omits cleanup context and dictionary when disable
   });
 });
 
-test("desktop transcribe route falls back to raw text when cleanup fails", async () => {
+test("desktop transcribe route maps cleanup failures to shared no-store errors", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
   const providerCalls = [];
   const { calls, dependencies } = createRouteDependencies({
@@ -717,18 +717,56 @@ test("desktop transcribe route falls back to raw text when cleanup fails", async
     (call) => call.operation === "writeRequestMetadata",
   ).input;
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 503);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
-  assert.equal(body.cleanedText, "Synthetic provider output.");
-  assert.equal(body.cleanedWordCount, 3);
-  assert.equal(body.trialWordsRemaining, 3897);
+  assert.equal(body.error.code, "provider_error");
+  assert.equal(body.error.retryable, true);
+  assert.equal(body.requestId, "req_rw_synthetic_route_001");
+  assert.deepEqual(body.metadata, {
+    appVersion: "0.1.0-test",
+    audioDurationMs: 4200,
+    osVersion: "macOS synthetic",
+    planState: "trial_active",
+    provider: "mock_provider",
+    providerLatencyMs: 18,
+    totalLatencyMs: 26,
+    trialWordsLimit: 5000,
+    trialWordsRemaining: 3900,
+  });
   assert.deepEqual(
     toPlainObject(providerCalls).map((call) => call.operation),
     ["transcribe", "cleanup"],
   );
-  assert.equal(requestMetadataInput.cleanedWordCount, 3);
+  assert.deepEqual(
+    toPlainObject(requestMetadataInput),
+    {
+      appVersion: "0.1.0-test",
+      audioDurationMs: 4200,
+      clerkUserId: "user_rw_synthetic_member_001",
+      errorCode: "provider_error",
+      latencyMs: 18,
+      now: "2026-05-04T07:30:00.000Z",
+      osVersion: "macOS synthetic",
+      planState: "trial_active",
+      provider: "mock_provider",
+      requestId: "req_rw_synthetic_route_001",
+      status: "failure",
+    },
+  );
+  assert.equal(
+    calls.some((call) => call.operation === "prepareUsageIncrement"),
+    false,
+  );
+  assert.equal(
+    calls.some((call) => call.operation === "writeUsageCounterIncrement"),
+    false,
+  );
   assertTranscriptionRequestMetadataOnly(requestMetadataInput);
   assertNoPrivateCleanupPayload(requestMetadataInput);
+  assert.doesNotMatch(
+    JSON.stringify(body),
+    /Synthetic provider output|Synthetic route context|cleanedText|transcriptText/i,
+  );
 });
 
 test("desktop transcribe provider continuation can be invoked directly", async () => {
@@ -1360,7 +1398,11 @@ function providerClientReturningCleanupFailure(calls = []) {
           message: "Synthetic cleanup unavailable.",
           retryable: true,
         },
-        metadata: { provider: "mock_provider" },
+        metadata: {
+          provider: "mock_provider",
+          providerLatencyMs: 18,
+          totalLatencyMs: 26,
+        },
         ok: false,
       };
     },

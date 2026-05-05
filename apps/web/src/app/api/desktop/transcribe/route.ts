@@ -290,6 +290,33 @@ export async function executeDesktopTranscribeProviderContinuation(
     requestId,
     transcriptText: transcriptionResult.result.text,
   });
+
+  if (cleanupResult.cleanupAttempted && cleanupResult.fallbackUsed) {
+    const errorCode = cleanupResult.error?.apiErrorCode ?? "provider_error";
+    const provider =
+      typeof cleanupResult.metadata?.provider === "string"
+        ? cleanupResult.metadata.provider
+        : transcriptionResult.result.provider;
+
+    await dependencies.writeRequestMetadata({
+      ...createRequestMetadataInput(input, requestId, {
+        errorCode,
+        provider,
+        providerLatencyMs: cleanupResult.metadata?.providerLatencyMs,
+        status: "failure",
+        timestamp: dependencies.now(),
+      }),
+    });
+
+    return rubyWhisperApiErrorResponse(errorCode, {
+      metadata: {
+        ...createProviderRouteMetadata(input),
+        ...cleanupResult.metadata,
+      },
+      requestId,
+    });
+  }
+
   const finalText = cleanupResult.cleanedText;
   const cleanedWordCount = countRubyWhisperBillableOutputWords(
     finalText,
