@@ -52,7 +52,10 @@ final class DictationShortcutSessionController {
                 guard toggleStopArmed else { return nil }
                 reset()
                 return .stop
-            case .holdActivated, .holdDeactivated:
+            case .holdActivated:
+                reset()
+                return .stop
+            case .holdDeactivated:
                 return nil
             }
         }
