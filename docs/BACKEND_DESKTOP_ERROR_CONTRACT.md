@@ -11,6 +11,7 @@ Source requirements:
 - `TECHNICAL_SPEC.md#Error Handling`
 - `TECHNICAL_SPEC.md#Observability Rules`
 - `WEB_DESIGN_SPEC.md#Component States`
+- `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
 - `IMPLEMENTATION_PLAN.md` Wave 4 backend requirements
 
 ## Response Shape
@@ -158,7 +159,9 @@ canonical here: `subscription_required`, `account_blocked`, `rate_limited`,
 - Insertion failures should preserve the final cleaned text only in local Recent
   Wisprs or local recovery UI; the backend must not receive that content.
 - Permission failures should route to macOS System Settings and should not call
-  backend routes.
+  backend routes. First-run permission recovery copy and keyboard accessibility
+  requirements are defined in
+  `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`.
 - The island should not show transcript content. Local recovery surfaces may
   show local cleaned text only when the user explicitly opens them.
 

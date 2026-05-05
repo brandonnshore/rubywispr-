@@ -11,6 +11,7 @@ response, and where privacy and duplicate-billing boundaries sit.
 It extends:
 
 - `TECHNICAL_SPEC.md#POST /api/desktop/transcribe`
+- `docs/FIRST_RUN_ONBOARDING_PERMISSION_CONTRACT.md`
 - `docs/KEYCHAIN_SESSION_API_CLIENT_CONTRACT.md#post-apidesktoptranscribe`
 - `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md`
 - `docs/USAGE_QUOTA_CONTRACT.md`
@@ -178,7 +179,9 @@ contract:
 Local-only macOS errors from
 `docs/BACKEND_DESKTOP_ERROR_CONTRACT.md#local-only-macos-error-matrix` stay
 local. Microphone and accessibility permission failures must not upload audio.
-Insertion failures must not call the backend again with cleaned text.
+Insertion failures must not call the backend again with cleaned text. First-run
+test whisper uses this same upload and cleanup boundary after the onboarding
+contract's auth, Terms, account, microphone, and Accessibility gates pass.
 
 The recording island must not show transcript content. It may show short
 recoverable state copy and actions. Local recovery surfaces may show cleaned
