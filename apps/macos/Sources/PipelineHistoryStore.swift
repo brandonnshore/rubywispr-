@@ -98,6 +98,7 @@ final class PipelineHistoryStore {
                 entity.contextSystemPrompt = item.contextSystemPrompt
                 entity.postProcessingStatus = item.postProcessingStatus
                 entity.debugStatus = item.debugStatus
+                entity.customVocabulary = ""
                 entity.contextAppName = item.contextAppName
                 entity.contextBundleIdentifier = item.contextBundleIdentifier
                 entity.contextWindowTitle = item.contextWindowTitle

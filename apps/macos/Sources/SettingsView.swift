@@ -1440,7 +1440,7 @@ struct GeneralSettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    TextField("term_placeholder_alpha", text: Binding(
+                    TextField("Name or term", text: Binding(
                         get: { dictionaryFlow.draftTerm },
                         set: { dictionaryFlow.updateDraft($0) }
                     ))
