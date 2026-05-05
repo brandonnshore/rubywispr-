@@ -320,7 +320,7 @@ Required work:
 - Implement 10-minute maximum single whisper with warning around 9:30.
 - Implement backend submission and result handling.
 - Implement direct insertion into active text field.
-- Implement clipboard-safe fallback and previous clipboard restoration when possible.
+- Implement clipboard-safe fallback and previous clipboard restoration when possible under `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`.
 - Implement `Copy Whisper`/`Copy Transcript` recovery.
 - Save failed insertions into Recent Wisprs.
 
@@ -339,7 +339,7 @@ Acceptance criteria:
 - Text appears in the active app when insertion succeeds.
 - If no text field is focused, island shows "Click a text box first."
 - User can recover text from Recent Wisprs and copy it.
-- Previous clipboard is restored after fallback when technically possible.
+- Previous clipboard restoration is best effort, skips unsupported pasteboard data types, and exposes the fallback/recovery states named in `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`.
 
 Validation by running:
 
@@ -663,7 +663,7 @@ Checkpoint B: First vertical slice.
 
 Checkpoint C: Failure recovery.
 
-- Dictate with no focused text field -> see "Click a text box first" -> recover from Recent Wisprs -> copy text.
+- Dictate with no focused text field -> see "Click a text box first" -> recover from Recent Wisprs -> copy text, following `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`.
 
 Checkpoint D: Billing and trial.
 

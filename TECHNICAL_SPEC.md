@@ -150,6 +150,7 @@ FR-018 Insertion failure recovery: The app must never silently discard a whisper
 - Validate by running: manual no-focused-field test.
 - Required tests: failure-state mapping and local history tests.
 - Security/privacy: final cleaned text stored locally only.
+- Contract: `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md` defines fallback states, recovery copy, pasteboard ownership, restoration limits, and privacy boundaries.
 
 FR-019 Clipboard fallback: The app should use a clipboard-safe fallback when direct insertion fails or is unavailable.
 
@@ -157,6 +158,7 @@ FR-019 Clipboard fallback: The app should use a clipboard-safe fallback when dir
 - Validate by running: manual clipboard fallback test.
 - Required tests: clipboard manager tests if abstraction exists.
 - Security/privacy: clipboard contents must not be sent to backend.
+- Contract: previous clipboard restoration is best effort under `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`; unsupported pasteboard data types must map to restoration skipped.
 
 FR-020 Recent Wisprs: The app must store final cleaned Recent Wisprs locally for 7 days by default.
 
@@ -313,7 +315,7 @@ NFR-007 Cost:
 4. Island shows "Click a text box first."
 5. App saves cleaned text locally in Recent Wisprs.
 6. User opens app and clicks `Copy Whisper`/`Copy Transcript`.
-7. App restores previous clipboard when possible.
+7. App restores previous clipboard when possible under the best-effort limits in `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md`.
 
 ### Trial Exhaustion
 
@@ -544,7 +546,7 @@ machine codes and keep responses/logs metadata-only.
 | Payment failed | Account/Plan prompt | Stripe status |
 | Provider down | Island error, retry option if safe | Error code/latency |
 | No text field focused | "Click a text box first"; save local whisper | Local cleaned text only |
-| Clipboard unavailable | Show copy/manual recovery path | Local cleaned text only |
+| Clipboard unavailable | Show copy/manual recovery path per `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md` | Local cleaned text only |
 | Duration over cap | Stop/block at 10 minutes | Duration metadata |
 
 ## Edge Cases
@@ -582,6 +584,8 @@ WHEN recording reaches 10:00, THE SYSTEM SHALL stop or prevent additional record
 WHEN transcription succeeds and a text field is focused, THE SYSTEM SHALL insert cleaned text into that field.
 
 WHEN insertion fails because no text field is focused, THE SYSTEM SHALL show "Click a text box first" and save the cleaned text locally.
+
+WHEN clipboard fallback is used, THE SYSTEM SHALL follow `docs/RW_069_CLIPBOARD_FALLBACK_CONTRACT.md` for fallback copied, manual copy recovery, and best-effort previous clipboard restoration states.
 
 WHEN a whisper is completed, THE SYSTEM SHALL store the final cleaned text locally for Recent Wisprs unless local history is disabled.
 
