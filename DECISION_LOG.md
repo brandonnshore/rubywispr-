@@ -8,7 +8,7 @@ This log tracks architecture decision records that future implementation work sh
 
 | ADR | Status | Decision area | Current direction | Source |
 | --- | --- | --- | --- | --- |
-| ADR-001 | Pending Brandon acceptance | FreeFlow base | Use FreeFlow as the first macOS harness only with backend-proxy, storage/privacy reduction, insertion recovery, island-state, and attribution/rebrand constraints. | `docs/adr/ADR-001-freeflow-import-decision.md`, `docs/FREEFLOW_AUDIT_RUB_24.md`, `RESEARCH_LOG.md#FreeFlow Audit Follow-Up` |
+| ADR-001 | Accepted | FreeFlow base | Import audited FreeFlow source into `apps/macos` as the first macOS harness only with backend-proxy, storage/privacy reduction, insertion recovery, island-state, and attribution/rebrand constraints. | `docs/adr/ADR-001-freeflow-import-decision.md`, `docs/FREEFLOW_AUDIT_RUB_24.md`, `RESEARCH_LOG.md#FreeFlow Audit Follow-Up`, `RUB-28` |
 | ADR-002 | Proposed | Backend provider proxying | Desktop app talks only to the RubyWhisper backend, never directly to Groq. | `TECHNICAL_SPEC.md#ADR Candidates`, `TECHNICAL_INFRASTRUCTURE.md#Summary` |
 | ADR-003 | Proposed | Authentication | Use Clerk for auth, starting with email magic-link login. | `TECHNICAL_SPEC.md#ADR Candidates`, `TECHNICAL_INFRASTRUCTURE.md#Services And Dependencies` |
 | ADR-004 | Proposed | Product database | Use Supabase for product metadata only. | `TECHNICAL_SPEC.md#ADR Candidates`, `TECHNICAL_INFRASTRUCTURE.md#Services And Dependencies` |

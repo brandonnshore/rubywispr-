@@ -1,6 +1,6 @@
 # ADR-001: FreeFlow Import Decision
 
-Status: Proposed; pending Brandon acceptance
+Status: Accepted by Brandon on 2026-05-05
 
 Date: 2026-05-05
 
@@ -8,17 +8,20 @@ Related issues: RUB-28 / RW-013, RUB-226 / RW-013A, RUB-220 through RUB-225 / RW
 
 ## Decision
 
-Recommend using `zachlatta/freeflow` as the first RubyWhisper macOS harness, but only as a constrained import path. This is not an accepted decision until Brandon explicitly accepts it through the RUB-28 / RW-013 human gate.
+Use `zachlatta/freeflow` as the first RubyWhisper macOS harness, but only as a constrained import path. Brandon accepted this through the RUB-28 / RW-013 human gate on 2026-05-05.
 
 The selected path is:
 
-- Import FreeFlow as the first harness because the audits found no blocking build, license, hotkey, permissions, or project-structure issue.
+- Import `https://github.com/zachlatta/freeflow` at commit `b91a5fb01a6fa46853b2a718a3dc6f43cff1f56c` into `apps/macos` as the first harness because the audits found no blocking build, license, hotkey, permissions, or project-structure issue.
 - Do not import FreeFlow unchanged.
+- Preserve FreeFlow MIT license notices and attribution.
 - Require backend proxying before provider-backed transcription is considered RubyWhisper-compliant.
 - Require storage and privacy reduction before beta release.
 - Require insertion preflight, insertion failure state, and copy recovery.
 - Require RubyWhisper island states beyond FreeFlow's current recording and processing overlay.
 - Require FreeFlow MIT attribution and rebrand constraints before any external distribution.
+- Do not add secrets, private env files, generated build products, upstream website assets, or `.tools` runtime artifacts during the import.
+- Do not sign, notarize, package, or publish a release build during the import.
 
 ## Context
 
@@ -83,7 +86,7 @@ Rejected. It conflicts with RubyWhisper's backend-proxy, provider-secret, local-
 
 ### Use FreeFlow As The First Harness With Required Refactors
 
-Selected recommendation, pending Brandon acceptance. This path preserves the useful macOS harness while forcing the architecture and privacy changes before beta release.
+Selected. This path preserves the useful macOS harness while forcing the architecture and privacy changes before beta release.
 
 ### Build RubyWhisper From Scratch
 
@@ -136,7 +139,7 @@ Release packaging:
 
 ## Downstream Unblock Condition
 
-RUB-220 through RUB-225 remain prepared import/rebrand leaves, not active import approval. They should be unblocked only after Brandon explicitly accepts the FreeFlow import recommendation through RUB-28 / RW-013 or an equivalent repo decision-log update that changes this ADR from `Proposed; pending Brandon acceptance` to an accepted state.
+RUB-220 through RUB-225 are prepared import/rebrand leaves. Brandon's 2026-05-05 acceptance unblocks the source import path, but each leaf must still respect its own scope and validation gates.
 
 Prepared sequence after acceptance:
 
@@ -147,4 +150,4 @@ Prepared sequence after acceptance:
 5. RUB-224 / RW-060E: Preserve FreeFlow attribution and exclude upstream release surfaces.
 6. RUB-225 / RW-060F: Record macOS import completion gate and downstream blockers.
 
-Until that human acceptance exists, agents must not import macOS source, move RUB-28 or RUB-220 through RUB-225 to Done, or claim the FreeFlow decision has been accepted.
+Agents may now import the macOS source through RUB-220, but must not claim signing, notarization, release packaging, live transcription, or beta readiness from this ADR alone.
