@@ -110,6 +110,42 @@ final class PipelineHistoryStore {
         if let thrownError { throw thrownError }
     }
 
+    func sanitizePersistedContentReferences() throws -> [String] {
+        guard isStoreLoaded else { return [] }
+
+        var audioFileNames: [String] = []
+        var thrownError: Error?
+        container.viewContext.performAndWait {
+            do {
+                let request = pipelineHistoryRequest()
+                guard let entities = try? container.viewContext.fetch(request) else { return }
+                for entity in entities {
+                    if let audioFileName = entity.audioFileName {
+                        audioFileNames.append(audioFileName)
+                        entity.audioFileName = nil
+                    }
+                    entity.selectedText = nil
+                    entity.capturedSelection = nil
+                    entity.rawTranscript = ""
+                    entity.postProcessedTranscript = ""
+                    entity.postProcessingPrompt = nil
+                    entity.systemPrompt = nil
+                    entity.contextSummary = ""
+                    entity.contextSystemPrompt = nil
+                    entity.contextPrompt = nil
+                    entity.contextScreenshotDataURL = nil
+                    entity.customVocabulary = ""
+                    entity.contextWindowTitle = nil
+                }
+                try saveContext()
+            } catch {
+                thrownError = error
+            }
+        }
+        if let thrownError { throw thrownError }
+        return audioFileNames
+    }
+
     func delete(id: UUID) throws -> String? {
         guard isStoreLoaded else { return nil }
 
@@ -207,7 +243,7 @@ final class PipelineHistoryStore {
                 entity.postProcessingStatus = item.postProcessingStatus
                 entity.debugStatus = item.debugStatus
                 entity.customVocabulary = ""
-                entity.audioFileName = item.audioFileName
+                entity.audioFileName = nil
                 entity.contextAppName = item.contextAppName
                 entity.contextBundleIdentifier = item.contextBundleIdentifier
                 entity.contextWindowTitle = item.contextWindowTitle
@@ -285,7 +321,7 @@ final class PipelineHistoryStore {
             postProcessingStatus: entity.postProcessingStatus ?? "",
             debugStatus: entity.debugStatus ?? "",
             customVocabulary: "",
-            audioFileName: entity.audioFileName,
+            audioFileName: nil,
             contextAppName: entity.contextAppName,
             contextBundleIdentifier: entity.contextBundleIdentifier,
             contextWindowTitle: entity.contextWindowTitle

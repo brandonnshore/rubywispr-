@@ -91,8 +91,7 @@ class TranscriptionService {
             os_log(
                 .error,
                 log: transcriptionLog,
-                "URLSession upload failed for %{public}@ (bytes=%{public}lld): domain=%{public}@ code=%ld desc=%{public}@",
-                fileURL.lastPathComponent,
+                "URLSession upload failed for transient audio (bytes=%{public}lld): domain=%{public}@ code=%ld desc=%{public}@",
                 fileSizeBytes(for: fileURL),
                 nsError.domain,
                 nsError.code,
@@ -108,15 +107,12 @@ class TranscriptionService {
         }
 
         guard httpResponse.statusCode == 200 else {
-            let responseBody = String(data: data, encoding: .utf8) ?? ""
             os_log(
                 .error,
                 log: transcriptionLog,
-                "URLSession upload returned HTTP %ld for %{public}@ (bytes=%{public}lld) body=%{public}@",
+                "URLSession upload returned HTTP %ld for transient audio (bytes=%{public}lld)",
                 httpResponse.statusCode,
-                fileURL.lastPathComponent,
-                fileSizeBytes(for: fileURL),
-                responseBody
+                fileSizeBytes(for: fileURL)
             )
             throw TranscriptionError.submissionFailed(Self.friendlyHTTPMessage(
                 status: httpResponse.statusCode,

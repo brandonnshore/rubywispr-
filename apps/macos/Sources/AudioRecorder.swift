@@ -312,9 +312,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
             self.fileWriteErrorLock.withLock { _ in
                 self.fileWriteError = nil
             }
-            if !shouldKeepFile {
-                self.tempFileURL = nil
-            }
+            self.tempFileURL = nil
         }
 
         return shouldKeepFile ? finalizedURL : nil
@@ -392,7 +390,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
             )
             activeAudioFile = audioFile
             activeAudioFormat = targetFormat
-            os_log(.info, log: recordingLog, "audio file writer created at %{public}@", outputURL.path)
+            os_log(.info, log: recordingLog, "transient audio file writer created")
         }
 
         guard let activeAudioFile else {
@@ -646,8 +644,12 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
 
         os_log(.info, log: recordingLog, "startRecording() entered")
 
-        let tempDir = FileManager.default.temporaryDirectory
-        let outputURL = tempDir.appendingPathComponent(UUID().uuidString + ".wav")
+        let outputURL: URL
+        do {
+            outputURL = try TransientRecordingArtifactStore.makeRecordingURL()
+        } catch {
+            throw AudioRecorderError.failedToBeginFileRecording("Could not create a transient recording artifact.")
+        }
 
         do {
             try sessionQueue.sync {
@@ -673,7 +675,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
         os_log(.info, log: recordingLog, "startRecording() complete: %.3fms total", (CFAbsoluteTimeGetCurrent() - t0) * 1000)
     }
 
-    func stopRecording(completion: @escaping (URL?) -> Void) {
+    func stopRecording(completion: @escaping (TransientRecordingArtifact?) -> Void) {
         let count = _bufferCount.withLock { $0 }
         let elapsed = (CFAbsoluteTimeGetCurrent() - recordingStartTime) * 1000
         os_log(.info, log: recordingLog, "stopRecording() called: %.3fms after start, %d buffers received", elapsed, count)
@@ -684,10 +686,22 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
             let outputURL = self.finishAudioFileLocked(discard: false)
             self._recording.withLock { $0 = false }
             self.liveLevelNormalizerLock.withLock { $0.reset() }
+            let artifact = outputURL.map { url -> TransientRecordingArtifact in
+                let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+                let byteCount = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+                return TransientRecordingArtifact(
+                    fileURL: url,
+                    metadata: RecordingArtifactMetadata(
+                        durationMs: max(0, Int(elapsed.rounded())),
+                        format: RecordingArtifactMetadata.wavPCM16Mono16k,
+                        byteCount: byteCount
+                    )
+                )
+            }
             DispatchQueue.main.async {
                 self.isRecording = false
                 self.audioLevel = 0.0
-                completion(outputURL)
+                completion(artifact)
             }
         }
     }

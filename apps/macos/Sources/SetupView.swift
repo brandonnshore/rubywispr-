@@ -1440,8 +1440,8 @@ struct SetupView: View {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         testPhase = .done
                     }
-                    recorder.stopRecording { _ in
-                        recorder.cleanup()
+                    recorder.stopRecording { artifact in
+                        artifact?.delete()
                     }
                     return
                 }
@@ -1450,8 +1450,8 @@ struct SetupView: View {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     testPhase = .transcribing
                 }
-                recorder.stopRecording { url in
-                    guard let url else {
+                recorder.stopRecording { artifact in
+                    guard let artifact else {
                         Task { @MainActor in
                             testHotkeyHarness.isTranscribing = false
                             testAudioRecorder = nil
@@ -1461,15 +1461,17 @@ struct SetupView: View {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                 testPhase = .done
                             }
-                            recorder.cleanup()
                         }
                         return
                     }
 
                     Task {
+                        defer {
+                            artifact.delete()
+                        }
                         do {
                             let service = try appState.makeTranscriptionService()
-                            let transcript = try await service.transcribe(fileURL: url)
+                            let transcript = try await service.transcribe(fileURL: artifact.fileURL)
                             await MainActor.run {
                                 testHotkeyHarness.isTranscribing = false
                                 testAudioRecorder = nil
@@ -1488,9 +1490,6 @@ struct SetupView: View {
                                     testPhase = .done
                                 }
                             }
-                        }
-                        await MainActor.run {
-                            recorder.cleanup()
                         }
                     }
                 }
