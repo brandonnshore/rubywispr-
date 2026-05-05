@@ -70,6 +70,7 @@ private struct RubyWhisperBackendAPIClientTests {
     static func main() async {
         do {
             try await testAccountRequestUsesSessionAuthMetadataAndNoStore()
+            try await testLoginHandoffExchangeUsesNoStoreMetadataAndReturnsSessionMaterial()
             try await testAccountSnapshotMapsDocumentedSuccessStates()
             try await testAccountSnapshotMapsFailureResponsesFailClosed()
             try await testExpiredSessionRefreshClearsLocalSession()
@@ -135,6 +136,59 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(request.value(forHTTPHeaderField: "X-RubyWhisper-App-Version") == "0.1.0-test", "account request should include app version metadata")
         expect(request.value(forHTTPHeaderField: "X-RubyWhisper-OS-Version") == "macOS synthetic", "account request should include OS metadata")
         expect(request.value(forHTTPHeaderField: "X-RubyWhisper-Platform") == "macos", "account request should include platform metadata")
+    }
+
+    private static func testLoginHandoffExchangeUsesNoStoreMetadataAndReturnsSessionMaterial() async throws {
+        let transport = CapturingTransport(stubs: [
+            .init(
+                statusCode: 200,
+                headers: ["Cache-Control": "no-store"],
+                body: Data("""
+                {
+                  "ok": true,
+                  "accessToken": "session_placeholder_redacted_exchanged",
+                  "refreshToken": "refresh_placeholder_redacted_exchanged",
+                  "expiresAt": "2099-12-31T00:00:00Z",
+                  "accountID": "acct_test"
+                }
+                """.utf8)
+            ),
+        ])
+        let client = try makeClient(token: nil, transport: transport)
+        let handoff = DesktopLoginHandoff(
+            attemptID: UUID(uuidString: "00000000-0000-0000-0000-000000000061")!,
+            state: "state_placeholder_redacted",
+            exchangeCode: "exchange_placeholder_redacted",
+            nonceVerifier: "nonce_placeholder_redacted"
+        )
+
+        let session = try await client.exchangeLoginHandoff(handoff)
+
+        expect(session.accessToken == "session_placeholder_redacted_exchanged", "exchange should decode access token into session material")
+        expect(session.refreshToken == "refresh_placeholder_redacted_exchanged", "exchange should decode refresh token into session material")
+        expect(session.accountID == "acct_test", "exchange should decode account ID into session material")
+        expect(transport.requests.count == 1, "exchange should call transport once")
+
+        let captured = transport.requests[0]
+        let request = captured.request
+        let body = String(data: captured.body ?? Data(), encoding: .utf8) ?? ""
+
+        expect(request.httpMethod == "POST", "exchange request should be POST")
+        expect(request.url?.absoluteString == "https://backend.example.test/api/desktop/login/exchange", "exchange request should target desktop login exchange route")
+        expect(request.value(forHTTPHeaderField: "Authorization") == nil, "exchange request should not attach a stale Authorization header before session exists")
+        expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json", "exchange request should send JSON")
+        expect(request.value(forHTTPHeaderField: "Cache-Control") == "no-store", "exchange request should send no-store")
+        expect(request.value(forHTTPHeaderField: "Pragma") == "no-cache", "exchange request should send no-cache")
+        expect(request.value(forHTTPHeaderField: "X-RubyWhisper-App-Version") == "0.1.0-test", "exchange request should include app version metadata")
+        expect(request.value(forHTTPHeaderField: "X-RubyWhisper-OS-Version") == "macOS synthetic", "exchange request should include OS metadata")
+        expect(request.value(forHTTPHeaderField: "X-RubyWhisper-Platform") == "macos", "exchange request should include platform metadata")
+        expect(body.contains("\"state\":\"state_placeholder_redacted\""), "exchange body should include handoff state")
+        expect(body.contains("\"code\":\"exchange_placeholder_redacted\""), "exchange body should include single-use exchange code")
+        expect(body.contains("\"nonce_verifier\":\"nonce_placeholder_redacted\""), "exchange body should include nonce verifier")
+
+        let handoffDescription = String(describing: handoff)
+        expect(!handoffDescription.contains("exchange_placeholder_redacted"), "handoff diagnostics should redact exchange code")
+        expect(!handoffDescription.contains("nonce_placeholder_redacted"), "handoff diagnostics should redact nonce verifier")
     }
 
     private static func testAccountSnapshotMapsDocumentedSuccessStates() async throws {

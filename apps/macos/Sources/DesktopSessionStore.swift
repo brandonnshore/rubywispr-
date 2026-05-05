@@ -16,6 +16,25 @@ struct DesktopSessionMaterial: Codable, Equatable, CustomStringConvertible, Cust
     }
 }
 
+struct DesktopLoginHandoff: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+    var attemptID: UUID
+    var state: String
+    var exchangeCode: String
+    var nonceVerifier: String
+
+    var description: String {
+        "DesktopLoginHandoff(attemptID: \(attemptID), state: <redacted>, exchangeCode: <redacted>, nonceVerifier: <redacted>)"
+    }
+
+    var debugDescription: String {
+        description
+    }
+}
+
+protocol DesktopLoginHandoffExchanging {
+    func exchangeLoginHandoff(_ handoff: DesktopLoginHandoff) async throws -> DesktopSessionMaterial
+}
+
 protocol DesktopSessionStoring {
     func read() -> DesktopSessionMaterial?
     func save(_ session: DesktopSessionMaterial) throws

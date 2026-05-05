@@ -10,11 +10,12 @@ enum DesktopLoginBridgeOutcome: Equatable {
     case canceled
     case timedOut
     case launchFailed
+    case exchangeFailed
     case invalidCallback(DesktopLoginBridgeFailureReason)
 
     var isFailure: Bool {
         switch self {
-        case .timedOut, .launchFailed, .invalidCallback:
+        case .timedOut, .launchFailed, .exchangeFailed, .invalidCallback:
             return true
         case .idle, .launching, .browserPending, .callbackAccepted, .alreadySignedIn, .canceled:
             return false
@@ -31,6 +32,7 @@ enum DesktopLoginBridgeOutcome: Equatable {
         case .canceled: return "canceled"
         case .timedOut: return "timed_out"
         case .launchFailed: return "launch_failed"
+        case .exchangeFailed: return "exchange_failed"
         case .invalidCallback(let reason): return reason.rawValue
         }
     }
@@ -164,6 +166,7 @@ enum DesktopAuthSessionClearReason: String, Equatable {
     case logout
     case missingSession
     case signedOutResponse
+    case loginHandoffFailed
 }
 
 struct DesktopAuthSessionClearResult: Equatable, CustomStringConvertible {
@@ -261,6 +264,35 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
         coordinatorState = .sessionExchanging
     }
 
+    func completeLoginHandoff(
+        _ handoff: DesktopLoginHandoff,
+        exchanger: DesktopLoginHandoffExchanging
+    ) async -> RubyWhisperDesktopAccountSnapshot {
+        let generation = sessionGeneration
+        refreshTask?.cancel()
+        refreshTask = nil
+        isRefreshingAccount = false
+        markSessionExchanging()
+
+        do {
+            let session = try await exchanger.exchangeLoginHandoff(handoff)
+            guard !Task.isCancelled, generation == sessionGeneration else {
+                return accountSnapshot
+            }
+            try sessionStore.replace(with: session)
+        } catch {
+            guard !Task.isCancelled, generation == sessionGeneration else {
+                return accountSnapshot
+            }
+            return failLoginHandoff(error)
+        }
+
+        guard !Task.isCancelled, generation == sessionGeneration else {
+            return accountSnapshot
+        }
+        return await refreshAccountSnapshot()
+    }
+
     func cancelSignIn() {
         sessionGeneration += 1
         refreshTask?.cancel()
@@ -350,6 +382,25 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
             keychainDeleteSucceeded: deleteSucceeded,
             accountState: .signedOut
         )
+    }
+
+    private func failLoginHandoff(_ error: Error) -> RubyWhisperDesktopAccountSnapshot {
+        let result = clearSessionResult(reason: .loginHandoffFailed)
+        let snapshot: RubyWhisperDesktopAccountSnapshot
+
+        if let clientError = error as? RubyWhisperBackendClientError,
+           case .backend(let backendError) = clientError {
+            snapshot = RubyWhisperDesktopAccountSnapshot(error: backendError)
+        } else {
+            snapshot = .accountRefreshUnavailable
+        }
+
+        accountSnapshot = snapshot
+        coordinatorState = DesktopAuthCoordinatorState.accountState(for: snapshot)
+        isRefreshingAccount = false
+        lastClearResult = result
+        lastLoginBridgeOutcome = .exchangeFailed
+        return snapshot
     }
 }
 

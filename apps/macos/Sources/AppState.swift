@@ -570,6 +570,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var audioLevelCancellable: AnyCancellable?
     private var authStateCancellables: Set<AnyCancellable> = []
     private var desktopLoginTimeoutTask: Task<Void, Never>?
+    private var desktopLoginCompletionTask: Task<Void, Never>?
     private var debugOverlayTimer: Timer?
     private var recordingInitializationTimer: DispatchSourceTimer?
     private var transcriptionTask: Task<Void, Never>?
@@ -603,11 +604,21 @@ final class AppState: ObservableObject, @unchecked Sendable {
     init() {
         UserDefaults.standard.removeObject(forKey: "force_http2_transcription")
         let desktopSessionStore = DesktopSessionKeychainStore()
+        let desktopBackendClient = Self.makeDesktopBackendAPIClient(sessionStore: desktopSessionStore)
+        let desktopHandoffExchanger: DesktopLoginHandoffExchanging
+        if let desktopBackendClient {
+            desktopHandoffExchanger = desktopBackendClient
+        } else {
+            desktopHandoffExchanger = DesktopLoginHandoffUnavailableExchanger()
+        }
         let authStateOwner = DesktopAuthStateOwner(
             sessionStore: desktopSessionStore,
-            accountSnapshotLoader: Self.makeDesktopAccountSnapshotLoader(sessionStore: desktopSessionStore)
+            accountSnapshotLoader: Self.makeDesktopAccountSnapshotLoader(client: desktopBackendClient)
         )
-        let desktopLoginBridge = DesktopLoginBridge(stateOwner: authStateOwner)
+        let desktopLoginBridge = DesktopLoginBridge(
+            stateOwner: authStateOwner,
+            handoffExchanger: desktopHandoffExchanger
+        )
         let firstRunOnboardingCoordinator = FirstRunOnboardingCoordinator()
         let hasCompletedSetup = UserDefaults.standard.bool(forKey: "hasCompletedSetup")
         let apiKey = Self.loadStoredAPIKey(account: apiKeyStorageKey)
@@ -793,14 +804,28 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private static func makeDesktopAccountSnapshotLoader(
         sessionStore: DesktopSessionStoring
     ) -> () async -> RubyWhisperDesktopAccountSnapshot {
+        makeDesktopAccountSnapshotLoader(client: makeDesktopBackendAPIClient(sessionStore: sessionStore))
+    }
+
+    private static func makeDesktopBackendAPIClient(
+        sessionStore: DesktopSessionStoring
+    ) -> RubyWhisperBackendAPIClient? {
         guard let configuration = try? RubyWhisperBackendConfiguration.load() else {
-            return { .accountRefreshUnavailable }
+            return nil
         }
 
-        let client = RubyWhisperBackendAPIClient(
+        return RubyWhisperBackendAPIClient(
             configuration: configuration,
             sessionStore: sessionStore
         )
+    }
+
+    private static func makeDesktopAccountSnapshotLoader(
+        client: RubyWhisperBackendAPIClient?
+    ) -> () async -> RubyWhisperDesktopAccountSnapshot {
+        guard let client else {
+            return { .accountRefreshUnavailable }
+        }
         return { await client.refreshAccountSnapshot() }
     }
 
@@ -867,6 +892,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     deinit {
         desktopLoginTimeoutTask?.cancel()
+        desktopLoginCompletionTask?.cancel()
         removeAudioDeviceObservers()
         AppState.writeRecordingStateFlag(false)
     }
@@ -1130,6 +1156,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     @discardableResult
     func startDesktopSignIn() -> DesktopLoginLaunchResult {
+        desktopLoginCompletionTask?.cancel()
         let result = desktopLoginBridge.startLogin()
         if result.outcome == .browserPending {
             errorMessage = nil
@@ -1149,20 +1176,29 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
         if result.outcome.isFailure {
             errorMessage = "Sign-in callback was not accepted. Start sign-in again."
+            desktopLoginCompletionTask?.cancel()
         } else {
             errorMessage = nil
+        }
+        if let handoff = result.handoff {
+            desktopLoginCompletionTask?.cancel()
+            desktopLoginCompletionTask = Task { [weak self] in
+                _ = await self?.desktopLoginBridge.completeLoginHandoff(handoff)
+            }
         }
         return result
     }
 
     func cancelDesktopSignIn() {
         desktopLoginTimeoutTask?.cancel()
+        desktopLoginCompletionTask?.cancel()
         _ = desktopLoginBridge.cancelPendingAttempt()
     }
 
     @discardableResult
     func logoutDesktopAccount() -> DesktopAuthSessionClearResult {
         desktopLoginTimeoutTask?.cancel()
+        desktopLoginCompletionTask?.cancel()
         return authStateOwner.logout()
     }
 

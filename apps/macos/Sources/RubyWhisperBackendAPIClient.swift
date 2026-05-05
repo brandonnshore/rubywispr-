@@ -113,7 +113,7 @@ struct URLSessionRubyWhisperBackendTransport: RubyWhisperBackendTransport {
     }
 }
 
-final class RubyWhisperBackendAPIClient {
+final class RubyWhisperBackendAPIClient: DesktopLoginHandoffExchanging {
     private let configuration: RubyWhisperBackendConfiguration
     private let sessionStore: DesktopSessionStoring
     private let transport: RubyWhisperBackendTransport
@@ -140,6 +140,20 @@ final class RubyWhisperBackendAPIClient {
         let request = try authenticatedRequest(path: "/api/desktop/account", method: "GET")
         let (data, response) = try await send(request, body: nil)
         return try decodeResponse(data, response: response, as: RubyWhisperDesktopAccountResponse.self)
+    }
+
+    func exchangeLoginHandoff(_ handoff: DesktopLoginHandoff) async throws -> DesktopSessionMaterial {
+        let body = try JSONEncoder().encode(DesktopLoginExchangeRequest(
+            state: handoff.state,
+            code: handoff.exchangeCode,
+            nonceVerifier: handoff.nonceVerifier
+        ))
+        var request = try backendRequest(path: "/api/desktop/login/exchange", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await send(request, body: body)
+        let exchangeResponse = try decodeResponse(data, response: response, as: DesktopLoginExchangeResponse.self)
+        return try exchangeResponse.sessionMaterial()
     }
 
     func refreshAccountSnapshot() async -> RubyWhisperDesktopAccountSnapshot {
@@ -214,11 +228,16 @@ final class RubyWhisperBackendAPIClient {
             )
         }
 
+        var request = try backendRequest(path: path, method: method)
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    private func backendRequest(path: String, method: String) throws -> URLRequest {
         var request = URLRequest(url: try endpointURL(path: path))
         request.httpMethod = method
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.timeoutInterval = 60
-        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         request.setValue("no-cache", forHTTPHeaderField: "Pragma")
@@ -283,6 +302,39 @@ final class RubyWhisperBackendAPIClient {
                 retryable: true
             )
         )
+    }
+}
+
+private struct DesktopLoginExchangeRequest: Encodable {
+    var state: String
+    var code: String
+    var nonceVerifier: String
+
+    enum CodingKeys: String, CodingKey {
+        case state
+        case code
+        case nonceVerifier = "nonce_verifier"
+    }
+}
+
+private struct DesktopLoginExchangeResponse: Decodable {
+    var ok: Bool
+    var accessToken: String
+    var refreshToken: String?
+    var expiresAt: Date?
+    var accountID: String?
+
+    func sessionMaterial() throws -> DesktopSessionMaterial {
+        let session = DesktopSessionMaterial(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            expiresAt: expiresAt,
+            accountID: accountID
+        )
+        guard !session.accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw DesktopSessionStoreError.encodingFailed
+        }
+        return session
     }
 }
 

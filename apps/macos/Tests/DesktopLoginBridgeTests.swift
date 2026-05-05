@@ -12,6 +12,7 @@ private func expect(_ condition: @autoclosure () -> Bool, _ message: String) -> 
 
 private final class MemorySessionStore: DesktopSessionStoring {
     private var session: DesktopSessionMaterial?
+    private(set) var replaceCount = 0
 
     init(session: DesktopSessionMaterial? = nil) {
         self.session = session
@@ -26,6 +27,7 @@ private final class MemorySessionStore: DesktopSessionStoring {
     }
 
     func replace(with session: DesktopSessionMaterial) throws {
+        replaceCount += 1
         self.session = session
     }
 
@@ -34,11 +36,25 @@ private final class MemorySessionStore: DesktopSessionStoring {
     }
 }
 
+private final class CapturingHandoffExchanger: DesktopLoginHandoffExchanging {
+    private(set) var handoffs: [DesktopLoginHandoff] = []
+    var session: DesktopSessionMaterial
+
+    init(session: DesktopSessionMaterial) {
+        self.session = session
+    }
+
+    func exchangeLoginHandoff(_ handoff: DesktopLoginHandoff) async throws -> DesktopSessionMaterial {
+        handoffs.append(handoff)
+        return session
+    }
+}
+
 @main
 private struct DesktopLoginBridgeTests {
     static func main() async {
         testLaunchOpensApprovedSignInRouteWithSafeMetadata()
-        testValidCallbackIsAcceptedOnce()
+        await testValidCallbackIsAcceptedOnceAndCompletesAccountRefresh()
         testCallbackRejectsMissingMismatchedAndStaleState()
         testCancelAndTimeoutAreRecoverable()
         testAlreadySignedInDoesNotOpenBrowser()
@@ -70,17 +86,29 @@ private struct DesktopLoginBridgeTests {
         expect(query["token"] == nil, "login URL must not include token-shaped query keys")
     }
 
-    private static func testValidCallbackIsAcceptedOnce() {
-        let fixture = LoginBridgeFixture()
+    private static func testValidCallbackIsAcceptedOnceAndCompletesAccountRefresh() async {
+        let exchangeCode = "exchange_placeholder"
+        let fixture = LoginBridgeFixture(accountSnapshot: activeSnapshot)
         _ = fixture.bridge.startLogin()
         let state = launchedState(fixture)
 
-        let callbackURL = URL(string: "rubywhisper://auth/callback?state=\(state)&code=exchange_placeholder")!
+        let callbackURL = URL(string: "rubywhisper://auth/callback?state=\(state)&code=\(exchangeCode)")!
         let accepted = fixture.bridge.handleCallbackURL(callbackURL)
 
         expect(accepted.outcome == .callbackAccepted, "valid callback should be accepted")
         expect(fixture.owner.coordinatorState == .handoffPending, "accepted callback should enter handoff_pending")
         expect(!fixture.bridge.hasPendingAttempt, "accepted callback should consume pending attempt")
+        expect(accepted.handoff?.state == state, "accepted callback should preserve handoff state for exchange")
+        expect(accepted.handoff?.exchangeCode == exchangeCode, "accepted callback should preserve exchange code only in transient handoff")
+        expect(!String(describing: accepted.handoff!).contains(exchangeCode), "handoff diagnostics should redact exchange code")
+
+        let snapshot = await fixture.bridge.completeLoginHandoff(accepted.handoff!)
+
+        expect(snapshot.state == .trialActive, "successful handoff should refresh account snapshot")
+        expect(fixture.owner.coordinatorState == .trialActive, "successful handoff should publish refreshed account state")
+        expect(fixture.sessionStore.replaceCount == 1, "successful handoff should replace durable session through session store")
+        expect(fixture.sessionStore.read()?.accessToken == fixture.exchanger.session.accessToken, "session store should receive exchanged session material")
+        expect(fixture.exchanger.handoffs.count == 1, "handoff exchanger should be called once")
 
         let replayed = fixture.bridge.handleCallbackURL(callbackURL)
         expect(replayed.outcome == .invalidCallback(.replayedState), "same state should be rejected as replayed")
@@ -186,6 +214,8 @@ private struct DesktopLoginBridgeTests {
 private final class LoginBridgeFixture {
     let owner: DesktopAuthStateOwner
     let bridge: DesktopLoginBridge
+    let sessionStore: MemorySessionStore
+    let exchanger: CapturingHandoffExchanger
     private let urlRecorder = URLRecorder()
     private let clock = MutableClock(now: Date(timeIntervalSince1970: 1_000))
     var openedURLs: [URL] { urlRecorder.openedURLs }
@@ -196,13 +226,20 @@ private final class LoginBridgeFixture {
 
     init(
         initialSession: DesktopSessionMaterial? = nil,
-        initialSnapshot: RubyWhisperDesktopAccountSnapshot = .signedOut
+        initialSnapshot: RubyWhisperDesktopAccountSnapshot = .signedOut,
+        accountSnapshot: RubyWhisperDesktopAccountSnapshot = .signedOut
     ) {
-        let sessionStore = MemorySessionStore(session: initialSession)
+        sessionStore = MemorySessionStore(session: initialSession)
+        exchanger = CapturingHandoffExchanger(session: DesktopSessionMaterial(
+            accessToken: "session_placeholder_redacted_exchanged",
+            refreshToken: "refresh_placeholder_redacted_exchanged",
+            expiresAt: Date(timeIntervalSince1970: 4_102_444_800),
+            accountID: "acct_test"
+        ))
         owner = DesktopAuthStateOwner(
             sessionStore: sessionStore,
             initialSnapshot: initialSnapshot,
-            accountSnapshotLoader: { .signedOut }
+            accountSnapshotLoader: { accountSnapshot }
         )
         bridge = DesktopLoginBridge(
             configurationLoader: {
@@ -214,6 +251,7 @@ private final class LoginBridgeFixture {
                 )
             },
             stateOwner: owner,
+            handoffExchanger: exchanger,
             browserOpener: { [urlRecorder] url in
                 urlRecorder.openedURLs.append(url)
                 return true
