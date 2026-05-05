@@ -879,7 +879,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
         let rms = updateAudioLevel(from: sampleBuffer)
         if count <= Self.sampleRateLogLimit {
             let elapsed = (CFAbsoluteTimeGetCurrent() - recordingStartTime) * 1000
-            os_log(.info, log: recordingLog, "buffer #%d at %.3fms, rms=%.6f", count, elapsed, rms)
+            os_log(.info, log: recordingLog, "buffer #%d at %.3fms", count, elapsed)
         }
 
         if !readyFired && rms > 0 {
