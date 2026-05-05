@@ -525,6 +525,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
     @Published var hotkeyMonitoringErrorMessage: String?
     @Published var hotkeyRegistrationState = HotkeyRegistrationState.unregistered
+    @Published private(set) var recordingDurationSnapshot = RecordingDurationSnapshot.inactive(policy: .production)
     @Published var isDebugOverlayActive = false
     @Published var selectedSettingsTab: SettingsTab? = .general
     @Published var pipelineHistory: [PipelineHistoryItem] = []
@@ -563,6 +564,15 @@ final class AppState: ObservableObject, @unchecked Sendable {
     let firstRunOnboardingCoordinator: FirstRunOnboardingCoordinator
     let hotkeyManager = HotkeyManager()
     let overlayManager = RecordingOverlayManager()
+    private lazy var recordingDurationMonitor: RecordingDurationMonitor = {
+        let monitor = RecordingDurationMonitor()
+        monitor.onSnapshot = { [weak self] snapshot in
+            DispatchQueue.main.async {
+                self?.recordingDurationSnapshot = snapshot
+            }
+        }
+        return monitor
+    }()
     private var accessibilityTimer: Timer?
     private var audioLevelCancellable: AnyCancellable?
     private var authStateCancellables: Set<AnyCancellable> = []
@@ -2059,6 +2069,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         case .switchedToToggle:
             if isRecording {
                 activeRecordingTriggerMode = .toggle
+                recordingDurationMonitor.updateMode(.toggle)
                 overlayManager.setRecordingTriggerMode(.toggle, animated: true)
             } else if pendingShortcutStartMode != nil {
                 pendingShortcutStartMode = .toggle
@@ -2207,6 +2218,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         capturedContext = nil
         currentSessionIntent = .dictation
         isRecording = false
+        stopRecordingDurationTimer()
         errorMessage = nil
         debugStatusMessage = "Cancelled"
         statusText = "Cancelled"
@@ -2240,6 +2252,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         capturedContext = nil
         currentSessionIntent = .dictation
         isRecording = false
+        stopRecordingDurationTimer()
         errorMessage = nil
         debugStatusMessage = "Cancelled"
         statusText = "Cancelled"
@@ -2267,6 +2280,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         currentSessionIntent = .dictation
         isRecording = false
         isTranscribing = false
+        stopRecordingDurationTimer()
         errorMessage = nil
         debugStatusMessage = "Cancelled"
         statusText = "Cancelled"
@@ -2677,7 +2691,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 try self.audioRecorder.startRecording(deviceUID: deviceUID)
                 os_log(.info, log: recordingLog, "audioRecorder.startRecording() done: %.3fms", (CFAbsoluteTimeGetCurrent() - t0) * 1000)
                 DispatchQueue.main.async {
-                    guard self.isRecording, self.activeRecordingTriggerMode != nil else { return }
+                    guard self.isRecording, let activeMode = self.activeRecordingTriggerMode else { return }
+                    self.startRecordingDurationTimer(mode: activeMode)
                     self.startContextCapture()
                     self.audioLevelCancellable = self.audioRecorder.$audioLevel
                         .receive(on: DispatchQueue.main)
@@ -2707,6 +2722,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         tearDownRealtimeService()
         audioRecorder.cleanup()
         restoreAudioInterruptionIfNeeded()
+        stopRecordingDurationTimer()
         isRecording = false
         isTranscribing = false
         transcriptionTask?.cancel()
@@ -2969,6 +2985,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         audioRecorder.onRecordingFailure = nil
         audioLevelCancellable?.cancel()
         audioLevelCancellable = nil
+        stopRecordingDurationTimer()
         debugStatusMessage = "Preparing audio"
         let sessionContext = capturedContext
         let inFlightContextTask = contextCaptureTask
@@ -3221,6 +3238,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         audioRecorder.onRecordingFailure = nil
         audioLevelCancellable?.cancel()
         audioLevelCancellable = nil
+        stopRecordingDurationTimer()
         contextCaptureTask?.cancel()
         contextCaptureTask = nil
         capturedContext = nil
@@ -3239,6 +3257,14 @@ final class AppState: ObservableObject, @unchecked Sendable {
             self.audioRecorder.cleanup()
             self.refreshAvailableMicrophonesIfNeeded()
         }
+    }
+
+    private func startRecordingDurationTimer(mode: RecordingTriggerMode) {
+        recordingDurationMonitor.start(mode: mode)
+    }
+
+    private func stopRecordingDurationTimer() {
+        recordingDurationMonitor.stop()
     }
 
     static func resolvedSystemPrompt(_ customSystemPrompt: String) -> String {
