@@ -26,7 +26,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-duration-timer test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-secret-guardrails
+.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-secret-guardrails
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -238,8 +238,11 @@ test-recording-island-state-machine:
 		Sources/FirstRunOnboardingCoordinator.swift \
 		Sources/HotkeyRecordingGate.swift \
 		Sources/RecordingIslandStateMachine.swift \
+		Sources/RecordingIslandVisualTestHarness.swift \
 		Tests/RecordingIslandStateMachineTests.swift
 	$(BUILD_DIR)/tests/RecordingIslandStateMachineTests
+
+test-recording-island-visual-harness: test-recording-island-state-machine
 
 test-recording-duration-timer:
 	@mkdir -p $(BUILD_DIR)/tests

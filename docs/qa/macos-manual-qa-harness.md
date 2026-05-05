@@ -27,6 +27,7 @@ below remains `Not Run` or `Blocked`.
 - `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md`
 - `docs/USAGE_QUOTA_CONTRACT.md`
 - `docs/SOURCE_LATENCY_METADATA_CONTRACT.md`
+- `docs/qa/recording-island-visual-proof-matrix.md`
 
 ## Status Values
 

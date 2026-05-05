@@ -256,8 +256,19 @@ final class RecordingOverlayManager {
 
     func showSyntheticIslandState(_ state: RecordingIslandStateName) {
         DispatchQueue.main.async {
+            self.overlayState.audioLevel = 0
             self.showIslandPresentation(
                 RecordingIslandStateMachine.syntheticPresentation(for: state),
+                animatedResize: true
+            )
+        }
+    }
+
+    func showSyntheticIslandHarnessScenario(_ scenario: RecordingIslandVisualHarnessScenario) {
+        DispatchQueue.main.async {
+            self.overlayState.audioLevel = scenario.syntheticAudioLevel
+            self.showIslandPresentation(
+                scenario.presentation,
                 animatedResize: true
             )
         }

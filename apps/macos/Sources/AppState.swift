@@ -3843,6 +3843,22 @@ final class AppState: ObservableObject, @unchecked Sendable {
         return true
     }
 
+    @discardableResult
+    func showDebugIslandHarnessScenario(_ scenarioID: String) -> Bool {
+        guard AppBuild.isDevBundle,
+              let scenario = RecordingIslandVisualTestHarness.scenario(id: scenarioID),
+              scenario.isRunnableInDevHarness else {
+            return false
+        }
+        debugOverlayTimer?.invalidate()
+        debugOverlayTimer = nil
+        isDebugOverlayActive = false
+        clearPendingOverlayDismissToken()
+        overlayManager.showSyntheticIslandHarnessScenario(scenario)
+        debugStatusMessage = scenario.safeEvidenceSummary
+        return true
+    }
+
     @MainActor
     private func handleUpdateOverlayPressed() {
         clearPendingOverlayDismissToken()
