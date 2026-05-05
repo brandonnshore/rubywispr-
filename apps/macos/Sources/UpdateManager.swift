@@ -148,8 +148,15 @@ final class UpdateManager: ObservableObject {
     }
 
     var autoCheckEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: "updateAutoCheckEnabled") as? Bool ?? true }
+        get {
+            guard Self.updateChannelEnabled else { return false }
+            return UserDefaults.standard.object(forKey: "updateAutoCheckEnabled") as? Bool ?? false
+        }
         set { UserDefaults.standard.set(newValue, forKey: "updateAutoCheckEnabled") }
+    }
+
+    var isUpdateChannelEnabled: Bool {
+        Self.updateChannelEnabled
     }
 
     private var skippedVersion: String? {
@@ -167,6 +174,8 @@ final class UpdateManager: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "updateLastPostTranscriptionReminderDate") }
     }
 
+    private static let updateChannelEnabled = false
+    // Disabled placeholder until RUB-77 configures the final RubyWhisper update channel.
     private let releasesURL = URL(string: "https://updates.rubywhisper.invalid/releases?per_page=100")!
     private let stabilityBufferDays: TimeInterval = 3
     private let checkIntervalSeconds: TimeInterval = 7 * 24 * 60 * 60 // 7 days
@@ -204,6 +213,7 @@ final class UpdateManager: ObservableObject {
     }
 
     private func shouldAutoCheck() -> Bool {
+        guard Self.updateChannelEnabled else { return false }
         guard autoCheckEnabled else { return false }
         guard let lastCheck = lastCheckDate else { return true }
         return Date().timeIntervalSince(lastCheck) > checkIntervalSeconds
@@ -213,6 +223,15 @@ final class UpdateManager: ObservableObject {
 
     @MainActor
     func checkForUpdates(userInitiated: Bool) async {
+        guard Self.updateChannelEnabled else {
+            clearAvailableUpdate()
+            updateStatus = .idle
+            if userInitiated {
+                showUpdateChannelDisabledAlert()
+            }
+            return
+        }
+
         let currentBuildTag = Bundle.main.infoDictionary?["RubyWhisperBuildTag"] as? String
         let currentVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
 
@@ -232,7 +251,7 @@ final class UpdateManager: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
-                if userInitiated { showErrorAlert("Could not reach GitHub.") }
+                if userInitiated { showErrorAlert("Could not reach the update server.") }
                 return
             }
 
@@ -248,7 +267,7 @@ final class UpdateManager: ObservableObject {
             }
 
             guard (200..<300).contains(httpResponse.statusCode) else {
-                if userInitiated { showErrorAlert("GitHub returned status \(httpResponse.statusCode).") }
+                if userInitiated { showErrorAlert("The update server returned status \(httpResponse.statusCode).") }
                 return
             }
 
@@ -510,14 +529,14 @@ final class UpdateManager: ObservableObject {
         let alert = NSAlert()
         let versionText = latestReleaseVersion.isEmpty ? release.tagName : "v\(latestReleaseVersion)"
         alert.messageText = "What's New in \(AppName.displayName) \(versionText)"
-        alert.informativeText = "Release notes from GitHub."
+        alert.informativeText = "Release notes from the RubyWhisper update channel."
         alert.alertStyle = .informational
         alert.icon = NSApp.applicationIconImage
         alert.accessoryView = releaseNotesView(text: releaseNotesText(for: release))
         alert.addButton(withTitle: "OK")
 
         if let releaseURL = URL(string: release.htmlUrl) {
-            alert.addButton(withTitle: "Open on GitHub")
+            alert.addButton(withTitle: "Open Release Page")
             let response = alert.runModal()
             if response == .alertSecondButtonReturn {
                 NSWorkspace.shared.open(releaseURL)
@@ -682,6 +701,16 @@ final class UpdateManager: ObservableObject {
         alert.messageText = "Update Check Failed"
         alert.informativeText = message
         alert.alertStyle = .warning
+        alert.icon = NSApp.applicationIconImage
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func showUpdateChannelDisabledAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Updates Are Disabled"
+        alert.informativeText = "RubyWhisper does not have an update channel yet. Update checks are blocked until RUB-77 configures the release channel."
+        alert.alertStyle = .informational
         alert.icon = NSApp.applicationIconImage
         alert.addButton(withTitle: "OK")
         alert.runModal()

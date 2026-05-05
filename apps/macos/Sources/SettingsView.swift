@@ -529,9 +529,8 @@ struct GeneralSettingsView: View {
     @State private var showMutedHint = false
     @State private var copiedBuildInfo = false
     @State private var copiedBuildInfoResetWorkItem: DispatchWorkItem?
-    @StateObject private var githubCache = GitHubMetadataCache.shared
     @ObservedObject private var updateManager = UpdateManager.shared
-    private let upstreamRepoURL = URL(string: "https://github.com/zachlatta/freeflow")!
+    private let freeFlowAttributionSourceURL = URL(string: "https://github.com/zachlatta/freeflow")!
 
     private var appDisplayName: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
@@ -585,24 +584,15 @@ struct GeneralSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    // GitHub card
-                    VStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 8) {
-                            AsyncImage(url: URL(string: "https://avatars.githubusercontent.com/u/992248")) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                default:
-                                    Color.gray.opacity(0.2)
-                                }
-                            }
-                            .frame(width: 22, height: 22)
-                            .clipShape(Circle())
-
+                            Image(systemName: "doc.text.magnifyingglass")
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
                             Button {
-                                openURL(upstreamRepoURL)
+                                openURL(freeFlowAttributionSourceURL)
                             } label: {
-                                Text("Upstream source")
+                                Text("FreeFlow attribution")
                                     .font(.system(.caption, design: .monospaced).weight(.medium))
                             }
                             .buttonStyle(.plain)
@@ -610,24 +600,8 @@ struct GeneralSettingsView: View {
 
                             Spacer()
 
-                            HStack(spacing: 4) {
-                                Image(systemName: "star.fill")
-                                    .foregroundStyle(.yellow)
-                                    .font(.caption2)
-                                if githubCache.isLoading {
-                                    ProgressView().scaleEffect(0.5)
-                                } else if let count = githubCache.starCount {
-                                    Text("\(count.formatted()) \(count == 1 ? "star" : "stars")")
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(Color.yellow.opacity(0.14)))
-
                             Button {
-                                openURL(upstreamRepoURL)
+                                openURL(freeFlowAttributionSourceURL)
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "arrow.up.right")
@@ -641,38 +615,10 @@ struct GeneralSettingsView: View {
                             .buttonStyle(.plain)
                         }
 
-                        if !githubCache.recentStargazers.isEmpty {
-                            Divider()
-                            HStack(spacing: 8) {
-                                HStack(spacing: -6) {
-                                    ForEach(githubCache.recentStargazers) { star in
-                                        Button {
-                                            openURL(star.user.htmlUrl)
-                                        } label: {
-                                            AsyncImage(url: star.user.avatarThumbnailUrl) { phase in
-                                                switch phase {
-                                                case .success(let image):
-                                                    image.resizable().aspectRatio(contentMode: .fill)
-                                                default:
-                                                    Color.gray.opacity(0.2)
-                                                }
-                                            }
-                                            .frame(width: 22, height: 22)
-                                            .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1.5))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                                .clipped()
-                                Text("recently starred")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                                    .fixedSize()
-                                Spacer()
-                            }
-                            .clipped()
-                        }
+                        Text("RubyWhisper is derived from FreeFlow under the MIT license. This link is attribution only; settings use RubyWhisper runtime identity.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(12)
                     .background(
@@ -738,7 +684,6 @@ struct GeneralSettingsView: View {
             customVocabularyInput = appState.customVocabulary
             checkMicPermission()
             appState.refreshLaunchAtLoginStatus()
-            Task { await githubCache.fetchIfNeeded() }
         }
         .onChange(of: appState.transcriptionAPIURL) { value in
             if transcriptionAPIURLInput != value {
@@ -784,6 +729,13 @@ struct GeneralSettingsView: View {
                 get: { updateManager.autoCheckEnabled },
                 set: { updateManager.autoCheckEnabled = $0 }
             ))
+            .disabled(!updateManager.isUpdateChannelEnabled)
+
+            if !updateManager.isUpdateChannelEnabled {
+                Label("Updates are disabled until RUB-77 configures RubyWhisper's release channel.", systemImage: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             HStack(spacing: 10) {
                 Button {
@@ -801,7 +753,7 @@ struct GeneralSettingsView: View {
                         Text("Check for Updates Now")
                     }
                 }
-                .disabled(updateManager.isChecking || updateManager.updateStatus != .idle)
+                .disabled(!updateManager.isUpdateChannelEnabled || updateManager.isChecking || updateManager.updateStatus != .idle)
 
                 if let lastCheck = updateManager.lastCheckDate {
                     Text("Last checked: \(lastCheck.formatted(date: .abbreviated, time: .shortened))")
