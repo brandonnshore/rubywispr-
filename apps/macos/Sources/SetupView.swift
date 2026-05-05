@@ -58,6 +58,7 @@ struct SetupView: View {
     private let freeFlowAttributionSourceURL = URL(string: "https://github.com/zachlatta/freeflow")!
     private enum SetupStep: Int, CaseIterable {
         case welcome = 0
+        case accountGate
         case apiKey
         case micPermission
         case accessibility
@@ -226,6 +227,8 @@ struct SetupView: View {
         switch currentStep {
         case .welcome:
             welcomeStep
+        case .accountGate:
+            accountGateStep
         case .apiKey:
             apiKeyStep
         case .micPermission:
@@ -410,6 +413,81 @@ struct SetupView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    var accountGateStep: some View {
+        let presentation = FirstRunOnboardingCoordinator.accountGatePresentation(
+            for: appState.authCoordinatorState,
+            recovery: appState.authAccountSnapshot.recovery
+        )
+
+        return VStack(spacing: 20) {
+            Image(systemName: presentation.systemImageName)
+                .font(.system(size: 60))
+                .foregroundStyle(presentation.canContinue ? .green : .blue)
+
+            Text(presentation.title)
+                .font(.title)
+                .fontWeight(.bold)
+
+            Text(presentation.message)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: appState.authStateSystemImage)
+                        .frame(width: 24)
+                        .foregroundStyle(presentation.canContinue ? .green : .blue)
+                    Text("RubyWhisper Account")
+                    Spacer()
+                    if presentation.showsProgress {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Text(presentation.statusLabel)
+                        .foregroundStyle(.secondary)
+                        .font(.caption.monospaced())
+                }
+
+                if let failureCode = appState.authAccountSnapshot.failureCode {
+                    Text("reason=\(failureCode.rawValue)")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.tertiary)
+                }
+
+                HStack(spacing: 10) {
+                    if let title = presentation.primaryActionTitle {
+                        Button(title) {
+                            _ = appState.performDesktopAccountRecoveryAction(presentation.primaryRecoveryAction)
+                        }
+                        .keyboardShortcut(.defaultAction)
+                    }
+
+                    if appState.authCoordinatorState.isLoginBridgePending {
+                        Button("Cancel Sign In") {
+                            appState.cancelDesktopSignIn()
+                        }
+                    }
+
+                    Button("Refresh Account") {
+                        appState.refreshDesktopAccountState()
+                    }
+                    .disabled(appState.authCoordinatorState.isLoginBridgePending)
+                }
+                .controlSize(.regular)
+            }
+            .padding(12)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(8)
+        }
+        .onAppear {
+            if appState.authCoordinatorState != .signedOut &&
+                !appState.authCoordinatorState.isLoginBridgePending {
+                appState.refreshDesktopAccountState()
+            }
+        }
     }
 
     var micPermissionStep: some View {
@@ -1060,6 +1138,12 @@ struct SetupView: View {
 
     private var canContinueFromCurrentStep: Bool {
         switch currentStep {
+        case .accountGate:
+            let presentation = FirstRunOnboardingCoordinator.accountGatePresentation(
+                for: appState.authCoordinatorState,
+                recovery: appState.authAccountSnapshot.recovery
+            )
+            return presentation.canContinue
         case .micPermission:
             return MicrophonePermissionGate.presentation(for: micPermissionStatus).canProceed
         case .accessibility:

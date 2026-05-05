@@ -247,6 +247,25 @@ extension DesktopAuthCoordinatorState {
             return .accountUnavailable
         }
     }
+
+    var defaultRecoveryAction: RubyWhisperDesktopRecoveryAction {
+        switch dictationAccountGateDecision {
+        case .allowed:
+            return .retry
+        case .signInRequired:
+            return .openSignIn
+        case .signInInProgress, .accountRefreshing, .accountUnavailable:
+            return .retry
+        case .termsRequired:
+            return .openTermsAcceptance
+        case .trialExhausted:
+            return .openCheckout
+        case .paymentFailed:
+            return .openBilling
+        case .blocked:
+            return .openAccount
+        }
+    }
 }
 
 enum DesktopAuthSessionClearReason: String, Equatable {
