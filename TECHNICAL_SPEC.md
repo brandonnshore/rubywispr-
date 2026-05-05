@@ -35,6 +35,7 @@ FR-002 Magic link: The system must support email magic-link sign-in through the 
 - Validate by running: Clerk dev/test flow.
 - Required tests: login callback/session handoff tests where feasible.
 - Security/privacy: do not log magic links or tokens.
+- Implementation contract: `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`.
 
 FR-003 Terms/Privacy: The system must require Terms/Privacy acceptance before trial dictation.
 
@@ -398,6 +399,9 @@ signed_out
   -> payment_failed
   -> blocked
 ```
+
+The desktop browser login bridge state machine and account handoff mapping live
+in `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`.
 
 ## API Contracts
 

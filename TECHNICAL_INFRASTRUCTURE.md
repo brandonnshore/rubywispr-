@@ -268,7 +268,8 @@ Auth mode:
 
 - Email magic link only at launch.
 - Browser-based login.
-- Desktop app receives/validates auth through a secure app login bridge.
+- Desktop app receives/validates auth through the secure app login bridge
+  defined in `docs/DESKTOP_LOGIN_BRIDGE_CONTRACT.md`.
 
 ### Supabase
 
