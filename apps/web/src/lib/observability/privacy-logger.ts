@@ -18,6 +18,8 @@ export const rubyWhisperPrivacyLogMetadataKeys = [
   "totalLatencyMs",
   "appVersion",
   "osVersion",
+  "runtime",
+  "release",
   "errorCode",
 ] as const;
 
