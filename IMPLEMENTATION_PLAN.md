@@ -411,7 +411,8 @@ Required work:
 - Follow `docs/RW_070_RECENT_WISPRS_CONTRACT.md` for the Recent Wisprs data
   model, insertion status semantics, retention cleanup, clear/disable behavior,
   no-backend-sync boundary, and metadata-only validation evidence.
-- Implement local personal dictionary/custom vocabulary.
+- Implement local personal dictionary/custom vocabulary under
+  `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md`.
 - Implement cleanup toggle in Advanced.
 - Implement context-aware cleanup toggle, on by default after Terms/Privacy acceptance.
 - Add billing management link to Stripe customer portal.
@@ -432,8 +433,10 @@ Acceptance criteria:
   Recent Wisprs writes.
 - Successful and failed insertions store only final text locally, and no Recent
   Wisprs content is sent to backend or Supabase.
-- User can add/edit/delete dictionary terms locally.
+- User can add/edit/delete dictionary terms locally; deleted or disabled terms do
+  not appear in later cleanup payloads.
 - User can turn cleanup/context behavior off in Advanced.
+- Cleanup-disabled requests omit dictionary payloads entirely.
 
 Validation by running:
 
@@ -445,7 +448,11 @@ This is a placeholder only. Exact repo-local workspace/scheme commands are block
 
 Manual validation:
 
-- Add dictionary term and confirm it influences cleanup prompt when enabled.
+- Add synthetic dictionary term and confirm it influences cleanup prompt when
+  cleanup and dictionary support are enabled.
+- Disable cleanup and confirm dictionary payload is absent, not empty.
+- Delete dictionary term and confirm it is absent from local storage and later
+  payloads.
 - Create failed insertion and confirm it appears in Recent Wisprs.
 - Clear history and confirm local store is empty.
 - Open customer portal from account settings.
@@ -454,12 +461,16 @@ Required tests:
 
 - Local retention tests.
 - Settings persistence tests.
-- Dictionary serialization tests.
+- Dictionary persistence, validation, deletion, and serialization tests.
+- Dictionary cleanup payload-shaping and redaction tests.
 - Account/plan API mapping tests.
 
 Security/privacy notes:
 
 - Local history and dictionary are not synced in v0.1.
+- Dictionary terms are never persisted server-side; eligible terms may be sent
+  transiently only during cleanup requests as defined in
+  `docs/RW_071_LOCAL_PERSONAL_DICTIONARY_CONTRACT.md`.
 - If encrypted local storage is feasible in the selected base, prefer encryption at rest.
 - Settings must make local-only storage clear.
 
