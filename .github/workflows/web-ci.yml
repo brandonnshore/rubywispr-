@@ -39,5 +39,4 @@ jobs:
       - name: Build
         run: npm run build
 
-      # macOS CI remains a separate blocked leaf until the repo-local app import
-      # and runner/build-command path are available.
+      # macOS validation is enforced separately by macOS CI when app paths change.

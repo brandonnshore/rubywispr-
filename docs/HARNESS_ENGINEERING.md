@@ -72,8 +72,10 @@ Use the lowest validation level that genuinely proves the change:
 - Docs only: link/check references and inspect rendered Markdown if needed.
 - Shell scripts: `bash -n` plus a dry-run or help path when available.
 - Repo setup: run bootstrap scripts and verify expected files/directories are present without printing secrets.
-- Web app: run root npm workspace commands `npm install`, `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`; use `npm run dev` for local browser validation of affected routes.
-- macOS app: build/test with Xcode or Swift commands and validate the affected user path.
+- Web app: run root npm workspace commands `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`; use `npm run dev` for local browser validation of affected routes.
+- macOS app: run `make -C apps/macos clean all CODESIGN_IDENTITY=-` for the imported Debug/ad hoc build gate, then validate the affected user path manually when the change is UI- or runtime-facing.
+- PR CI: GitHub should enforce `Web CI / npm validation` for root web/backend changes and `macOS CI / Debug ad hoc build` for macOS app changes.
+- CI secret boundary: workflows must not expose provider, production, Apple signing/notarization, billing, database, release packaging, or private env secrets.
 - UI polish: include screenshot or video proof when possible.
 - Release/package work: verify signing/notarization assumptions separately from app behavior.
 - Security/privacy work: prove no forbidden data is stored or logged.
