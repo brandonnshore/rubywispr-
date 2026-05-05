@@ -26,7 +26,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize
+.PHONY: all clean run icon dmg codesign-dmg notarize test-session-store
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -125,3 +125,13 @@ clean:
 
 run: all
 	open "$(APP_BUNDLE)"
+
+test-session-store:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-o $(BUILD_DIR)/tests/DesktopSessionStoreTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Sources/DesktopSessionStore.swift \
+		Tests/DesktopSessionStoreTests.swift
+	$(BUILD_DIR)/tests/DesktopSessionStoreTests
