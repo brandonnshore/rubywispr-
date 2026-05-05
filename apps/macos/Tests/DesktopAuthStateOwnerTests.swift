@@ -56,6 +56,9 @@ private struct DesktopAuthStateOwnerTests {
         await testLogoutClearsSessionAndInMemoryAccountState()
         await testMissingSessionFailsClosedWithoutTransport()
         await testSignedOutRefreshClearsLocalSession()
+        await testLoginBridgeShellStatesUseContractNames()
+        await testAccountSnapshotsMapToCoordinatorStates()
+        await testAccountRefreshFailureIsDistinctFromSignedOut()
         await testDiagnosticsDoNotExposeAuthMaterial()
         print("DesktopAuthStateOwnerTests passed")
     }
@@ -67,6 +70,8 @@ private struct DesktopAuthStateOwnerTests {
             sessionStore: store,
             accountSnapshotLoader: { await loader.load() }
         )
+
+        expect(owner.coordinatorState == .accountRefreshing, "existing session without account snapshot should publish account_refreshing")
 
         let active = await owner.refreshAccountSnapshot()
         expect(active.state == .trialActive, "refresh should populate active account state")
@@ -115,8 +120,84 @@ private struct DesktopAuthStateOwnerTests {
         expect(loader.callCount == 1, "existing session should refresh account once")
         expect(snapshot.state == .signedOut, "revoked session should fail closed to signed_out")
         expect(snapshot.canTranscribe == false, "revoked session should disable dictation")
+        expect(owner.coordinatorState == .signedOut, "revoked session should publish signed_out coordinator state")
         expect(store.read() == nil, "revoked session should delete durable session material")
         expect(owner.lastClearResult?.reason == .signedOutResponse, "revoked session should record signed_out clear reason")
+    }
+
+    private static func testLoginBridgeShellStatesUseContractNames() async {
+        let store = MemorySessionStore(session: nil)
+        let loader = AccountSnapshotLoader(nextSnapshot: activeSnapshot)
+        let owner = DesktopAuthStateOwner(
+            sessionStore: store,
+            accountSnapshotLoader: { await loader.load() }
+        )
+
+        expect(owner.coordinatorState == .signedOut, "initial missing-session coordinator state should be signed_out")
+
+        owner.beginSignIn()
+        expect(owner.coordinatorState == .loginLaunching, "begin sign-in should enter login_launching")
+        expect(owner.coordinatorState.rawValue == "login_launching", "login launching should use login bridge raw value")
+        expect(owner.coordinatorState.isLoginBridgePending, "login_launching should be a pending login bridge state")
+        expect(owner.coordinatorState.canTranscribe == false, "login_launching should disable dictation")
+
+        owner.markBrowserPending()
+        expect(owner.coordinatorState.rawValue == "browser_pending", "browser pending should use login bridge raw value")
+
+        owner.markHandoffPending()
+        expect(owner.coordinatorState.rawValue == "handoff_pending", "handoff pending should use login bridge raw value")
+
+        owner.markSessionExchanging()
+        expect(owner.coordinatorState.rawValue == "session_exchanging", "session exchanging should use login bridge raw value")
+
+        owner.cancelSignIn()
+        expect(owner.coordinatorState == .canceled, "cancel should publish canceled coordinator state")
+        expect(owner.accountSnapshot.state == .signedOut, "cancel should keep account snapshot signed_out")
+        expect(owner.coordinatorState.canTranscribe == false, "canceled should disable dictation")
+    }
+
+    private static func testAccountSnapshotsMapToCoordinatorStates() async {
+        let cases: [(name: String, snapshot: RubyWhisperDesktopAccountSnapshot, state: DesktopAuthCoordinatorState)] = [
+            ("terms required", termsRequiredSnapshot, .signedInTermsRequired),
+            ("trial active", activeSnapshot, .trialActive),
+            ("paid active", paidActiveSnapshot, .paidActive),
+            ("blocked", blockedSnapshot, .blocked),
+            ("payment failed", paymentFailedSnapshot, .paymentFailed),
+        ]
+
+        for testCase in cases {
+            let store = MemorySessionStore(session: sessionMaterial(token: "session_placeholder_redacted_\(testCase.name)"))
+            let loader = AccountSnapshotLoader(nextSnapshot: testCase.snapshot)
+            let owner = DesktopAuthStateOwner(
+                sessionStore: store,
+                accountSnapshotLoader: { await loader.load() }
+            )
+
+            let snapshot = await owner.refreshAccountSnapshot()
+
+            expect(snapshot.state == testCase.snapshot.state, "\(testCase.name) should refresh snapshot")
+            expect(owner.coordinatorState == testCase.state, "\(testCase.name) should publish coordinator state")
+            expect(owner.coordinatorState.rawValue == testCase.state.rawValue, "\(testCase.name) should keep stable raw state")
+            expect(owner.coordinatorState.canTranscribe == testCase.snapshot.canTranscribe, "\(testCase.name) should mirror dictation eligibility")
+        }
+    }
+
+    private static func testAccountRefreshFailureIsDistinctFromSignedOut() async {
+        let store = MemorySessionStore(session: sessionMaterial(token: "session_placeholder_redacted_refresh_failure"))
+        let loader = AccountSnapshotLoader(nextSnapshot: .accountRefreshUnavailable)
+        let owner = DesktopAuthStateOwner(
+            sessionStore: store,
+            initialSnapshot: activeSnapshot,
+            accountSnapshotLoader: { await loader.load() }
+        )
+
+        let snapshot = await owner.refreshAccountSnapshot()
+
+        expect(snapshot.state == .signedOut, "refresh failures should keep backend contract snapshot signed_out")
+        expect(snapshot.failureCode == .serviceUnavailable, "refresh failure should carry backend failure code")
+        expect(owner.coordinatorState == .error, "refresh failure should be distinct from signed_out coordinator state")
+        expect(owner.lastClearResult == nil, "refresh failure should not be treated as logout/session clear")
+        expect(store.read() != nil, "refresh failure should not delete local session material")
     }
 
     private static func testDiagnosticsDoNotExposeAuthMaterial() async {
@@ -147,6 +228,64 @@ private struct DesktopAuthStateOwnerTests {
             accountStatus: .active,
             planState: .trialActive,
             billingPortalAvailable: false
+        )
+    }
+
+    private static var termsRequiredSnapshot: RubyWhisperDesktopAccountSnapshot {
+        RubyWhisperDesktopAccountSnapshot(
+            state: .signedInTermsRequired,
+            canTranscribe: false,
+            recovery: .openTermsAcceptance,
+            retryable: false,
+            email: "user@example.test",
+            termsAccepted: false,
+            accountStatus: .termsRequired,
+            planState: .trialActive,
+            billingPortalAvailable: false,
+            failureCode: .termsRequired
+        )
+    }
+
+    private static var paidActiveSnapshot: RubyWhisperDesktopAccountSnapshot {
+        RubyWhisperDesktopAccountSnapshot(
+            state: .paidActive,
+            canTranscribe: true,
+            retryable: false,
+            email: "user@example.test",
+            termsAccepted: true,
+            accountStatus: .active,
+            planState: .paidActive,
+            billingPortalAvailable: true
+        )
+    }
+
+    private static var blockedSnapshot: RubyWhisperDesktopAccountSnapshot {
+        RubyWhisperDesktopAccountSnapshot(
+            state: .blocked,
+            canTranscribe: false,
+            recovery: .openAccount,
+            retryable: false,
+            email: "user@example.test",
+            termsAccepted: true,
+            accountStatus: .active,
+            planState: .blocked,
+            billingPortalAvailable: false,
+            failureCode: .accountBlocked
+        )
+    }
+
+    private static var paymentFailedSnapshot: RubyWhisperDesktopAccountSnapshot {
+        RubyWhisperDesktopAccountSnapshot(
+            state: .paymentFailed,
+            canTranscribe: false,
+            recovery: .openBilling,
+            retryable: false,
+            email: "user@example.test",
+            termsAccepted: true,
+            accountStatus: .active,
+            planState: .paymentFailed,
+            billingPortalAvailable: true,
+            failureCode: .paymentFailed
         )
     }
 

@@ -21,6 +21,7 @@ struct PrecomputedMacro {
 }
 
 enum SettingsTab: String, CaseIterable, Identifiable {
+    case account
     case general
     case prompts
     case macros
@@ -37,6 +38,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .account: return "Account"
         case .general: return "General"
         case .prompts: return "Prompts"
         case .macros: return "Voice Macros"
@@ -47,6 +49,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
+        case .account: return "person.crop.circle"
         case .general: return "gearshape"
         case .prompts: return "text.bubble"
         case .macros: return "music.mic"
@@ -524,6 +527,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var isDebugOverlayActive = false
     @Published var selectedSettingsTab: SettingsTab? = .general
     @Published var pipelineHistory: [PipelineHistoryItem] = []
+    @Published private(set) var authCoordinatorState: DesktopAuthCoordinatorState
+    @Published private(set) var authAccountSnapshot: RubyWhisperDesktopAccountSnapshot
     @Published var debugStatusMessage = "Idle"
     @Published var debugShowsUpdateReminderAfterDictation = false
     @Published var lastRawTranscript = ""
@@ -551,10 +556,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var availableMicrophones: [AudioDevice] = []
 
     let audioRecorder = AudioRecorder()
+    let authStateOwner: DesktopAuthStateOwner
     let hotkeyManager = HotkeyManager()
     let overlayManager = RecordingOverlayManager()
     private var accessibilityTimer: Timer?
     private var audioLevelCancellable: AnyCancellable?
+    private var authStateCancellables: Set<AnyCancellable> = []
     private var debugOverlayTimer: Timer?
     private var recordingInitializationTimer: DispatchSourceTimer?
     private var transcriptionTask: Task<Void, Never>?
@@ -587,6 +594,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     init() {
         UserDefaults.standard.removeObject(forKey: "force_http2_transcription")
+        let desktopSessionStore = DesktopSessionKeychainStore()
+        let authStateOwner = DesktopAuthStateOwner(
+            sessionStore: desktopSessionStore,
+            accountSnapshotLoader: Self.makeDesktopAccountSnapshotLoader(sessionStore: desktopSessionStore)
+        )
         let hasCompletedSetup = UserDefaults.standard.bool(forKey: "hasCompletedSetup")
         let apiKey = Self.loadStoredAPIKey(account: apiKeyStorageKey)
         let apiBaseURL = Self.loadStoredAPIBaseURL(account: "api_base_url")
@@ -712,6 +724,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.soundVolume = soundVolume
         self.voiceMacros = initialMacros
         self.pipelineHistory = savedHistory
+        self.authStateOwner = authStateOwner
+        self.authCoordinatorState = authStateOwner.coordinatorState
+        self.authAccountSnapshot = authStateOwner.accountSnapshot
         self.hasAccessibility = initialAccessibility
         self.hasScreenRecordingPermission = initialScreenCapturePermission
         self.launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -720,6 +735,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         refreshAvailableMicrophones()
         installAudioDeviceObservers()
+        bindAuthStateOwner()
+        authStateOwner.refreshAccountSnapshotInBackground()
 
         if shortcuts.didUpdateHoldStoredValue {
             persistShortcut(shortcuts.hold, key: holdShortcutStorageKey)
@@ -747,6 +764,36 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         // Clear any stale recording flag left over from an unclean exit.
         AppState.writeRecordingStateFlag(false)
+    }
+
+    private static func makeDesktopAccountSnapshotLoader(
+        sessionStore: DesktopSessionStoring
+    ) -> () async -> RubyWhisperDesktopAccountSnapshot {
+        guard let configuration = try? RubyWhisperBackendConfiguration.load() else {
+            return { .accountRefreshUnavailable }
+        }
+
+        let client = RubyWhisperBackendAPIClient(
+            configuration: configuration,
+            sessionStore: sessionStore
+        )
+        return { await client.refreshAccountSnapshot() }
+    }
+
+    private func bindAuthStateOwner() {
+        authStateOwner.$coordinatorState
+            .receive(on: RunLoop.main)
+            .sink { [weak self] state in
+                self?.authCoordinatorState = state
+            }
+            .store(in: &authStateCancellables)
+
+        authStateOwner.$accountSnapshot
+            .receive(on: RunLoop.main)
+            .sink { [weak self] snapshot in
+                self?.authAccountSnapshot = snapshot
+            }
+            .store(in: &authStateCancellables)
     }
 
     deinit {
@@ -935,6 +982,72 @@ final class AppState: ObservableObject, @unchecked Sendable {
             transcriptionModel: transcriptionModel,
             language: resolvedTranscriptionLanguage
         )
+    }
+
+    var authStateTitle: String {
+        switch authCoordinatorState {
+        case .signedOut:
+            return "Signed out"
+        case .loginLaunching, .browserPending, .handoffPending, .sessionExchanging:
+            return "Signing in"
+        case .accountRefreshing:
+            return "Loading account"
+        case .signedInTermsRequired:
+            return "Terms required"
+        case .trialActive, .paidActive, .friendOfRubyActive:
+            return "Active"
+        case .trialExhausted:
+            return "Trial exhausted"
+        case .paymentFailed:
+            return "Payment failed"
+        case .blocked:
+            return "Account blocked"
+        case .canceled:
+            return "Sign-in canceled"
+        case .error, .unknown:
+            return "Account unavailable"
+        }
+    }
+
+    var authStateDetail: String {
+        if let email = authAccountSnapshot.email?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !email.isEmpty,
+           authCoordinatorState.canTranscribe || authCoordinatorState == .signedInTermsRequired {
+            return email
+        }
+
+        if let failureCode = authAccountSnapshot.failureCode,
+           authCoordinatorState != .signedOut {
+            return failureCode.rawValue
+        }
+
+        return authCoordinatorState.rawValue
+    }
+
+    var authStateSystemImage: String {
+        switch authCoordinatorState {
+        case .trialActive, .paidActive, .friendOfRubyActive:
+            return "checkmark.circle.fill"
+        case .loginLaunching, .browserPending, .handoffPending, .sessionExchanging, .accountRefreshing:
+            return "arrow.triangle.2.circlepath"
+        case .signedInTermsRequired, .trialExhausted, .paymentFailed, .blocked, .error, .unknown:
+            return "exclamationmark.triangle.fill"
+        case .signedOut, .canceled:
+            return "person.crop.circle.badge.xmark"
+        }
+    }
+
+    func refreshDesktopAccountState() {
+        authStateOwner.refreshAccountSnapshotInBackground()
+    }
+
+    func cancelDesktopSignIn() {
+        authStateOwner.cancelSignIn()
+    }
+
+    @discardableResult
+    func logoutDesktopAccount() -> DesktopAuthSessionClearResult {
+        authStateOwner.logout()
     }
 
     private var resolvedTranscriptionLanguage: String? {
