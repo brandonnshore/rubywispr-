@@ -9,6 +9,9 @@ RUB-220 / RW-060A imported the approved FreeFlow macOS harness source into `apps
 - Import decision: `docs/adr/ADR-001-freeflow-import-decision.md`
 - Audit evidence: `docs/FREEFLOW_AUDIT_RUB_24.md`
 - Upstream license: MIT, preserved at `apps/macos/LICENSE`
+- Distribution notice: `apps/macos/Resources/ThirdPartyNotices.md`, copied to
+  `RubyWhisper.app/Contents/Resources/ThirdPartyNotices.md` by the macOS
+  Makefile
 
 ## Method
 
@@ -22,6 +25,7 @@ Included:
 - `FreeFlow.entitlements`
 - `Resources/AppIcon-*.png`
 - `Resources/AppIcon*.icns`
+- `Resources/ThirdPartyNotices.md`
 - `.gitignore`
 - `LICENSE`
 
@@ -51,4 +55,7 @@ make -C apps/macos clean all CODESIGN_IDENTITY=-
 The imported source is Makefile-based, with no upstream Xcode project,
 workspace, package, or schemes.
 
-Before any beta or release workflow, preserve MIT attribution in distributed artifacts and complete the ADR-required backend proxy, privacy/storage, insertion recovery, island state, updater, icon/media, and release-surface refactors.
+Before any beta or release workflow, preserve MIT attribution in distributed
+artifacts by verifying `Contents/Resources/ThirdPartyNotices.md`, and complete
+the ADR-required backend proxy, privacy/storage, insertion recovery, island
+state, updater, icon/media, and release-surface refactors.
