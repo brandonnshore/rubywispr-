@@ -1,0 +1,49 @@
+name: macOS CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/macos/**"
+      - ".github/workflows/macos-ci.yml"
+      - "TECHNICAL_INFRASTRUCTURE.md"
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/macos/**"
+      - ".github/workflows/macos-ci.yml"
+      - "TECHNICAL_INFRASTRUCTURE.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  debug-adhoc-build:
+    name: Debug ad hoc build
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show macOS toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          xcrun --show-sdk-path
+
+      - name: Build RubyWhisper.app without release signing
+        run: make -C apps/macos clean all CODESIGN_IDENTITY=-
+
+      - name: Verify development bundle and ad hoc signature
+        run: |
+          test -d "apps/macos/build/RubyWhisper.app"
+          test "$(plutil -extract CFBundleIdentifier raw "apps/macos/build/RubyWhisper.app/Contents/Info.plist")" = "com.rubyadvisory.rubywhisper.dev"
+          codesign -dv "apps/macos/build/RubyWhisper.app" 2>&1 | tee /tmp/rubywhisper-codesign.txt
+          grep -q "Signature=adhoc" /tmp/rubywhisper-codesign.txt
