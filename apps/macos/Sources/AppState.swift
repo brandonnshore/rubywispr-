@@ -2067,6 +2067,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func validateShortcutStartGate(mode: RecordingTriggerMode) -> Bool {
+        guard validateAccountGateForDictationAttempt() else {
+            return false
+        }
+
         refreshFirstRunOnboardingState()
         guard firstRunOnboardingStep.allowsNormalDictation else {
             cancelPendingShortcutStart()
@@ -2102,6 +2106,58 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
 
         return true
+    }
+
+    private func validateAccountGateForDictationAttempt(routeSignIn: Bool = true) -> Bool {
+        let decision = authCoordinatorState.dictationAccountGateDecision
+        guard decision.allowsDictation else {
+            blockDictationAttempt(for: decision, routeSignIn: routeSignIn)
+            return false
+        }
+
+        return true
+    }
+
+    func validateFirstRunTestDictationAccountGate() -> Bool {
+        validateAccountGateForDictationAttempt()
+    }
+
+    private func blockDictationAttempt(
+        for decision: DesktopDictationAccountGateDecision,
+        routeSignIn: Bool
+    ) {
+        cancelPendingShortcutStart()
+        shortcutSessionController.reset()
+        activeRecordingTriggerMode = nil
+        currentSessionIntent = .dictation
+        statusText = decision.statusText
+        debugStatusMessage = "Dictation blocked: \(decision.debugReason)"
+
+        switch decision {
+        case .signInRequired:
+            selectedSettingsTab = .account
+            if routeSignIn {
+                let result = startDesktopSignIn()
+                if result.outcome == .browserPending {
+                    statusText = "Signing in"
+                    debugStatusMessage = "Dictation blocked: sign_in_browser_opened"
+                    errorMessage = nil
+                }
+            } else {
+                NotificationCenter.default.post(name: .showSettings, object: nil)
+            }
+        case .signInInProgress:
+            selectedSettingsTab = .account
+            NotificationCenter.default.post(name: .showSettings, object: nil)
+        case .accountRefreshing:
+            selectedSettingsTab = .account
+            NotificationCenter.default.post(name: .showSettings, object: nil)
+        case .termsRequired, .trialExhausted, .paymentFailed, .blocked, .accountUnavailable:
+            selectedSettingsTab = .account
+            NotificationCenter.default.post(name: .showSettings, object: nil)
+        case .allowed:
+            break
+        }
     }
 
     private func handleEscapeKeyPress() -> Bool {
@@ -2346,6 +2402,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let t0 = CFAbsoluteTimeGetCurrent()
         os_log(.info, log: recordingLog, "startRecording() entered")
         guard !isRecording && !isTranscribing else { return }
+        guard validateAccountGateForDictationAttempt() else { return }
         let scheduledSelectionSnapshot = pendingSelectionSnapshot
         let scheduledManualCommandInvocation = pendingManualCommandInvocation
         cancelPendingShortcutStart()
@@ -2896,6 +2953,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func stopAndTranscribe() {
+        let accountGateDecision = authCoordinatorState.dictationAccountGateDecision
+        guard accountGateDecision.allowsDictation else {
+            stopRecordingWithoutTranscribing(for: accountGateDecision)
+            return
+        }
+
         cancelPendingShortcutStart()
         cancelRecordingInitializationTimer()
         shortcutSessionController.reset()
@@ -3145,6 +3208,36 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     }
                 }
             }
+        }
+    }
+
+    private func stopRecordingWithoutTranscribing(for decision: DesktopDictationAccountGateDecision) {
+        cancelPendingShortcutStart()
+        cancelRecordingInitializationTimer()
+        shortcutSessionController.reset()
+        activeRecordingTriggerMode = nil
+        currentSessionIntent = .dictation
+        audioRecorder.onRecordingReady = nil
+        audioRecorder.onRecordingFailure = nil
+        audioLevelCancellable?.cancel()
+        audioLevelCancellable = nil
+        contextCaptureTask?.cancel()
+        contextCaptureTask = nil
+        capturedContext = nil
+        tearDownRealtimeService()
+        restoreAudioInterruptionIfNeeded()
+        isRecording = false
+        isTranscribing = false
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+        transcribingAudioFileName = nil
+        endCriticalDictationActivity()
+        overlayManager.dismiss()
+        blockDictationAttempt(for: decision, routeSignIn: true)
+        audioRecorder.stopRecording { [weak self] _ in
+            guard let self else { return }
+            self.audioRecorder.cleanup()
+            self.refreshAvailableMicrophonesIfNeeded()
         }
     }
 

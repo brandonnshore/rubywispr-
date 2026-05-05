@@ -162,6 +162,93 @@ enum DesktopAuthCoordinatorState: Equatable, RawRepresentable, Codable, CustomSt
     }
 }
 
+enum DesktopDictationAccountGateDecision: Equatable, Hashable {
+    case allowed
+    case signInRequired
+    case signInInProgress
+    case accountRefreshing
+    case termsRequired
+    case trialExhausted
+    case paymentFailed
+    case blocked
+    case accountUnavailable
+
+    var allowsDictation: Bool {
+        self == .allowed
+    }
+
+    var statusText: String {
+        switch self {
+        case .allowed:
+            return "Ready"
+        case .signInRequired:
+            return "Sign in required"
+        case .signInInProgress:
+            return "Signing in"
+        case .accountRefreshing:
+            return "Loading account"
+        case .termsRequired:
+            return "Accept Terms"
+        case .trialExhausted:
+            return "Trial exhausted"
+        case .paymentFailed:
+            return "Payment failed"
+        case .blocked:
+            return "Account blocked"
+        case .accountUnavailable:
+            return "Account unavailable"
+        }
+    }
+
+    var debugReason: String {
+        switch self {
+        case .allowed:
+            return "allowed"
+        case .signInRequired:
+            return "sign_in_required"
+        case .signInInProgress:
+            return "sign_in_in_progress"
+        case .accountRefreshing:
+            return "account_refreshing"
+        case .termsRequired:
+            return "terms_required"
+        case .trialExhausted:
+            return "trial_exhausted"
+        case .paymentFailed:
+            return "payment_failed"
+        case .blocked:
+            return "account_blocked"
+        case .accountUnavailable:
+            return "account_unavailable"
+        }
+    }
+}
+
+extension DesktopAuthCoordinatorState {
+    var dictationAccountGateDecision: DesktopDictationAccountGateDecision {
+        switch self {
+        case .trialActive, .paidActive, .friendOfRubyActive:
+            return .allowed
+        case .signedOut, .canceled:
+            return .signInRequired
+        case .loginLaunching, .browserPending, .handoffPending, .sessionExchanging:
+            return .signInInProgress
+        case .accountRefreshing:
+            return .accountRefreshing
+        case .signedInTermsRequired:
+            return .termsRequired
+        case .trialExhausted:
+            return .trialExhausted
+        case .paymentFailed:
+            return .paymentFailed
+        case .blocked:
+            return .blocked
+        case .error, .unknown:
+            return .accountUnavailable
+        }
+    }
+}
+
 enum DesktopAuthSessionClearReason: String, Equatable {
     case logout
     case missingSession
