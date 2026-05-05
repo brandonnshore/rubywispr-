@@ -156,6 +156,7 @@ test-hotkey-manager:
 		Sources/AppName.swift \
 		Sources/ModifierKeyEventState.swift \
 		Sources/ShortcutBinding.swift \
+		Sources/ShortcutCore/DictationShortcutSessionController.swift \
 		Sources/ShortcutCore/ShortcutModels.swift \
 		Sources/ShortcutCore/ShortcutMatcher.swift \
 		Sources/GlobalShortcutBackend.swift \

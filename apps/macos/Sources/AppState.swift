@@ -1506,6 +1506,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     func stopHotkeyMonitoring(reason: HotkeyLifecyclePauseReason = .logout) {
         shouldMonitorHotkeys = false
         hotkeyMonitoringErrorMessage = nil
+        cancelActiveShortcutRecordingForLifecycleChange()
         if reason == .appQuit {
             hotkeyManager.onShortcutEvent = nil
             hotkeyManager.onEscapeKeyPressed = nil
@@ -1518,6 +1519,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
             hotkeyManager.onRegistrationStateChanged = nil
         }
         hotkeyRegistrationState = hotkeyManager.registrationState
+    }
+
+    func handleAppDeactivationForHotkeySafety() {
+        guard pendingShortcutStartMode == .hold || activeRecordingTriggerMode == .hold else { return }
+        cancelActiveShortcutRecordingForLifecycleChange()
     }
 
     func suspendHotkeyMonitoringForShortcutCapture() {
@@ -1624,6 +1630,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         switch action {
         case .start(let mode):
+            guard validateShortcutStartGate(mode: mode) else { return }
             os_log(.info, log: recordingLog, "Shortcut start fired for mode %{public}@", mode.rawValue)
             scheduleShortcutStart(mode: mode)
         case .stop:
@@ -1642,6 +1649,21 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 pendingShortcutStartMode = .toggle
             }
         }
+    }
+
+    private func validateShortcutStartGate(mode: RecordingTriggerMode) -> Bool {
+        guard hasCompletedSetup else {
+            cancelPendingShortcutStart()
+            shortcutSessionController.reset()
+            activeRecordingTriggerMode = nil
+            currentSessionIntent = .dictation
+            statusText = "Complete setup first"
+            debugStatusMessage = "Onboarding required"
+            NotificationCenter.default.post(name: .showSetup, object: nil)
+            return false
+        }
+
+        return true
     }
 
     private func handleEscapeKeyPress() -> Bool {
@@ -1679,6 +1701,39 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         cancelPendingShortcutStart()
         shortcutSessionController.reset()
+        activeRecordingTriggerMode = nil
+        audioRecorder.onRecordingReady = nil
+        audioRecorder.onRecordingFailure = nil
+        audioLevelCancellable?.cancel()
+        audioLevelCancellable = nil
+        cancelRecordingInitializationTimer()
+        contextCaptureTask?.cancel()
+        contextCaptureTask = nil
+        capturedContext = nil
+        currentSessionIntent = .dictation
+        isRecording = false
+        errorMessage = nil
+        debugStatusMessage = "Cancelled"
+        statusText = "Cancelled"
+        overlayManager.dismiss()
+        tearDownRealtimeService()
+        audioRecorder.cancelRecording()
+        restoreAudioInterruptionIfNeeded()
+        endCriticalDictationActivity()
+        refreshAvailableMicrophonesIfNeeded()
+        if !isRecording && !isTranscribing && statusText == "Cancelled" {
+            scheduleReadyStatusReset(after: 2, matching: ["Cancelled"])
+        }
+    }
+
+    private func cancelActiveShortcutRecordingForLifecycleChange() {
+        guard pendingShortcutStartMode != nil || activeRecordingTriggerMode != nil || isRecording else {
+            shortcutSessionController.reset()
+            return
+        }
+
+        cancelPendingShortcutStart()
+        _ = shortcutSessionController.resetActiveSession()
         activeRecordingTriggerMode = nil
         audioRecorder.onRecordingReady = nil
         audioRecorder.onRecordingFailure = nil
