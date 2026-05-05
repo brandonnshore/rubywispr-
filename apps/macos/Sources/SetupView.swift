@@ -1213,6 +1213,7 @@ struct SetupView: View {
                                 testHotkeyHarness.isTranscribing = false
                                 testAudioRecorder = nil
                                 testTranscript = transcript
+                                appState.markFirstRunTestWhisperCompleted()
                                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                                     testPhase = .done
                                 }
