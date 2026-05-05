@@ -247,6 +247,14 @@ Forbidden diagnostics include raw key event logs, full key sequences, HID usage
 streams, app/window names, process lists, typed text, selected text, clipboard
 content, screenshots, audio, transcripts, cleaned text, and provider payloads.
 
+Current macOS implementation note: RubyWhisper uses a local `CGEventTap` for
+global shortcut capture. The framework exposes categorical startup failures
+(`event_tap_unavailable`, `event_tap_run_loop_source_unavailable`) and runtime
+capture interruptions (`event_tap_disabled_by_timeout`,
+`event_tap_disabled_by_user_input`). macOS does not expose a privacy-safe name
+for the other app, setting, or device policy involved in a conflict, so v0.1
+must show only the categorical reason and affected binding category.
+
 ## Settings Contract
 
 The Hotkeys settings section must show:

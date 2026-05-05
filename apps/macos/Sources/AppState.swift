@@ -1279,6 +1279,17 @@ final class AppState: ObservableObject, @unchecked Sendable {
         openPrivacySettingsPane("Privacy_ScreenCapture")
     }
 
+    func openKeyboardSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func openHotkeySettings() {
+        selectedSettingsTab = .general
+        NotificationCenter.default.post(name: .showSettings, object: nil)
+    }
+
     private func openPrivacySettingsPane(_ pane: String) {
         let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")
         if let url = settingsURL {
@@ -1367,7 +1378,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     var shortcutStatusText: String {
-        if hotkeyMonitoringErrorMessage != nil {
+        if hasRecoverableHotkeyFailure {
             return "Global shortcuts unavailable"
         }
 
@@ -1381,6 +1392,51 @@ final class AppState: ObservableObject, @unchecked Sendable {
         case (false, false):
             return "No dictation shortcut enabled"
         }
+    }
+
+    var isHotkeyReadyForDictation: Bool {
+        switch hotkeyRegistrationState.phase {
+        case .registered, .degraded:
+            return true
+        case .unregistered, .registering, .disabled:
+            return false
+        }
+    }
+
+    var hasRecoverableHotkeyFailure: Bool {
+        switch hotkeyRegistrationState.phase {
+        case .disabled:
+            return hotkeyRegistrationState.reason != .paused
+        case .unregistered, .registering, .registered, .degraded:
+            return false
+        }
+    }
+
+    var hotkeyRecoveryTitle: String {
+        switch hotkeyRegistrationState.reason {
+        case .noBindingEnabled:
+            return "Dictation Shortcuts Off"
+        case .holdBindingDisabled, .toggleBindingDisabled:
+            return "Shortcut Availability Degraded"
+        case .eventTapUnavailable, .eventTapRunLoopSourceUnavailable,
+             .eventTapDisabledByTimeout, .eventTapDisabledByUserInput:
+            return "Global Shortcuts Unavailable"
+        case .paused:
+            return "Global Shortcuts Paused"
+        case .none:
+            return isHotkeyReadyForDictation ? "Global Shortcuts Ready" : "Global Shortcuts Not Ready"
+        case .unknown:
+            return "Global Shortcuts Need Attention"
+        }
+    }
+
+    var hotkeyRecoveryMessage: String {
+        Self.hotkeyRecoveryMessage(for: hotkeyRegistrationState)
+    }
+
+    var hotkeyDiagnosticCategory: String {
+        let binding = hotkeyRegistrationState.affectedBinding?.rawValue ?? "none"
+        return "phase=\(hotkeyRegistrationState.phase.rawValue), reason=\(hotkeyRegistrationState.reason.rawValue), binding=\(binding)"
     }
 
     var shortcutStartDelayMilliseconds: Int {
@@ -1497,7 +1553,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
         hotkeyManager.onRegistrationStateChanged = { [weak self] state in
             DispatchQueue.main.async {
-                self?.hotkeyRegistrationState = state
+                guard let self else { return }
+                self.hotkeyRegistrationState = state
+                self.hotkeyMonitoringErrorMessage = self.hasRecoverableHotkeyFailure
+                    ? Self.hotkeyRecoveryMessage(for: state)
+                    : nil
             }
         }
         restartHotkeyMonitoring()
@@ -1583,7 +1643,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 for: hotkeyManager.registrationState,
                 fallback: error.localizedDescription
             )
-            os_log(.error, log: recordingLog, "Hotkey monitoring failed to start: %{public}@", error.localizedDescription)
+            os_log(
+                .error,
+                log: recordingLog,
+                "Hotkey monitoring failed to start category=%{public}@",
+                hotkeyRegistrationState.reason.rawValue
+            )
         }
     }
 
@@ -1603,23 +1668,40 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 for: hotkeyManager.registrationState,
                 fallback: error.localizedDescription
             )
-            os_log(.error, log: recordingLog, "Hotkey monitoring retry failed: %{public}@", error.localizedDescription)
+            os_log(
+                .error,
+                log: recordingLog,
+                "Hotkey monitoring retry failed category=%{public}@",
+                hotkeyRegistrationState.reason.rawValue
+            )
         }
     }
 
-    private static func hotkeyRecoveryMessage(
+    static func hotkeyRecoveryMessage(
         for state: HotkeyRegistrationState,
-        fallback: String
+        fallback: String? = nil
     ) -> String {
         switch state.reason {
         case .eventTapUnavailable:
-            return "Global shortcuts could not start. Grant keyboard monitoring or Accessibility permission, then retry."
+            return "macOS did not allow the global keyboard monitor to start. Grant Accessibility or keyboard monitoring access, then retry."
         case .eventTapRunLoopSourceUnavailable:
             return "Global shortcuts could not start because macOS could not attach the keyboard monitor. Retry after restarting the app."
+        case .eventTapDisabledByTimeout:
+            return "macOS disabled the global keyboard monitor after it stopped responding in time. Retry registration; if it repeats, restart the app."
+        case .eventTapDisabledByUserInput:
+            return "macOS disabled the global keyboard monitor, which can happen after system keyboard changes or another shortcut utility takes over. Adjust the conflicting setting, then retry."
+        case .noBindingEnabled:
+            return "Turn on at least one dictation shortcut before finishing setup."
+        case .holdBindingDisabled:
+            return "Hold-to-record is off. Tap-to-record can still work, but the default hotkey set is degraded."
+        case .toggleBindingDisabled:
+            return "Tap-to-record is off. Hold-to-record can still work, but the default hotkey set is degraded."
         case .unknown:
-            return fallback
-        case .none, .paused, .noBindingEnabled, .holdBindingDisabled, .toggleBindingDisabled:
-            return fallback
+            return fallback ?? "Global shortcuts could not start. Retry registration or review keyboard settings."
+        case .none:
+            return fallback ?? "Global shortcuts are available."
+        case .paused:
+            return fallback ?? "Global shortcuts are paused while another setup or permission step is active."
         }
     }
 

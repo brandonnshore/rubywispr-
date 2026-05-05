@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 @MainActor
 final class SetupTestHotkeyHarness: ObservableObject {
@@ -7,10 +8,21 @@ final class SetupTestHotkeyHarness: ObservableObject {
     private var pendingStartTask: Task<Void, Never>?
     private var pendingStartMode: RecordingTriggerMode?
 
+    @Published private(set) var registrationState = HotkeyRegistrationState.unregistered
+    @Published private(set) var registrationErrorMessage: String?
+
     var isTranscribing = false
     var onAction: ((DictationShortcutAction) -> Void)?
 
     func start(configuration: ShortcutConfiguration, startDelay: TimeInterval) throws {
+        hotkeyManager.onRegistrationStateChanged = { [weak self] state in
+            DispatchQueue.main.async {
+                self?.registrationState = state
+                if state.phase == .registered || state.phase == .degraded {
+                    self?.registrationErrorMessage = nil
+                }
+            }
+        }
         hotkeyManager.onShortcutEvent = { [weak self] event in
             guard let self else { return }
             let action = self.sessionController.handle(event: event, isTranscribing: self.isTranscribing)
@@ -20,15 +32,29 @@ final class SetupTestHotkeyHarness: ObservableObject {
         cancelPendingStart()
         sessionController.reset()
         isTranscribing = false
-        try hotkeyManager.start(configuration: configuration)
+        do {
+            try hotkeyManager.start(configuration: configuration)
+            registrationState = hotkeyManager.registrationState
+            registrationErrorMessage = nil
+        } catch {
+            registrationState = hotkeyManager.registrationState
+            registrationErrorMessage = AppState.hotkeyRecoveryMessage(
+                for: hotkeyManager.registrationState,
+                fallback: error.localizedDescription
+            )
+            throw error
+        }
     }
 
     func stop() {
         hotkeyManager.stop()
+        hotkeyManager.onRegistrationStateChanged = nil
         cancelPendingStart()
         onAction = nil
         sessionController.reset()
         isTranscribing = false
+        registrationState = hotkeyManager.registrationState
+        registrationErrorMessage = nil
     }
 
     func resetSession() {
