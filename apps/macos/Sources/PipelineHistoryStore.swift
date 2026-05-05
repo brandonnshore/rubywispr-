@@ -5,19 +5,19 @@ final class PipelineHistoryStore {
     private let container: NSPersistentContainer
     private let isStoreLoaded: Bool
 
-    init() {
+    convenience init() {
+        self.init(storeURL: Self.defaultStoreURL())
+    }
+
+    init(storeURL: URL?, inMemory: Bool = false) {
         let model = Self.makeModel()
         container = NSPersistentContainer(name: "PipelineHistory", managedObjectModel: model)
 
-        var storeURL: URL?
-        if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let appName = AppName.displayName
-            let baseURL = appSupport.appendingPathComponent(appName, isDirectory: true)
-            try? FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
-            storeURL = baseURL.appendingPathComponent("PipelineHistory.sqlite")
-        }
-
-        if let storeURL {
+        if inMemory {
+            let description = NSPersistentStoreDescription()
+            description.type = NSInMemoryStoreType
+            container.persistentStoreDescriptions = [description]
+        } else if let storeURL {
             let description = NSPersistentStoreDescription(url: storeURL)
             description.shouldMigrateStoreAutomatically = true
             description.shouldInferMappingModelAutomatically = true
@@ -59,6 +59,16 @@ final class PipelineHistoryStore {
                 isStoreLoaded = Self.loadPersistentStoresSynchronously(container: container) == nil
             }
         }
+    }
+
+    private static func defaultStoreURL() -> URL? {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+
+        let baseURL = appSupport.appendingPathComponent(AppName.displayName, isDirectory: true)
+        try? FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
+        return baseURL.appendingPathComponent("PipelineHistory.sqlite")
     }
 
     func loadAllHistory() -> [PipelineHistoryItem] {
@@ -135,6 +145,8 @@ final class PipelineHistoryStore {
                     entity.contextPrompt = nil
                     entity.contextScreenshotDataURL = nil
                     entity.customVocabulary = ""
+                    entity.contextAppName = nil
+                    entity.contextBundleIdentifier = nil
                     entity.contextWindowTitle = nil
                 }
                 try saveContext()

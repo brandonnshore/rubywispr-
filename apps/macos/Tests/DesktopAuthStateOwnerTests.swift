@@ -198,7 +198,7 @@ private struct DesktopAuthStateOwnerTests {
         owner.markHandoffPending()
         let snapshot = await owner.completeLoginHandoff(syntheticHandoff, exchanger: exchanger)
 
-        expect(snapshot.state == .signedOut, "handoff exchange service errors should fail closed")
+        expect(snapshot.state == .error, "handoff exchange service errors should map stable error state")
         expect(snapshot.failureCode == .serviceUnavailable, "handoff exchange failure should keep stable backend failure code")
         expect(snapshot.recovery == .retry, "handoff exchange failure should preserve stable recovery")
         expect(owner.coordinatorState == .error, "retryable handoff failure should publish recoverable error state")
@@ -317,7 +317,7 @@ private struct DesktopAuthStateOwnerTests {
 
         let snapshot = await owner.refreshAccountSnapshot()
 
-        expect(snapshot.state == .signedOut, "refresh failures should keep backend contract snapshot signed_out")
+        expect(snapshot.state == .error, "refresh failures should keep backend contract snapshot in error")
         expect(snapshot.failureCode == .serviceUnavailable, "refresh failure should carry backend failure code")
         expect(owner.coordinatorState == .error, "refresh failure should be distinct from signed_out coordinator state")
         expect(owner.lastClearResult == nil, "refresh failure should not be treated as logout/session clear")

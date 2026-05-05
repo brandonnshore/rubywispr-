@@ -84,6 +84,8 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testTranscriptionRequestRedactedDiagnosticSummary()
             try await testTranscriptionRequestRejectsInvalidDurationWithoutContent()
             try await testTranscriptionSuccessMapsCleanedTextAndUsageOnly()
+            try await testUploadTerminalStateRoutesSuccessToInsertionAndCleanedTextRecoveryPolicy()
+            try await testCanceledUploadTerminalStateDropsInsertionFailureAndRecovery()
             try await testTranscriptionBackendErrorMappingUsesStableRecovery()
             print("RubyWhisperBackendAPIClientTests passed")
         } catch {
@@ -338,7 +340,7 @@ private struct RubyWhisperBackendAPIClientTests {
             }
             """.utf8)
         )
-        expect(serviceUnavailableSnapshot.state == .signedOut, "service_unavailable account refresh should fail closed to signed_out until refresh succeeds")
+        expect(serviceUnavailableSnapshot.state == .error, "service_unavailable account refresh should map stable error state")
         expect(serviceUnavailableSnapshot.canTranscribe == false, "service_unavailable should not enable dictation")
         expect(serviceUnavailableSnapshot.recovery == .retry, "service_unavailable should be retryable")
         expect(serviceUnavailableSnapshot.retryable == true, "service_unavailable should mark retryable")
@@ -358,7 +360,7 @@ private struct RubyWhisperBackendAPIClientTests {
             }
             """.utf8)
         )
-        expect(internalErrorSnapshot.state == .signedOut, "internal_error account refresh should fail closed to signed_out until refresh succeeds")
+        expect(internalErrorSnapshot.state == .error, "internal_error account refresh should map stable error state")
         expect(internalErrorSnapshot.canTranscribe == false, "internal_error should not enable dictation")
         expect(internalErrorSnapshot.retryable == true, "internal_error should mark retryable")
 
@@ -766,6 +768,44 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(success.usageMetadata.audioDurationMs == 1234, "success should map duration metadata")
     }
 
+    private static func testUploadTerminalStateRoutesSuccessToInsertionAndCleanedTextRecoveryPolicy() async throws {
+        let success = RubyWhisperDesktopTranscriptionSuccess(
+            requestId: "req_terminal_success",
+            cleanedText: "  Final cleaned text.  ",
+            cleanedWordCount: 3,
+            usageMetadata: RubyWhisperDesktopTranscriptionUsageMetadata(
+                cleanedWordCount: 3,
+                trialWordsRemaining: 42,
+                trialWordsUsed: 58,
+                trialWordsLimit: 100,
+                planState: .trialActive,
+                audioDurationMs: 1200
+            )
+        )
+
+        let insertionOnly = RubyWhisperDesktopUploadTerminalState.success(success)
+        expect(insertionOnly.insertionInput?.requestId == "req_terminal_success", "success should route opaque request ID to insertion boundary")
+        expect(insertionOnly.insertionInput?.cleanedText == "  Final cleaned text.  ", "success insertion input should carry final cleaned text only")
+        expect(insertionOnly.insertionInput?.cleanedWordCount == 3, "success insertion input should carry word-count metadata")
+        expect(insertionOnly.insertionInput?.usageMetadata.planState == .trialActive, "success insertion input should carry account metadata")
+        expect(insertionOnly.failure == nil, "success terminal state should not expose failure")
+        expect(insertionOnly.recoveryState.cleanedText == nil, "success should not create local cleaned-text recovery unless policy allows it")
+
+        let recoveryAllowed = RubyWhisperDesktopUploadTerminalState.success(
+            success,
+            allowCleanedTextRecovery: true
+        )
+        expect(recoveryAllowed.recoveryState.cleanedText == "Final cleaned text.", "allowed recovery should preserve only trimmed final cleaned text")
+    }
+
+    private static func testCanceledUploadTerminalStateDropsInsertionFailureAndRecovery() async throws {
+        let canceled = RubyWhisperDesktopUploadTerminalState.canceled
+
+        expect(canceled.insertionInput == nil, "canceled upload should not route insertion input")
+        expect(canceled.failure == nil, "canceled upload should not route a backend failure")
+        expect(canceled.recoveryState.cleanedText == nil, "canceled upload should not preserve local recovery text")
+    }
+
     private static func testTranscriptionBackendErrorMappingUsesStableRecovery() async throws {
         let cases: [(name: String, statusCode: Int, code: String, state: RubyWhisperDesktopState, recovery: RubyWhisperDesktopRecoveryAction, retryable: Bool, retryAfterSeconds: Int?)] = [
             ("signed out", 401, "signed_out", .signedOut, .openSignIn, false, nil),
@@ -821,6 +861,11 @@ private struct RubyWhisperBackendAPIClientTests {
                 expect(failure.recovery == testCase.recovery, "\(testCase.name) upload failure should map recovery")
                 expect(failure.retryable == testCase.retryable, "\(testCase.name) upload failure should map retryability")
                 expect(failure.sameAudioRetryAllowed == false, "\(testCase.name) upload failure should not allow blind same-audio retry")
+
+                let terminalState = RubyWhisperDesktopUploadTerminalState.failure(failure)
+                expect(terminalState.failure == failure, "\(testCase.name) terminal state should preserve sanitized upload failure")
+                expect(terminalState.insertionInput == nil, "\(testCase.name) terminal state should not route insertion input")
+                expect(terminalState.recoveryState.cleanedText == nil, "\(testCase.name) terminal state should not preserve cleaned text without local policy")
 
                 let description = String(describing: RubyWhisperBackendClientError.backend(error))
                 expect(!description.contains("Synthetic disabled payload text."), "\(testCase.name) diagnostics should not include cleaned text")

@@ -3068,23 +3068,19 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         artifact,
                         context: appContext
                     )
+                    let uploadTerminalState = RubyWhisperDesktopUploadTerminalState.success(uploadSuccess)
+                    guard let insertionInput = uploadTerminalState.insertionInput else {
+                        throw CancellationError()
+                    }
                     let parsedTranscript = Self.parseTranscriptCommands(
-                        from: uploadSuccess.cleanedText,
+                        from: insertionInput.cleanedText,
                         pressEnterCommandEnabled: self.isPressEnterVoiceCommandEnabled
                     )
                     try Task.checkCancellation()
 
                     await MainActor.run {
                         guard self.isTranscribing else { return }
-                        self.lastContextSummary = appContext.contextSummary
-                        self.lastContextScreenshotDataURL = appContext.screenshotDataURL
-                        self.lastContextScreenshotStatus = appContext.screenshotError
-                            ?? "available (\(appContext.screenshotMimeType ?? "image"))"
-                        self.lastContextAppName = appContext.appName ?? ""
-                        self.lastContextBundleIdentifier = appContext.bundleIdentifier ?? ""
-                        self.lastContextWindowTitle = appContext.windowTitle ?? ""
-                        self.lastContextSelectedText = appContext.selectedText ?? ""
-                        self.lastContextLLMPrompt = appContext.contextPrompt ?? ""
+                        self.clearUploadContextState()
                         let trimmedFinalTranscript = parsedTranscript.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
                         let processingStatus = "RubyWhisper upload succeeded"
                         self.lastPostProcessingPrompt = ""
@@ -3093,7 +3089,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         self.lastPostProcessingStatus = processingStatus
                         self.recordPipelineHistoryEntry(
                             rawTranscript: "",
-                            postProcessedTranscript: trimmedFinalTranscript,
+                            postProcessedTranscript: "",
                             postProcessingPrompt: "",
                             systemPrompt: Self.resolvedSystemPrompt(self.customSystemPrompt),
                             context: appContext,
@@ -3167,7 +3163,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         if self.activeTransientRecordingArtifact === artifact {
                             self.activeTransientRecordingArtifact = nil
                         }
-                        let failure = error as? RubyWhisperDesktopTranscriptionFailure
+                        let uploadTerminalState = (error as? RubyWhisperDesktopTranscriptionFailure).map {
+                            RubyWhisperDesktopUploadTerminalState.failure($0)
+                        }
+                        let failure = uploadTerminalState?.failure
                         self.errorMessage = failure?.message ?? error.localizedDescription
                         self.isTranscribing = false
                         self.endCriticalDictationActivity()
@@ -3175,13 +3174,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         self.overlayManager.dismiss()
                         self.lastPostProcessedTranscript = ""
                         self.lastRawTranscript = ""
-                        self.lastContextSummary = ""
+                        self.clearUploadContextState()
                         self.lastPostProcessingStatus = failure.map { "Upload failed: \($0.code.rawValue)" }
                             ?? "Upload failed"
                         self.lastPostProcessingPrompt = ""
-                        self.lastContextScreenshotDataURL = resolvedContext.screenshotDataURL
-                        self.lastContextScreenshotStatus = resolvedContext.screenshotError
-                            ?? "available (\(resolvedContext.screenshotMimeType ?? "image"))"
                         self.recordPipelineHistoryEntry(
                             rawTranscript: "",
                             postProcessedTranscript: "",
@@ -3244,6 +3240,17 @@ final class AppState: ObservableObject, @unchecked Sendable {
             : customSystemPrompt
     }
 
+    private func clearUploadContextState() {
+        lastContextSummary = ""
+        lastContextScreenshotDataURL = nil
+        lastContextScreenshotStatus = "No screenshot"
+        lastContextAppName = ""
+        lastContextBundleIdentifier = ""
+        lastContextWindowTitle = ""
+        lastContextSelectedText = ""
+        lastContextLLMPrompt = ""
+    }
+
     private func recordPipelineHistoryEntry(
         rawTranscript: String,
         postProcessedTranscript: String,
@@ -3279,8 +3286,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
             debugStatus: debugStatusMessage,
             customVocabulary: "",
             audioFileName: nil,
-            contextAppName: context.appName,
-            contextBundleIdentifier: context.bundleIdentifier,
+            contextAppName: nil,
+            contextBundleIdentifier: nil,
             contextWindowTitle: nil
         )
         do {
