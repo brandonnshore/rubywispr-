@@ -24,6 +24,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case account
     case appearance
     case general
+    case advanced
     case prompts
     case macros
     case runLog
@@ -42,6 +43,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .account: return "Account"
         case .appearance: return "Appearance"
         case .general: return "General"
+        case .advanced: return "Advanced"
         case .prompts: return "Prompts"
         case .macros: return "Voice Macros"
         case .runLog: return "Run Log"
@@ -54,6 +56,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .account: return "person.crop.circle"
         case .appearance: return "circle.lefthalf.filled"
         case .general: return "gearshape"
+        case .advanced: return "slider.horizontal.3"
         case .prompts: return "text.bubble"
         case .macros: return "music.mic"
         case .runLog: return "clock.arrow.circlepath"
