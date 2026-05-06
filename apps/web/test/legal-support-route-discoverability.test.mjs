@@ -30,6 +30,14 @@ const authShellPath = path.join(
   "_components",
   "auth-route-shell.tsx",
 );
+const webDesignSpecPath = path.join(repoRoot, "WEB_DESIGN_SPEC.md");
+const productBriefPath = path.join(repoRoot, "PRODUCT_BRIEF.md");
+const handoffPath = path.join(
+  repoRoot,
+  "docs",
+  "qa",
+  "rub-314-public-copy-handoff.md",
+);
 
 const legalSupportRoutes = ["/terms", "/privacy", "/support"];
 
@@ -110,6 +118,45 @@ test("legal and support copy stays privacy-safe and metadata-only", async () => 
   assertNoPrivateSentinels(text);
   assertNoUnsafeStorageClaims(text);
   assertNoPrivateContentRequests(text);
+});
+
+test("public and spec copy keep insertion claims source-safe", async () => {
+  const [homeModule, pricingModule, termsModule, webDesignSpec, productBrief] =
+    await Promise.all([
+      loadPageModule(publicPagePath, createPublicRequire()),
+      loadPageModule(pricingPagePath, createPricingRequire()),
+      loadPageModule(termsPagePath, createPublicRequire()),
+      readFile(webDesignSpecPath, "utf8"),
+      readFile(productBriefPath, "utf8"),
+    ]);
+
+  const publicText = textContent(
+    [
+      renderToStaticMarkup(homeModule.default()),
+      renderToStaticMarkup(pricingModule.default()),
+      renderToStaticMarkup(termsModule.default()),
+    ].join("\n"),
+  );
+  const specText = textContent([webDesignSpec, productBrief].join("\n"));
+
+  assert.match(publicText, /works anywhere you can type/i);
+  assert.match(specText, /works anywhere you can type/i);
+  assertNoOverbroadInsertionClaims(publicText);
+  assertNoOverbroadInsertionClaims(specText);
+});
+
+test("RUB-314 handoff lists only human-owned launch decisions", async () => {
+  const handoff = await readFile(handoffPath, "utf8");
+
+  assert.match(handoff, /canonical domain/i);
+  assert.match(handoff, /policy owner\/reviewer/i);
+  assert.match(handoff, /final Terms\/Privacy approval/i);
+  assert.match(handoff, /public launch approval/i);
+  assert.match(handoff, /RW-017 remains human-gated/i);
+  assert.doesNotMatch(
+    handoff,
+    /\.env\.local|rubywhisper\.env|sk_(?:live|test)_|whsec_|Bearer\s+[A-Za-z0-9._-]+|\/Users\//i,
+  );
 });
 
 async function loadPageModule(filePath, requireFunction) {
@@ -369,10 +416,30 @@ function assertNoPrivateContentRequests(text) {
     /\bplease (?:send|include|attach|provide) (?:private )?(?:dictation|audio|transcript|transcripts|cleaned text|clipboard content|prompts?|provider payloads?)\b/i,
     /\bsend (?:us|support) (?:private )?(?:dictation|audio|transcript|transcripts|cleaned text|clipboard content|prompts?|provider payloads?)\b/i,
     /\binclude (?:your )?(?:private )?(?:dictation text|audio files?|transcripts?|cleaned text|clipboard contents?|prompts?|provider payloads?) by default\b/i,
+    /\bunless you intentionally choose to share (?:it|them)\b/i,
   ];
 
   for (const unsafeRequestPattern of unsafeRequestPatterns) {
     assert.doesNotMatch(text, unsafeRequestPattern);
+  }
+}
+
+function assertNoOverbroadInsertionClaims(text) {
+  const allowedProhibition = /Do not claim "every text box\."/i;
+  const textWithoutAllowedProhibition = text.replace(allowedProhibition, " ");
+  const unsafeInsertionClaimPatterns = [
+    /\bevery text box\b/i,
+    /\bany text field in any Mac app\b/i,
+    /\bevery app\b/i,
+    /\balways (?:insert|inserts|land|lands)\b/i,
+    /\bguaranteed (?:insertion|to insert|behavior)\b/i,
+  ];
+
+  for (const unsafeInsertionClaimPattern of unsafeInsertionClaimPatterns) {
+    assert.doesNotMatch(
+      textWithoutAllowedProhibition,
+      unsafeInsertionClaimPattern,
+    );
   }
 }
 

@@ -15,7 +15,7 @@ const privateSupportContent = [
   "Audio files, recording contents, or exported audio.",
   "Clipboard contents, surrounding app context, prompts, or personal dictionary terms.",
   "Provider request payloads, provider response payloads, auth tokens, or secrets.",
-  "Screenshots that show private text unless you intentionally choose to share them.",
+  "Screenshots that show private text.",
 ];
 
 const supportRoutes = [
@@ -110,7 +110,7 @@ export default function SupportPage() {
             <p>
               Do not include dictation content, audio files, transcripts,
               clipboard contents, prompts, provider payloads, or screenshots
-              with private text unless you intentionally choose to share them.
+              with private text in support requests.
             </p>
           </section>
 

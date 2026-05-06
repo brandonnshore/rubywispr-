@@ -65,12 +65,12 @@ test("support page warns against private content by default", async () => {
   const text = textContent(markup);
 
   assert.match(text, /Do not include private dictation by default/);
-  assert.match(text, /Do not include dictation content, audio files, transcripts, clipboard contents, prompts, provider payloads, or screenshots with private text unless you intentionally choose to share them/);
+  assert.match(text, /Do not include dictation content, audio files, transcripts, clipboard contents, prompts, provider payloads, or screenshots with private text in support requests/);
   assert.match(text, /Private dictation text, raw transcripts, cleaned text, or local Recent Wisprs/);
   assert.match(text, /Audio files, recording contents, or exported audio/);
   assert.match(text, /Clipboard contents, surrounding app context, prompts, or personal dictionary terms/);
   assert.match(text, /Provider request payloads, provider response payloads, auth tokens, or secrets/);
-  assert.match(text, /Screenshots that show private text unless you intentionally choose to share them/);
+  assert.match(text, /Screenshots that show private text/);
   assert.doesNotMatch(text, /please send|send us|send support/i);
   assert.doesNotMatch(source, /\.env\.local|rubywhisper\.env/);
   assertNoPrivateSentinels(text);
