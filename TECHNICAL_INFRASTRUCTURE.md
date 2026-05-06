@@ -1,7 +1,7 @@
 # RubyWhisper Technical Infrastructure
 
 Status: Draft for approval
-Last updated: 2026-04-30
+Last updated: 2026-05-06
 
 ## Summary
 
@@ -372,6 +372,16 @@ npm run build
   notarized artifact, DMG, CI runner, or test target. Downstream Mac
   implementation tickets should cite this command unless they explicitly add a
   new Xcode or SwiftPM project contract.
+- Exact macOS local/ad hoc DMG shape-check command:
+
+  ```bash
+  make -C apps/macos dmg CODESIGN_IDENTITY=-
+  ```
+
+  This target is local-only. It preflights non-secret `create-dmg` and
+  `fileicon` availability, then packages the ad hoc app bundle for manual DMG
+  shape inspection. The output is not Developer ID signed, notarized, stapled,
+  uploaded, published, or suitable for paid beta distribution.
 - CI command selection is blocked on RW-005 after the web scaffold and macOS import decisions exist.
 
 If a package manager other than npm is chosen, update this doc and all future issues before implementation work cites the new command.
@@ -420,6 +430,10 @@ Mac app:
   provider secrets, production secrets, Apple signing/notarization credentials,
   billing secrets, database secrets, release packaging secrets, or private env
   files.
+- The Makefile guards `codesign-dmg` and `notarize` so release-sensitive paths
+  fail before signing or submission when the Developer ID identity, notary
+  profile, or local Apple tooling inputs are missing or placeholder-like. Ad hoc
+  signing remains limited to local app and local DMG testing.
 - Release builds gated by manual approval.
 - Signing/notarization gated by Apple credential availability.
 - Release artifacts published only through approved release workflow.
@@ -501,6 +515,10 @@ Release artifact shape:
 - Package the signed app in a `.dmg` with an `/Applications` symlink for website
   distribution and Sparkle updates. A `.zip` can be used for Sparkle if needed,
   but the website download should prefer a notarized/stapled `.dmg`.
+- Do not use the local/ad hoc `make -C apps/macos dmg CODESIGN_IDENTITY=-`
+  output as a beta release artifact. It is only a source-side packaging check
+  and is intentionally separated from Developer ID signing, notarization,
+  public URL configuration, and clean-Mac release QA.
 - Submit the distributable container to Apple's notary service with `xcrun
   notarytool submit --wait` or Xcode Organizer, then staple and validate with
   `xcrun stapler validate`.

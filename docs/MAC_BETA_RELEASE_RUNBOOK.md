@@ -264,6 +264,16 @@ make -C apps/macos clean all CODESIGN_IDENTITY=-
 That command creates an ad hoc local app bundle for development only; it is not
 a signed release, notarized artifact, or DMG.
 
+The Makefile also exposes a local/ad hoc DMG helper:
+
+```bash
+make -C apps/macos dmg CODESIGN_IDENTITY=-
+```
+
+That helper is for source-side drag-install shape checks only. It preflights
+the non-secret `create-dmg` and `fileicon` tools, packages an ad hoc app, and
+must not be treated as a release artifact.
+
 Placeholder-only Xcode-style release flow, not a current local development
 command:
 
@@ -296,6 +306,12 @@ make release \
 Stop if signing falls back to ad hoc signing, Hardened Runtime is missing, or
 the signed app fails local signature verification.
 
+The repo Makefile `codesign-dmg` target is also guarded: it must fail when
+`CODESIGN_IDENTITY` is empty, ad hoc (`-`), placeholder-like, not a
+`Developer ID Application` identity, or not installed in the active keychain
+search list. Agents may validate those source-safe failure paths, but must not
+provide or use real Developer ID identities.
+
 Placeholder-only verification:
 
 ```bash
@@ -307,6 +323,11 @@ spctl --assess --type execute --verbose=4 "<EXPORT_DIR>/RubyWhisper.app"
 
 Human gate: create the production artifact only on the approved release machine
 or approved CI release environment.
+
+Do not substitute `make -C apps/macos dmg CODESIGN_IDENTITY=-` for this step.
+That Makefile target creates a local/ad hoc testing DMG only and intentionally
+does not Developer ID sign, notarize, staple, upload, publish, configure public
+URLs, or satisfy clean-Mac release QA.
 
 Expected `.dmg` shape:
 
@@ -355,6 +376,12 @@ spctl --assess --type open --verbose=4 \
 Record the sanitized notary status and submission ID in private release notes or
 the release tracking ticket. Do not paste credential material or full logs if
 they contain local paths, account identifiers, or private details.
+
+The repo Makefile `notarize` target must fail fast when `NOTARIZE_PROFILE` is
+missing or placeholder-like, when local `notarytool`/`stapler` are unavailable,
+or when the expected DMG path is absent. A passing preflight still does not
+authorize autonomous notarization; release-owner approval and credentials remain
+the controlling human gate.
 
 ### 7. Sparkle Appcast Preparation
 

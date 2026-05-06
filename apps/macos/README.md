@@ -71,6 +71,50 @@ The output name, bundle identifier, entitlements filename, and resources use
 RubyWhisper development placeholders until later release-packaging tickets set
 approved production values.
 
+## Local DMG Packaging
+
+The `dmg` target is a local/ad hoc packaging helper for developer testing only:
+
+```bash
+make -C apps/macos dmg CODESIGN_IDENTITY=-
+```
+
+It builds the same ad hoc app bundle, stages `RubyWhisper.app` with an
+`Applications` alias, and writes:
+
+```text
+apps/macos/build/RubyWhisper.dmg
+```
+
+This artifact is not Developer ID signed, notarized, stapled, uploaded,
+published, or suitable for paid beta distribution. It exists only to inspect
+the local drag-install DMG shape.
+
+The target checks for the non-secret local tools it needs before building:
+
+- `create-dmg`
+- `fileicon`
+
+If either tool is missing, the Makefile stops with a sanitized prerequisite
+message and does not print local private values.
+
+## Release Signing And Notarization Guardrails
+
+`codesign-dmg` and `notarize` are release-sensitive targets. They are guarded
+so they cannot run with the default ad hoc identity or obvious placeholder
+values.
+
+- `codesign-dmg` requires `CODESIGN_IDENTITY` to name an installed
+  `Developer ID Application` identity in the active keychain search list.
+- `notarize` requires a non-placeholder `NOTARIZE_PROFILE`, local
+  `notarytool`/`stapler` availability, and an existing DMG path before it
+  submits anything.
+- Autonomous agent work must not provide real Apple identities, notary
+  profiles, private key paths, tokens, or release upload destinations.
+
+The paid beta release artifact remains human-gated by
+`docs/MAC_BETA_RELEASE_RUNBOOK.md`.
+
 ## Update Channel Configuration
 
 Development builds are update-disabled by default. The app reads these
