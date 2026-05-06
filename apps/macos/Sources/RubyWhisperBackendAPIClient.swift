@@ -805,6 +805,27 @@ struct RubyWhisperDesktopTranscriptionRequest: Equatable {
         self.contextAwareCleanupEnabled = contextAwareCleanupEnabled
     }
 
+    static func desktopMultipart(
+        audio: Data,
+        context: String?,
+        dictionaryTerms: [String],
+        audioMimeType: String,
+        audioDurationMs: Int,
+        privacyControls: CleanupPrivacyControls = .enabled
+    ) -> RubyWhisperDesktopTranscriptionRequest {
+        RubyWhisperDesktopTranscriptionRequest(
+            body: .multipart(
+                audio: audio,
+                context: privacyControls.includesContextPayload ? context : nil,
+                dictionaryTerms: privacyControls.includesCleanupPayloads ? dictionaryTerms : []
+            ),
+            audioMimeType: audioMimeType,
+            audioDurationMs: audioDurationMs,
+            cleanupEnabled: privacyControls.cleanupEnabled,
+            contextAwareCleanupEnabled: privacyControls.effectiveContextAwareCleanupEnabled
+        )
+    }
+
     var contentType: String {
         switch body {
         case .binary:

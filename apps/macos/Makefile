@@ -26,7 +26,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-secret-guardrails
+.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-secret-guardrails
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -143,6 +143,7 @@ test-backend-client:
 		-sdk $(shell xcrun --show-sdk-path) \
 		-target $(ARCH)-apple-macosx13.0 \
 		Sources/DesktopSessionStore.swift \
+		Sources/PrivacySettingsPresentation.swift \
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Tests/RubyWhisperBackendAPIClientTests.swift
 	$(BUILD_DIR)/tests/RubyWhisperBackendAPIClientTests
@@ -154,6 +155,7 @@ test-auth-state-owner:
 		-sdk $(shell xcrun --show-sdk-path) \
 		-target $(ARCH)-apple-macosx13.0 \
 		Sources/DesktopSessionStore.swift \
+		Sources/PrivacySettingsPresentation.swift \
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Sources/DesktopLoginBridge.swift \
 		Sources/DesktopAuthStateOwner.swift \
@@ -167,6 +169,7 @@ test-account-settings-presenter:
 		-sdk $(shell xcrun --show-sdk-path) \
 		-target $(ARCH)-apple-macosx13.0 \
 		Sources/DesktopSessionStore.swift \
+		Sources/PrivacySettingsPresentation.swift \
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Sources/DesktopLoginBridge.swift \
 		Sources/DesktopAuthStateOwner.swift \
@@ -181,6 +184,7 @@ test-login-bridge:
 		-sdk $(shell xcrun --show-sdk-path) \
 		-target $(ARCH)-apple-macosx13.0 \
 		Sources/DesktopSessionStore.swift \
+		Sources/PrivacySettingsPresentation.swift \
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Sources/DesktopAuthStateOwner.swift \
 		Sources/DesktopLoginBridge.swift \
@@ -194,6 +198,7 @@ test-onboarding-coordinator:
 		-sdk $(shell xcrun --show-sdk-path) \
 		-target $(ARCH)-apple-macosx13.0 \
 		Sources/DesktopSessionStore.swift \
+		Sources/PrivacySettingsPresentation.swift \
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Sources/DesktopAuthStateOwner.swift \
 		Sources/MicrophonePermissionGate.swift \
@@ -225,6 +230,7 @@ test-hotkey-recording-gate:
 		-sdk $(shell xcrun --show-sdk-path) \
 		-target $(ARCH)-apple-macosx13.0 \
 		Sources/DesktopSessionStore.swift \
+		Sources/PrivacySettingsPresentation.swift \
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Sources/DesktopLoginBridge.swift \
 		Sources/DesktopAuthStateOwner.swift \
@@ -243,6 +249,7 @@ test-recording-island-state-machine:
 		-sdk $(shell xcrun --show-sdk-path) \
 		-target $(ARCH)-apple-macosx13.0 \
 		Sources/DesktopSessionStore.swift \
+		Sources/PrivacySettingsPresentation.swift \
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Sources/DesktopLoginBridge.swift \
 		Sources/DesktopAuthStateOwner.swift \
@@ -346,6 +353,16 @@ test-recent-wispr-store:
 		Tests/RecentWisprStoreTests.swift
 	$(BUILD_DIR)/tests/RecentWisprStoreTests
 
+test-privacy-settings-presentation:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-o $(BUILD_DIR)/tests/PrivacySettingsPresentationTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Sources/PrivacySettingsPresentation.swift \
+		Tests/PrivacySettingsPresentationTests.swift
+	$(BUILD_DIR)/tests/PrivacySettingsPresentationTests
+
 test-recent-wisprs-history-menu-state:
 	@mkdir -p $(BUILD_DIR)/tests
 	swiftc \
@@ -399,4 +416,4 @@ test-secret-guardrails:
 		Tests/SourceGuardrailTests.swift
 	$(BUILD_DIR)/tests/SourceGuardrailTests
 
-test: test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-secret-guardrails
+test: test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-secret-guardrails
