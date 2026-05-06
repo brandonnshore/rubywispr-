@@ -8,70 +8,63 @@ enum PipelineHistoryItemIntent: String, Codable {
 
 struct PipelineHistoryItem: Identifiable, Codable {
     let intent: PipelineHistoryItemIntent
-    let selectedText: String?
-    let capturedSelection: String?
     let id: UUID
     let timestamp: Date
-    let rawTranscript: String
-    let postProcessedTranscript: String
-    let postProcessingPrompt: String?
-    let systemPrompt: String?
-    let contextSummary: String
-    let contextSystemPrompt: String?
-    let contextPrompt: String?
-    let contextScreenshotDataURL: String?
     let contextScreenshotStatus: String
     let postProcessingStatus: String
     let debugStatus: String
-    let customVocabulary: String
-    let audioFileName: String?
-    let contextAppName: String?
-    let contextBundleIdentifier: String?
-    let contextWindowTitle: String?
+
+    var selectedText: String? { nil }
+    var capturedSelection: String? { nil }
+    var rawTranscript: String { "" }
+    var postProcessedTranscript: String { "" }
+    var postProcessingPrompt: String? { nil }
+    var systemPrompt: String? { nil }
+    var contextSummary: String { "" }
+    var contextSystemPrompt: String? { nil }
+    var contextPrompt: String? { nil }
+    var contextScreenshotDataURL: String? { nil }
+    var customVocabulary: String { "" }
+    var audioFileName: String? { nil }
+    var contextAppName: String? { nil }
+    var contextBundleIdentifier: String? { nil }
+    var contextWindowTitle: String? { nil }
 
     init(
         intent: PipelineHistoryItemIntent = .dictation,
-        selectedText: String? = nil,
-        capturedSelection: String? = nil,
         id: UUID = UUID(),
         timestamp: Date,
-        rawTranscript: String,
-        postProcessedTranscript: String,
-        postProcessingPrompt: String?,
-        systemPrompt: String? = nil,
-        contextSummary: String,
-        contextSystemPrompt: String? = nil,
-        contextPrompt: String? = nil,
-        contextScreenshotDataURL: String?,
         contextScreenshotStatus: String,
         postProcessingStatus: String,
-        debugStatus: String,
-        customVocabulary: String,
-        audioFileName: String? = nil,
-        contextAppName: String? = nil,
-        contextBundleIdentifier: String? = nil,
-        contextWindowTitle: String? = nil
+        debugStatus: String
     ) {
         self.intent = intent
-        self.selectedText = selectedText
-        self.capturedSelection = capturedSelection
         self.id = id
         self.timestamp = timestamp
-        self.rawTranscript = rawTranscript
-        self.postProcessedTranscript = postProcessedTranscript
-        self.postProcessingPrompt = postProcessingPrompt
-        self.systemPrompt = systemPrompt
-        self.contextSummary = contextSummary
-        self.contextSystemPrompt = contextSystemPrompt
-        self.contextPrompt = contextPrompt
-        self.contextScreenshotDataURL = contextScreenshotDataURL
         self.contextScreenshotStatus = contextScreenshotStatus
         self.postProcessingStatus = postProcessingStatus
         self.debugStatus = debugStatus
-        self.customVocabulary = customVocabulary
-        self.audioFileName = audioFileName
-        self.contextAppName = contextAppName
-        self.contextBundleIdentifier = contextBundleIdentifier
-        self.contextWindowTitle = contextWindowTitle
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case intent
+        case id
+        case timestamp
+        case contextScreenshotStatus
+        case postProcessingStatus
+        case debugStatus
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.intent = try container.decodeIfPresent(PipelineHistoryItemIntent.self, forKey: .intent) ?? .dictation
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.timestamp = try container.decode(Date.self, forKey: .timestamp)
+        self.contextScreenshotStatus = try container.decodeIfPresent(
+            String.self,
+            forKey: .contextScreenshotStatus
+        ) ?? "No screenshot"
+        self.postProcessingStatus = try container.decodeIfPresent(String.self, forKey: .postProcessingStatus) ?? ""
+        self.debugStatus = try container.decodeIfPresent(String.self, forKey: .debugStatus) ?? ""
     }
 }

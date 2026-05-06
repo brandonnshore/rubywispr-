@@ -98,20 +98,7 @@ final class PipelineHistoryStore {
                 let request = pipelineHistoryRequest()
                 request.predicate = NSPredicate(format: "id == %@", item.id as CVarArg)
                 guard let entity = try container.viewContext.fetch(request).first else { return }
-                entity.intent = item.intent.rawValue
-                entity.selectedText = item.selectedText
-                entity.capturedSelection = item.capturedSelection
-                entity.rawTranscript = item.rawTranscript
-                entity.postProcessedTranscript = item.postProcessedTranscript
-                entity.postProcessingPrompt = item.postProcessingPrompt
-                entity.systemPrompt = item.systemPrompt
-                entity.contextSystemPrompt = item.contextSystemPrompt
-                entity.postProcessingStatus = item.postProcessingStatus
-                entity.debugStatus = item.debugStatus
-                entity.customVocabulary = ""
-                entity.contextAppName = item.contextAppName
-                entity.contextBundleIdentifier = item.contextBundleIdentifier
-                entity.contextWindowTitle = item.contextWindowTitle
+                Self.applyMetadataOnlyValues(from: item, to: entity, includeTimestamp: false)
                 try saveContext()
             } catch {
                 thrownError = error
@@ -238,27 +225,7 @@ final class PipelineHistoryStore {
             do {
                 let context = container.viewContext
                 let entity = PipelineHistoryEntry(context: context)
-                entity.id = item.id
-                entity.intent = item.intent.rawValue
-                entity.selectedText = item.selectedText
-                entity.capturedSelection = item.capturedSelection
-                entity.timestamp = item.timestamp
-                entity.rawTranscript = item.rawTranscript
-                entity.postProcessedTranscript = item.postProcessedTranscript
-                entity.postProcessingPrompt = item.postProcessingPrompt
-                entity.systemPrompt = item.systemPrompt
-                entity.contextSummary = item.contextSummary
-                entity.contextSystemPrompt = item.contextSystemPrompt
-                entity.contextPrompt = item.contextPrompt
-                entity.contextScreenshotDataURL = item.contextScreenshotDataURL
-                entity.contextScreenshotStatus = item.contextScreenshotStatus
-                entity.postProcessingStatus = item.postProcessingStatus
-                entity.debugStatus = item.debugStatus
-                entity.customVocabulary = ""
-                entity.audioFileName = nil
-                entity.contextAppName = item.contextAppName
-                entity.contextBundleIdentifier = item.contextBundleIdentifier
-                entity.contextWindowTitle = item.contextWindowTitle
+                Self.applyMetadataOnlyValues(from: item, to: entity, includeTimestamp: true)
                 try saveContext()
             } catch {
                 thrownError = error
@@ -279,6 +246,36 @@ final class PipelineHistoryStore {
 
     private func pipelineHistoryRequest() -> NSFetchRequest<PipelineHistoryEntry> {
         NSFetchRequest<PipelineHistoryEntry>(entityName: "PipelineHistoryEntry")
+    }
+
+    private static func applyMetadataOnlyValues(
+        from item: PipelineHistoryItem,
+        to entity: PipelineHistoryEntry,
+        includeTimestamp: Bool
+    ) {
+        entity.id = item.id
+        entity.intent = item.intent.rawValue
+        if includeTimestamp {
+            entity.timestamp = item.timestamp
+        }
+        entity.selectedText = nil
+        entity.capturedSelection = nil
+        entity.rawTranscript = ""
+        entity.postProcessedTranscript = ""
+        entity.postProcessingPrompt = nil
+        entity.systemPrompt = nil
+        entity.contextSummary = ""
+        entity.contextSystemPrompt = nil
+        entity.contextPrompt = nil
+        entity.contextScreenshotDataURL = nil
+        entity.contextScreenshotStatus = item.contextScreenshotStatus
+        entity.postProcessingStatus = item.postProcessingStatus
+        entity.debugStatus = item.debugStatus
+        entity.customVocabulary = ""
+        entity.audioFileName = nil
+        entity.contextAppName = nil
+        entity.contextBundleIdentifier = nil
+        entity.contextWindowTitle = nil
     }
 
     // Safe: loadPersistentStores calls back on a private queue, not the calling thread.
@@ -317,28 +314,51 @@ final class PipelineHistoryStore {
     private static func makeHistoryItem(from entity: PipelineHistoryEntry) -> PipelineHistoryItem {
         PipelineHistoryItem(
             intent: PipelineHistoryItemIntent(rawValue: entity.intent ?? "") ?? .dictation,
-            selectedText: entity.selectedText,
-            capturedSelection: entity.capturedSelection,
             id: entity.id,
             timestamp: entity.timestamp ?? Date(),
-            rawTranscript: entity.rawTranscript ?? "",
-            postProcessedTranscript: entity.postProcessedTranscript ?? "",
-            postProcessingPrompt: entity.postProcessingPrompt,
-            systemPrompt: entity.systemPrompt,
-            contextSummary: entity.contextSummary ?? "",
-            contextSystemPrompt: entity.contextSystemPrompt,
-            contextPrompt: entity.contextPrompt,
-            contextScreenshotDataURL: entity.contextScreenshotDataURL,
             contextScreenshotStatus: entity.contextScreenshotStatus ?? "available (image)",
             postProcessingStatus: entity.postProcessingStatus ?? "",
-            debugStatus: entity.debugStatus ?? "",
-            customVocabulary: "",
-            audioFileName: nil,
-            contextAppName: entity.contextAppName,
-            contextBundleIdentifier: entity.contextBundleIdentifier,
-            contextWindowTitle: entity.contextWindowTitle
+            debugStatus: entity.debugStatus ?? ""
         )
     }
+
+#if DEBUG
+    func insertLegacyUnsafeContentForPrivacyTest(_ item: PipelineHistoryItem, forbiddenValue: String) throws {
+        guard isStoreLoaded else { return }
+
+        var thrownError: Error?
+        container.viewContext.performAndWait {
+            do {
+                let entity = PipelineHistoryEntry(context: container.viewContext)
+                entity.id = item.id
+                entity.intent = item.intent.rawValue
+                entity.selectedText = forbiddenValue
+                entity.capturedSelection = forbiddenValue
+                entity.timestamp = item.timestamp
+                entity.rawTranscript = forbiddenValue
+                entity.postProcessedTranscript = forbiddenValue
+                entity.postProcessingPrompt = forbiddenValue
+                entity.systemPrompt = forbiddenValue
+                entity.contextSummary = forbiddenValue
+                entity.contextSystemPrompt = forbiddenValue
+                entity.contextPrompt = forbiddenValue
+                entity.contextScreenshotDataURL = forbiddenValue
+                entity.contextScreenshotStatus = item.contextScreenshotStatus
+                entity.postProcessingStatus = item.postProcessingStatus
+                entity.debugStatus = item.debugStatus
+                entity.customVocabulary = forbiddenValue
+                entity.audioFileName = forbiddenValue
+                entity.contextAppName = forbiddenValue
+                entity.contextBundleIdentifier = forbiddenValue
+                entity.contextWindowTitle = forbiddenValue
+                try saveContext()
+            } catch {
+                thrownError = error
+            }
+        }
+        if let thrownError { throw thrownError }
+    }
+#endif
 
     private static func makeModel() -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
