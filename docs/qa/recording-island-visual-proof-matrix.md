@@ -67,6 +67,8 @@ scenario triggering is also guarded by `AppBuild.isDevBundle`.
 | ISLAND-038 | `hotkey_unavailable` | Debug harness button | Cropped categorical hotkey state only. | Real keyboard/Fn availability remains manual QA. |
 | ISLAND-039 | `hotkey_conflict` | Debug harness button | Cropped categorical conflict state only. | Do not identify conflicting apps in evidence. |
 | ISLAND-040 | `recorder_busy` | Debug harness button | Cropped busy state only. | Duplicate recording prevention remains manual QA. |
+| ISLAND-041U | `insertion_unavailable` | Debug harness button | Cropped Copy/Retry or Copy/Settings actions only. | Do not show target app content, cleaned text, or clipboard contents. |
+| ISLAND-041C | `fallback_copied` | Debug harness button | Cropped copied-fallback state only. | Do not show cleaned text or clipboard contents; this is not insertion success. |
 | ISLAND-041 | `insertion_failed` | Debug harness button | Cropped Copy/Retry actions only. | Do not show cleaned text or clipboard contents. |
 | ISLAND-042 | `rate_limited` | Debug harness button | Cropped rate-limit recovery only. | Real account quota behavior remains manual QA. |
 | ISLAND-043 | `network_error` | Debug harness button | Cropped network recovery only. | Real offline/timeout path remains manual QA. |

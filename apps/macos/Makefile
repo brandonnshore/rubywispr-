@@ -237,6 +237,7 @@ test-recording-island-state-machine:
 		Sources/MicrophonePermissionGate.swift \
 		Sources/FirstRunOnboardingCoordinator.swift \
 		Sources/HotkeyRecordingGate.swift \
+		Sources/DirectInsertionCoordinator.swift \
 		Sources/RecordingIslandStateMachine.swift \
 		Sources/RecordingIslandVisualTestHarness.swift \
 		Tests/RecordingIslandStateMachineTests.swift

@@ -17,6 +17,7 @@ private struct RecordingIslandStateMachineTests {
         mapsGateFailuresWithoutStartingRecording()
         mapsAccountStates()
         mapsBackendFailuresToSafeRecoveryActions()
+        mapsDirectInsertionResultsToIslandRecoveryStates()
         requiredRecoveryStatesHaveCompactCopyAndActions()
         exposesPrivacySafeSyntheticRecoveryProofStates()
         visualHarnessCoversEveryImplementedState()
@@ -174,6 +175,92 @@ private struct RecordingIslandStateMachineTests {
         )
     }
 
+    private static func mapsDirectInsertionResultsToIslandRecoveryStates() {
+        let inserted = RecordingIslandStateMachine.directInsertionRecovery(for: insertionResult(
+            state: .inserted,
+            outcome: .directInsertionSucceeded,
+            targetCategory: .plainTextEditor,
+            localHistoryStatus: .inserted
+        ))
+        expect(inserted.state == .success, "known direct insertion should map to success")
+
+        let unavailable = RecordingIslandStateMachine.directInsertionRecovery(for: insertionResult(
+            state: .unavailable,
+            outcome: .insertionUnavailable,
+            reason: .noFocusedTarget,
+            unsafeTargetCategory: .noFocusedTarget,
+            localHistoryStatus: .insertionFailed
+        ))
+        expect(unavailable.state == .insertionUnavailable, "no focused target should map to insertion_unavailable")
+        expect(unavailable.primaryAction == .copyCleanedText, "unavailable insertion should offer source-safe copy")
+        expect(unavailable.secondaryAction == .retryInsertion, "unavailable insertion should allow retry after focusing a target")
+
+        let copiedFallback = RecordingIslandStateMachine.fallbackCopied(after: insertionResult(
+            state: .unavailable,
+            outcome: .insertionUnavailable,
+            reason: .noFocusedTarget,
+            unsafeTargetCategory: .noFocusedTarget,
+            localHistoryStatus: .insertionFailed
+        ))
+        expect(copiedFallback.state == .fallbackCopied, "automatic fallback copy should map to fallback_copied")
+        expect(copiedFallback.title == "Copied to paste", "fallback copy should not claim insertion success")
+        expect(copiedFallback.secondaryAction == .startNewWhisper, "copied fallback should expose a new-whisper exit")
+
+        let failed = RecordingIslandStateMachine.directInsertionRecovery(for: insertionResult(
+            state: .failed,
+            outcome: .directInsertionFailed,
+            reason: .deterministicFailure,
+            targetCategory: .plainTextEditor,
+            localHistoryStatus: .insertionFailed
+        ))
+        expect(failed.state == .insertionFailed, "deterministic insertion failure should map to insertion_failed")
+        expect(failed.title == "Could not insert", "deterministic failure should not use unavailable-target copy")
+        expect(failed.primaryAction == .copyCleanedText, "failed insertion should remain recoverable through copy")
+        expect(failed.secondaryAction == .retryInsertion, "failed insertion should keep retry insertion available")
+
+        let ambiguous = RecordingIslandStateMachine.directInsertionRecovery(for: insertionResult(
+            state: .ambiguous,
+            outcome: .directInsertionAmbiguous,
+            reason: .targetAmbiguous,
+            localHistoryStatus: .insertionFailed
+        ))
+        expect(ambiguous.state == .insertionFailed, "ambiguous insertion should not map to success")
+        expect(ambiguous.title == "Insert unclear", "ambiguous insertion should be visibly distinct")
+        expect(ambiguous.secondaryAction == .startNewWhisper, "ambiguous insertion should not offer blind same-target retry")
+
+        let copiedAmbiguous = RecordingIslandStateMachine.fallbackCopied(after: insertionResult(
+            state: .ambiguous,
+            outcome: .directInsertionAmbiguous,
+            reason: .attemptTimeout,
+            targetCategory: .plainTextEditor,
+            localHistoryStatus: .insertionFailed
+        ))
+        expect(copiedAmbiguous.state == .fallbackCopied, "copied ambiguous insertion should still expose fallback copy")
+        expect(copiedAmbiguous.title == "Copied, check app", "copied ambiguous insertion should not claim success")
+        expect(copiedAmbiguous.primaryAction == .copyCleanedText, "ambiguous copied fallback should keep copy recovery available")
+        expect(copiedAmbiguous.secondaryAction == .startNewWhisper, "ambiguous copied fallback should expose new whisper")
+
+        let permission = RecordingIslandStateMachine.directInsertionRecovery(for: insertionResult(
+            state: .blocked,
+            outcome: .insertionUnavailable,
+            reason: .permissionDenied,
+            permissionCategory: .denied,
+            localHistoryStatus: .insertionFailed
+        ))
+        expect(permission.state == .insertionUnavailable, "permission-blocked final text should stay recoverable")
+        expect(permission.primaryAction == .copyCleanedText, "permission-blocked insertion should offer copy")
+        expect(permission.secondaryAction == .openSystemSettingsAccessibility, "permission-blocked insertion should offer Accessibility recovery")
+
+        let duplicate = RecordingIslandStateMachine.directInsertionRecovery(for: insertionResult(
+            state: .blocked,
+            outcome: .insertionUnavailable,
+            reason: .duplicateAttempt,
+            localHistoryStatus: nil
+        ))
+        expect(duplicate.state == .unsafeRetryRequired, "duplicate in-flight insertion should require a new whisper")
+        expect(duplicate.primaryAction == .startNewWhisper, "duplicate in-flight insertion should expose new whisper")
+    }
+
     private static func requiredRecoveryStatesHaveCompactCopyAndActions() {
         let requiredStates: Set<RecordingIslandStateName> = [
             .signedOut,
@@ -183,6 +270,8 @@ private struct RecordingIslandStateMachineTests {
             .microphoneRecovery,
             .accessibilityRecovery,
             .durationLimitReached,
+            .insertionUnavailable,
+            .fallbackCopied,
             .insertionFailed,
             .networkError,
             .providerError,
@@ -203,8 +292,8 @@ private struct RecordingIslandStateMachineTests {
 
         let insertionFailed = RecordingIslandStateMachine.insertionFailed()
         expect(
-            insertionFailed.title == "Click a text box first",
-            "insertion failure should use approved recovery copy"
+            insertionFailed.title == "Could not insert",
+            "deterministic insertion failure should not claim an unavailable target"
         )
         expect(
             insertionFailed.primaryAction == .copyCleanedText,
@@ -242,6 +331,8 @@ private struct RecordingIslandStateMachineTests {
             .hotkeyUnavailable,
             .hotkeyConflict,
             .durationLimitReached,
+            .insertionUnavailable,
+            .fallbackCopied,
             .insertionFailed,
             .networkError,
             .providerError,
@@ -415,6 +506,26 @@ private struct RecordingIslandStateMachineTests {
                 retryable: retryable
             ),
             sameAudioRetryAllowed: sameAudioRetryAllowed
+        )
+    }
+
+    private static func insertionResult(
+        state: DirectInsertionResultState,
+        outcome: DirectInsertionOutcome,
+        reason: DirectInsertionFailureReason? = nil,
+        targetCategory: DirectInsertionTargetCategory? = nil,
+        unsafeTargetCategory: DirectInsertionUnsafeTargetCategory? = nil,
+        permissionCategory: DirectInsertionPermissionCategory = .trusted,
+        localHistoryStatus: DirectInsertionLocalHistoryStatus?
+    ) -> DirectInsertionResult {
+        DirectInsertionResult(
+            state: state,
+            outcome: outcome,
+            reason: reason,
+            targetCategory: targetCategory,
+            unsafeTargetCategory: unsafeTargetCategory,
+            permissionCategory: permissionCategory,
+            localHistoryStatus: localHistoryStatus
         )
     }
 }

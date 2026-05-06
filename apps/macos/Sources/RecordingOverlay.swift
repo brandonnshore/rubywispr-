@@ -248,6 +248,27 @@ final class RecordingOverlayManager {
         }
     }
 
+    func showInsertionUnavailable() {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(RecordingIslandStateMachine.insertionUnavailable(), animatedResize: true)
+        }
+    }
+
+    func showFallbackCopied(after result: DirectInsertionResult? = nil) {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(RecordingIslandStateMachine.fallbackCopied(after: result), animatedResize: true)
+        }
+    }
+
+    func showDirectInsertionRecovery(for result: DirectInsertionResult) {
+        DispatchQueue.main.async {
+            self.showIslandPresentation(
+                RecordingIslandStateMachine.directInsertionRecovery(for: result),
+                animatedResize: true
+            )
+        }
+    }
+
     func showInsertionFailed() {
         DispatchQueue.main.async {
             self.showIslandPresentation(RecordingIslandStateMachine.insertionFailed(), animatedResize: true)
@@ -420,8 +441,9 @@ final class RecordingOverlayManager {
              .trialExhausted, .paymentFailed, .accountBlocked,
              .microphoneRecovery, .accessibilityRecovery, .hotkeyUnavailable,
              .hotkeyConflict, .recorderBusy, .durationLimitReached,
-             .insertionFailed, .rateLimited, .networkError, .providerError,
-             .invalidAudio, .serviceError, .unsafeRetryRequired:
+             .insertionUnavailable, .fallbackCopied, .insertionFailed,
+             .rateLimited, .networkError, .providerError, .invalidAudio,
+             .serviceError, .unsafeRetryRequired:
             overlayState.phase = .feedback
         case .hiddenIdle:
             dismissAll()
@@ -868,9 +890,9 @@ struct IslandFeedbackView: View {
         case .onboardingBlocked, .signedOut, .termsRequired, .trialExhausted,
              .paymentFailed, .accountBlocked, .microphoneRecovery,
              .accessibilityRecovery, .hotkeyUnavailable, .hotkeyConflict,
-             .durationLimitReached, .insertionFailed, .rateLimited,
-             .networkError, .providerError, .invalidAudio, .serviceError,
-             .unsafeRetryRequired:
+             .durationLimitReached, .insertionUnavailable, .fallbackCopied,
+             .insertionFailed, .rateLimited, .networkError, .providerError,
+             .invalidAudio, .serviceError, .unsafeRetryRequired:
             return Color.red.opacity(0.92)
         case .hiddenIdle, .accountRefreshing, .recordingHold, .recordingToggle,
              .nearingDurationLimit, .processingUploading, .inserting:
