@@ -44,6 +44,7 @@ const allowedTranscriptionRequestMetadataKeys = new Set([
   "provider",
   "requestId",
   "status",
+  "totalBackendLatencyMs",
 ]);
 const forbiddenTranscriptionRequestPayloadKeys = [
   "authorization",
@@ -420,6 +421,7 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
       "prepareUsageIncrement",
       "writeRequestMetadata",
       "writeUsageCounterIncrement",
+      "updateRequestTotalBackendLatencyMetadata",
     ],
   );
   assert.deepEqual(
@@ -436,6 +438,18 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
       latencyMs: 24,
       requestId: "req_rw_synthetic_route_001",
       status: "success",
+      totalBackendLatencyMs: 128,
+    },
+  );
+  assert.deepEqual(
+    toPlainObject(
+      calls.find(
+        (call) => call.operation === "updateRequestTotalBackendLatencyMetadata",
+      ).input,
+    ),
+    {
+      requestId: "req_rw_synthetic_route_001",
+      totalBackendLatencyMs: 164,
     },
   );
   assertTranscriptionRequestMetadataOnly(
@@ -529,6 +543,30 @@ test("desktop transcribe route omits non-finite success latency metadata", async
   assert.equal(response.status, 200);
   assert.equal(Object.hasOwn(body, "providerLatencyMs"), false);
   assert.equal(Object.hasOwn(requestMetadataInput, "latencyMs"), false);
+  assert.equal(requestMetadataInput.totalBackendLatencyMs, 128);
+  assertTranscriptionRequestMetadataOnly(requestMetadataInput);
+});
+
+test("desktop transcribe route omits non-finite total backend latency metadata", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+  const { calls, dependencies } = createRouteDependencies({
+    nowMs: createClock([Number.NaN, Number.POSITIVE_INFINITY]),
+  });
+  const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+  const response = await handler(syntheticAudioRequest());
+  const requestMetadataInput = calls.find(
+    (call) => call.operation === "writeRequestMetadata",
+  ).input;
+
+  assert.equal(response.status, 200);
+  assert.equal(Object.hasOwn(requestMetadataInput, "totalBackendLatencyMs"), false);
+  assert.equal(requestMetadataInput.latencyMs, 24);
+  assert.equal(
+    calls.some(
+      (call) => call.operation === "updateRequestTotalBackendLatencyMetadata",
+    ),
+    false,
+  );
   assertTranscriptionRequestMetadataOnly(requestMetadataInput);
 });
 
@@ -699,6 +737,7 @@ test("desktop transcribe route maps provider failures to shared errors", async (
       provider: "mock_provider",
       requestId: "req_rw_synthetic_route_001",
       status: "failure",
+      totalBackendLatencyMs: 128,
     });
     assertTranscriptionRequestMetadataOnly(requestMetadataInput);
   }
@@ -869,6 +908,7 @@ test("desktop transcribe route maps cleanup failures to shared no-store errors",
       provider: "mock_provider",
       requestId: "req_rw_synthetic_route_001",
       status: "failure",
+      totalBackendLatencyMs: 128,
     },
   );
   assert.equal(
@@ -1104,6 +1144,7 @@ function createRouteDependencies(overrides = {}) {
     now() {
       return syntheticNow;
     },
+    nowMs: createClock([1_000, 1_128, 1_164]),
     async parseRequest() {
       calls.push({ operation: "parseRequest" });
 
@@ -1151,6 +1192,18 @@ function createRouteDependencies(overrides = {}) {
         request: input,
       };
     },
+    async updateRequestTotalBackendLatencyMetadata(input) {
+      calls.push({
+        input,
+        operation: "updateRequestTotalBackendLatencyMetadata",
+      });
+
+      return {
+        action: "updated",
+        ok: true,
+        request: input,
+      };
+    },
     async writeUsageCounterIncrement(input) {
       calls.push({ input, operation: "writeUsageCounterIncrement" });
 
@@ -1188,6 +1241,11 @@ function wrapOverridesWithCallTracking(calls, overrides) {
   for (const [operation, value] of Object.entries(overrides)) {
     if (operation === "providerClient") {
       wrapped.providerClient = value;
+      continue;
+    }
+
+    if (operation === "nowMs") {
+      wrapped.nowMs = value;
       continue;
     }
 
@@ -1414,9 +1472,15 @@ function directContinuationDependencies() {
   return {
     createRequestId: () => "req_rw_synthetic_route_001",
     now: () => syntheticNow,
+    nowMs: createClock([1_000, 1_128, 1_164]),
     prepareUsageIncrement: preparedUsageIncrement,
     writeRequestMetadata: async (input) => ({
       action: "inserted",
+      ok: true,
+      request: input,
+    }),
+    updateRequestTotalBackendLatencyMetadata: async (input) => ({
+      action: "updated",
       ok: true,
       request: input,
     }),
@@ -1426,6 +1490,18 @@ function directContinuationDependencies() {
       ok: true,
       usageCounter: preparedUsageIncrement(input).usageCounter,
     }),
+  };
+}
+
+function createClock(values) {
+  let index = 0;
+
+  return () => {
+    const value = values[Math.min(index, values.length - 1)];
+
+    index += 1;
+
+    return value;
   };
 }
 

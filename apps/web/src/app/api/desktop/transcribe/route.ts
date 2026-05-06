@@ -55,9 +55,12 @@ import {
   type RubyWhisperQuotaUsageIncrementResult,
 } from "@/lib/usage/quota-service";
 import {
+  updateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadata,
   writeRubyWhisperTranscriptionRequestMetadata,
+  type RubyWhisperTranscriptionRequestTotalBackendLatencyUpdateResult,
   type RubyWhisperTranscriptionRequestMetadataWriteResult,
   type SupabaseTranscriptionRequestsClient,
+  type UpdateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadataInput,
   type WriteRubyWhisperTranscriptionRequestMetadataInput,
 } from "@/lib/usage/supabase-transcription-requests";
 import {
@@ -79,6 +82,7 @@ export type DesktopTranscribePreflightContinuationInput = Readonly<{
   requestInput: DesktopTranscribeRequestInput;
   subscription: RubyWhisperSubscriptionCache;
   usageCounters: RubyWhisperUsageCounters;
+  routeStartedAtMs?: number;
 }>;
 
 export type DesktopTranscribeProviderSuccessPayload = Readonly<{
@@ -110,6 +114,7 @@ export type DesktopTranscribeRouteDependencies = Readonly<{
   ) => DesktopTranscribeRateLimitResult | Promise<DesktopTranscribeRateLimitResult>;
   createRequestId: () => string;
   now: () => Date;
+  nowMs: () => number;
   parseRequest: (request: Request) => Promise<DesktopTranscribeRequestParseResult>;
   providerClient: RubyWhisperProviderClient;
   prepareUsageIncrement: (
@@ -127,6 +132,9 @@ export type DesktopTranscribeRouteDependencies = Readonly<{
   writeRequestMetadata: (
     input: WriteRubyWhisperTranscriptionRequestMetadataInput,
   ) => Promise<RubyWhisperTranscriptionRequestMetadataWriteResult>;
+  updateRequestTotalBackendLatencyMetadata: (
+    input: UpdateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadataInput,
+  ) => Promise<RubyWhisperTranscriptionRequestTotalBackendLatencyUpdateResult>;
   writeUsageCounterIncrement: (
     input: RubyWhisperQuotaUsageIncrementInput,
   ) => Promise<RubyWhisperUsageCountersIncrementUpsertedResult>;
@@ -143,6 +151,7 @@ export function createDesktopTranscribeRouteHandler(
   dependencies: DesktopTranscribeRouteDependencies,
 ) {
   return async function POST(request: Request) {
+    const routeStartedAtMs = dependencies.nowMs();
     const authState = await dependencies.requireAuth();
 
     if (!authState.ok) {
@@ -225,6 +234,7 @@ export function createDesktopTranscribeRouteHandler(
           entitlement,
           profile: profileResult.profile,
           requestInput: parseResult.input,
+          routeStartedAtMs,
           subscription: subscriptionResult.subscription,
           usageCounters: usageCountersResult.counters,
         },
@@ -244,11 +254,16 @@ export async function executeDesktopTranscribeProviderContinuation(
     DesktopTranscribeRouteDependencies,
     | "createRequestId"
     | "now"
+    | "nowMs"
     | "prepareUsageIncrement"
+    | "updateRequestTotalBackendLatencyMetadata"
     | "writeRequestMetadata"
     | "writeUsageCounterIncrement"
   > = defaultDesktopTranscribeRouteDependencies,
 ) {
+  const startedAtMs =
+    normalizeClockTimestampMs(input.routeStartedAtMs) ??
+    normalizeClockTimestampMs(dependencies.nowMs());
   const requestId = dependencies.createRequestId();
   const transcriptionResult = await providerClient.transcribe(
     {
@@ -268,6 +283,7 @@ export async function executeDesktopTranscribeProviderContinuation(
         providerLatencyMs: transcriptionResult.metadata?.providerLatencyMs,
         status: "failure",
         timestamp: dependencies.now(),
+        totalBackendLatencyMs: elapsedLatencyMs(dependencies.nowMs, startedAtMs),
       }),
     });
 
@@ -305,6 +321,7 @@ export async function executeDesktopTranscribeProviderContinuation(
         providerLatencyMs: cleanupResult.metadata?.providerLatencyMs,
         status: "failure",
         timestamp: dependencies.now(),
+        totalBackendLatencyMs: elapsedLatencyMs(dependencies.nowMs, startedAtMs),
       }),
     });
 
@@ -345,6 +362,7 @@ export async function executeDesktopTranscribeProviderContinuation(
       providerLatencyMs: transcriptionResult.result.providerLatencyMs,
       status: "success",
       timestamp: dependencies.now(),
+      totalBackendLatencyMs: elapsedLatencyMs(dependencies.nowMs, startedAtMs),
     }),
   );
 
@@ -367,6 +385,18 @@ export async function executeDesktopTranscribeProviderContinuation(
 
   if (!usageWriteResult.ok) {
     return rubyWhisperApiErrorResponse("service_unavailable", { requestId });
+  }
+
+  const finalTotalBackendLatencyMs = elapsedLatencyMs(
+    dependencies.nowMs,
+    startedAtMs,
+  );
+
+  if (isFiniteLatencyMs(finalTotalBackendLatencyMs)) {
+    await dependencies.updateRequestTotalBackendLatencyMetadata({
+      requestId,
+      totalBackendLatencyMs: finalTotalBackendLatencyMs,
+    });
   }
 
   return Response.json(
@@ -399,6 +429,7 @@ const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependenc
       createDesktopTranscribeSupabaseClient,
     ),
   now: () => new Date(),
+  nowMs: () => Date.now(),
   parseRequest: parseDesktopTranscribeRequest,
   prepareUsageIncrement: prepareRubyWhisperQuotaUsageIncrement,
   providerClient: createRubyWhisperGroqProviderClient(),
@@ -419,6 +450,11 @@ const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependenc
     ),
   writeRequestMetadata: (input) =>
     writeRubyWhisperTranscriptionRequestMetadata(
+      input,
+      createDesktopTranscribeSupabaseClient,
+    ),
+  updateRequestTotalBackendLatencyMetadata: (input) =>
+    updateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadata(
       input,
       createDesktopTranscribeSupabaseClient,
     ),
@@ -521,6 +557,7 @@ function createRequestMetadataInput(
     errorCode?: RubyWhisperApiErrorCode;
     providerLatencyMs?: unknown;
     timestamp: Date;
+    totalBackendLatencyMs?: unknown;
   }>,
 ): WriteRubyWhisperTranscriptionRequestMetadataInput {
   const metadata = createProviderRouteMetadata(input);
@@ -549,6 +586,9 @@ function createRequestMetadataInput(
       : {}),
     requestId,
     status: result.status,
+    ...(isFiniteLatencyMs(result.totalBackendLatencyMs)
+      ? { totalBackendLatencyMs: result.totalBackendLatencyMs }
+      : {}),
   };
 }
 
@@ -578,4 +618,22 @@ function createProviderRouteMetadata(
 
 function isFiniteLatencyMs(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function normalizeClockTimestampMs(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function elapsedLatencyMs(nowMs: () => number, startedAtMs: number | undefined) {
+  if (startedAtMs === undefined) {
+    return undefined;
+  }
+
+  const endedAtMs = normalizeClockTimestampMs(nowMs());
+
+  if (endedAtMs === undefined) {
+    return undefined;
+  }
+
+  return Math.max(0, Math.round(endedAtMs - startedAtMs));
 }

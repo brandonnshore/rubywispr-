@@ -21,11 +21,13 @@ Groq, Mac recording, or staging traffic.
   dictionary payloads.
 - `apps/web/src/app/api/desktop/transcribe/route.ts` persists provider latency
   as `latencyMs` for transcription request metadata on success, provider
-  failure, and cleanup failure. It only forwards finite nonnegative latency
-  numbers.
+  failure, and cleanup failure. It separately measures source-side total backend
+  route latency with an injectable millisecond clock and persists it as
+  `totalBackendLatencyMs` metadata when finite and nonnegative.
 - `apps/web/src/lib/usage/supabase-transcription-requests.ts` inserts
-  `transcription_requests.latency_ms` as finite numeric metadata only and omits
-  invalid latency values.
+  `transcription_requests.latency_ms` as finite provider latency metadata and
+  `transcription_requests.total_backend_latency_ms` as finite backend route
+  latency metadata. It omits invalid values for both fields.
 
 ## Privacy Boundary
 
@@ -46,24 +48,34 @@ Current regression coverage for this contract lives in:
 - `apps/web/test/transcription-rate-limit.test.mjs`
 - `apps/web/test/supabase-transcription-rate-limits.test.mjs`
 
+## Stored Latency Fields
+
+`transcription_requests.latency_ms` is provider latency metadata. On
+transcription success it comes from the provider transcription result. On
+provider failure and cleanup failure it comes from provider failure metadata.
+
+`transcription_requests.total_backend_latency_ms` is backend route latency
+metadata. The desktop transcription route starts the source-side clock at route
+entry and records elapsed backend time when request metadata is written for
+success, provider failure, or cleanup failure. On successful transcriptions, the
+route then refreshes this metadata after the usage counter write so the stored
+total can include parsing, entitlement/quota checks, provider work, cleanup,
+the metadata insert, and the usage counter update while preserving the existing
+quota write order. Synthetic tests inject this clock so RW-102 can validate
+finite and non-finite handling without live Groq, live Supabase, production
+logs, or real user data.
+
 ## Remaining Live And Manual Timing Work
 
 Full RW-102 completion remains blocked by work outside this source audit:
 
 - RUB-26 / RW-015: live Groq latency and cost benchmark.
+- Live authenticated endpoint timing against the deployed backend after service
+  setup.
 - RUB-64 / RW-073: macOS multi-app manual QA harness for recording, upload, and
   insertion timing.
 - RUB-140 / RW-040D: live Groq provider smoke after dev key setup.
 - RUB-150 / RW-041H: live authenticated transcription endpoint smoke after
   service setup.
-- RUB-75 / RW-102: final end-to-end latency budget validation and mitigation
-  tickets for any misses.
-
-## Follow-Up Gap
-
-The source currently persists provider latency in `transcription_requests.latency_ms`.
-It does not persist a separate total backend request latency column covering
-auth, profile/subscription/usage reads, rate-limit claim, parsing, provider,
-cleanup, metadata insert, and usage counter update. Add a separate schema and
-route timing change if RW-102 needs stored total backend latency distinct from
-provider latency.
+- RUB-75 / RW-102: final latency budget acceptance and mitigation tickets for
+  any misses.
