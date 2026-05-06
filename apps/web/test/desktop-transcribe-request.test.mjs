@@ -340,6 +340,8 @@ test("desktop transcription parser ignores Recent Wisprs local history fields", 
 
   formData.set("recentWisprs", "final_text_placeholder_not_synced");
   formData.set("recent_wispr", "final_text_placeholder_not_synced");
+  formData.set("recent_wisprs", "final_text_placeholder_not_synced");
+  formData.set("localHistory", "final_text_placeholder_not_synced");
   formData.set("finalText", "final_text_placeholder_not_synced");
   formData.set("cleanedText", "final_text_placeholder_not_synced");
   formData.set("rawTranscript", "raw_transcript_placeholder_not_synced");
@@ -363,7 +365,7 @@ test("desktop transcription parser ignores Recent Wisprs local history fields", 
   ]);
   assert.doesNotMatch(
     JSON.stringify(result.input),
-    /recentWisprs|recent_wispr|finalText|cleanedText|rawTranscript|final_text_placeholder_not_synced|raw_transcript_placeholder_not_synced|clipboard_placeholder_not_synced|insertion_failed|copiedAt|clipboard/,
+    /recentWisprs|recent_wispr|recent_wisprs|localHistory|finalText|cleanedText|rawTranscript|final_text_placeholder_not_synced|raw_transcript_placeholder_not_synced|clipboard_placeholder_not_synced|insertion_failed|copiedAt|clipboard/,
   );
 });
 

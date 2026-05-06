@@ -54,6 +54,9 @@ const forbiddenPrivateContentPatterns = [
   /\braw(?:_|-)?transcript\b/i,
   /\btranscript(?:_|-)?(?:content|text|value)?\b/i,
   /\bcleaned(?:_|-)?(?:text|transcript)\b/i,
+  /\bfinal(?:_|-)?text\b/i,
+  /\brecent(?:_|-)?wisprs?\b/i,
+  /\blocal(?:_|-)?history\b/i,
   /\bclipboard(?:_|-)?(?:content|text|value)?\b/i,
   /\bapp(?:_|-)?context\b/i,
   /\bcontext(?:_|-)?(?:content|snapshot|text|value)?\b/i,
@@ -67,7 +70,7 @@ const forbiddenLoggingPatterns = [
   /\bconsole\.(?:debug|error|info|log|warn)\s*\(/,
   /\b(?:logger|log)\.(?:debug|error|fatal|info|trace|warn)\s*\(/i,
   /\b(?:captureException|captureMessage|Sentry\.(?:captureException|captureMessage))\s*\(/,
-  /\bJSON\.stringify\s*\([^)]*\b(?:audio|body|cleanedText|clipboard|context|payload|prompt|provider|request|response|transcript)\b[^)]*\)/ims,
+  /\bJSON\.stringify\s*\([^)]*\b(?:audio|body|cleanedText|clipboard|context|finalText|payload|prompt|provider|recentWisprs?|request|response|transcript)\b[^)]*\)/ims,
 ];
 const liveOrPrivateFixturePatterns = [
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,

@@ -167,9 +167,9 @@ final class RecentWisprStore {
         }
 
         let sanitized = sanitizedSnapshot(decoded)
-        if sanitized != decoded,
-           let data = try? JSONEncoder.rubyWhisperRecentWisprs.encode(sanitized) {
-            persistence.set(data, forKey: storageKey)
+        if let sanitizedData = try? JSONEncoder.rubyWhisperRecentWisprs.encode(sanitized),
+           sanitizedData != data || sanitized != decoded {
+            persistence.set(sanitizedData, forKey: storageKey)
         }
         return sanitized
     }

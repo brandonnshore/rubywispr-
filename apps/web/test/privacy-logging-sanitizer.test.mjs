@@ -48,7 +48,7 @@ const expectedRequestEventNames = [
   "backend.request.failed",
 ];
 const forbiddenPayloadPattern =
-  /payload must not echo|private audio|private transcript|private cleaned text|private context|private clipboard|private dictionary|private prompt|provider request body|provider response body|term_placeholder_alpha|Bearer rw_synthetic_placeholder|rubywhisper\.env|\.env\.local/i;
+  /payload must not echo|private audio|private transcript|private cleaned text|private context|private clipboard|private dictionary|private prompt|provider request body|provider response body|SYNTHETIC_RECENT_WISPR_TEXT|term_placeholder_alpha|Bearer rw_synthetic_placeholder|rubywhisper\.env|\.env\.local/i;
 
 test("privacy log metadata exposes an explicit metadata-only allowlist", async () => {
   const privacyLogger = await loadPrivacyLoggerModule();
@@ -66,9 +66,12 @@ test("privacy log metadata exposes an explicit metadata-only allowlist", async (
     "context",
     "clipboard",
     "dictionaryTerms",
+    "finalText",
     "prompt",
     "providerRequestBody",
     "providerResponseBody",
+    "recentWisprs",
+    "recentWisprRows",
     "headers",
     "cookie",
     "authorization",
@@ -109,6 +112,8 @@ test("privacy log sanitizer preserves safe metadata and drops private payloads",
     providerRequestBody: "provider request body",
     providerResponseBody: "provider response body",
     rawTranscript: "private transcript",
+    recentWisprs: "SYNTHETIC_RECENT_WISPR_TEXT",
+    recentWisprRows: [{ finalText: "SYNTHETIC_RECENT_WISPR_TEXT" }],
     release: "rw-web-test",
     requestId: "  req_rw_synthetic_001  ",
     route: "/api/desktop/transcribe",
@@ -223,6 +228,7 @@ test("backend request event builders emit metadata-only lifecycle events", async
         context: "private context",
         osVersion: "macOS test",
         providerRequestBody: "provider request body",
+        recentWisprs: "SYNTHETIC_RECENT_WISPR_TEXT",
         requestId: "req_rw_synthetic_start",
       },
       route: "/api/desktop/transcribe",
@@ -244,6 +250,7 @@ test("backend request event builders emit metadata-only lifecycle events", async
     privacyLogger.createRubyWhisperBackendRequestSucceededLogEvent({
       cleanedText: "private cleaned text",
       cleanedWordCount: 7,
+      finalText: "SYNTHETIC_RECENT_WISPR_TEXT",
       latencyMs: 320,
       metadata: {
         planState: "trial_active",
@@ -288,6 +295,7 @@ test("backend request failed event keeps error code without private error payloa
       totalLatencyMs: 430,
     },
     providerRequestBody: "provider request body",
+    recentWisprRows: [{ finalText: "SYNTHETIC_RECENT_WISPR_TEXT" }],
     requestId: "req_rw_synthetic_failed",
     route: "/api/desktop/transcribe",
     status: 503,

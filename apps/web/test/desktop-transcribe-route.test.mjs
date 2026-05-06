@@ -52,15 +52,18 @@ const forbiddenTranscriptionRequestPayloadKeys = [
   "clipboard",
   "context",
   "dictionaryTerms",
+  "finalText",
   "prompt",
   "providerRequestBody",
   "providerResponseBody",
   "rawTranscript",
+  "recentWisprs",
+  "recent_wisprs",
   "transcript",
   "transcriptText",
 ];
 const forbiddenTranscriptionRequestPayloadContent =
-  /uh schedule ruby whisper|Schedule RubyWhisper|Synthetic cleanup output|Synthetic provider output|Synthetic route context|Ruby Advisory|term_placeholder_alpha|term_placeholder_beta|term_placeholder_disabled|payload must not echo|Bearer /i;
+  /uh schedule ruby whisper|Schedule RubyWhisper|Synthetic cleanup output|Synthetic provider output|Synthetic route context|Ruby Advisory|SYNTHETIC_RECENT_WISPR_TEXT|term_placeholder_alpha|term_placeholder_beta|term_placeholder_disabled|payload must not echo|Bearer /i;
 const syntheticDictionaryTermContent =
   /term_placeholder_alpha|term_placeholder_beta|term_placeholder_disabled/i;
 

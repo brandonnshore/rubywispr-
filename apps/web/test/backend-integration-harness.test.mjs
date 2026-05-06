@@ -205,8 +205,11 @@ test("provider fixture guardrails reject private provider payload fields", () =>
     { audio: "synthetic payload must still stay out of fixtures" },
     { rawTranscript: "synthetic payload must still stay out of fixtures" },
     { cleanedText: "synthetic payload must still stay out of fixtures" },
+    { finalText: "synthetic payload must still stay out of fixtures" },
     { context: "synthetic payload must still stay out of fixtures" },
     { dictionaryTerms: ["term_placeholder_alpha"] },
+    { recentWisprs: [{ finalText: "SYNTHETIC_RECENT_WISPR_TEXT" }] },
+    { serverHistoryId: "server_history_placeholder_forbidden" },
     { providerRequestBody: { prompt: "synthetic payload" } },
     { result: { text: "synthetic payload must still stay out of fixtures" } },
   ];
