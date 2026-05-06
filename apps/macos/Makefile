@@ -360,6 +360,7 @@ test-privacy-settings-presentation:
 		-sdk $(shell xcrun --show-sdk-path) \
 		-target $(ARCH)-apple-macosx13.0 \
 		Sources/PrivacySettingsPresentation.swift \
+		Sources/AdvancedSettingsPresentation.swift \
 		Tests/PrivacySettingsPresentationTests.swift
 	$(BUILD_DIR)/tests/PrivacySettingsPresentationTests
 

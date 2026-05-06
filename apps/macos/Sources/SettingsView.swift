@@ -488,6 +488,8 @@ struct SettingsView: View {
                     AppearanceSettingsView()
                 case .general, .none:
                     GeneralSettingsView()
+                case .advanced:
+                    AdvancedSettingsView()
                 case .prompts:
                     PromptsSettingsView()
                 case .macros:
@@ -712,6 +714,228 @@ struct AppearanceSettingsView: View {
     }
 }
 
+// MARK: - Advanced Settings
+
+struct AdvancedSettingsView: View {
+    @EnvironmentObject var appState: AppState
+    @State private var copiedDiagnosticsInfo = false
+    @State private var copiedDiagnosticsInfoResetWorkItem: DispatchWorkItem?
+
+    private var presentation: AdvancedSettingsPresentation {
+        AdvancedSettingsPresentation(
+            diagnosticsMetadata: AdvancedSettingsPresentation.DiagnosticsMetadata(
+                appDisplayName: appDisplayName,
+                appVersion: appVersion,
+                appBuildNumber: appBuildNumber,
+                macOSVersion: macOSVersion,
+                appArchitecture: appArchitecture
+            )
+        )
+    }
+
+    private var privacyPresentation: PrivacySettingsPresentation {
+        PrivacySettingsPresentation(
+            cleanupEnabled: appState.cleanupEnabled,
+            contextAwareCleanupEnabled: appState.contextAwareCleanupEnabled,
+            recentWisprsHistoryEnabled: appState.isRecentWisprsHistoryEnabled,
+            recentWisprCount: appState.recentWisprs.count
+        )
+    }
+
+    private var appDisplayName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
+            ?? "\(AppName.displayName)"
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+    }
+
+    private var appBuildNumber: String {
+        Bundle.main.object(forInfoDictionaryKey: "RubyWhisperBuildTag") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+            ?? "unknown"
+    }
+
+    private var macOSVersion: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+    }
+
+    private var appArchitecture: String {
+        #if arch(arm64)
+        return "arm64"
+        #elseif arch(x86_64)
+        return "x86_64"
+        #else
+        return "unknown"
+        #endif
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Advanced")
+                    .font(.largeTitle.bold())
+
+                SettingsCard("Privacy", icon: "hand.raised.fill") {
+                    privacySection
+                }
+
+                SettingsCard("Diagnostics", icon: "info.circle.fill") {
+                    diagnosticsSection
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var privacySection: some View {
+        let presentation = privacyPresentation
+
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Clean up transcripts", isOn: $appState.cleanupEnabled)
+                    .accessibilityHint("Turns backend cleanup on or off without syncing local content.")
+
+                Text(PrivacySettingsPresentation.cleanupCopy)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let copy = presentation.cleanupStatusCopy {
+                    Label(copy, systemImage: "pause.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Use app context during cleanup", isOn: $appState.contextAwareCleanupEnabled)
+                    .disabled(!presentation.isContextToggleEnabled)
+                    .accessibilityHint("Controls whether app context is included in cleanup uploads.")
+
+                Text(PrivacySettingsPresentation.contextCopy)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let copy = presentation.contextStatusCopy {
+                    Label(copy, systemImage: "eye.slash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: Binding(
+                    get: { appState.isRecentWisprsHistoryEnabled },
+                    set: { appState.setRecentWisprsHistoryEnabled($0) }
+                )) {
+                    Text("Save Recent Wisprs on this Mac")
+                }
+                .accessibilityHint("Controls only local Recent Wisprs history on this Mac.")
+
+                Text(PrivacySettingsPresentation.recentWisprsLocalOnlyCopy)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let copy = presentation.recentWisprsStatusCopy {
+                    Label(copy, systemImage: "clock.badge.xmark")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Text(PrivacySettingsPresentation.recentWisprsClearCopy)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Button {
+                        appState.clearRecentWisprs()
+                    } label: {
+                        Label("Clear Local Recent Wisprs", systemImage: "trash")
+                    }
+                    .disabled(!presentation.canClearRecentWisprs)
+
+                    Button(role: .destructive) {
+                        appState.disableAndClearRecentWisprsHistory()
+                    } label: {
+                        Label("Disable and Clear", systemImage: "trash.slash")
+                    }
+                    .disabled(!presentation.canDisableAndClearRecentWisprs)
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private var diagnosticsSection: some View {
+        let presentation = presentation
+
+        return VStack(alignment: .leading, spacing: 10) {
+            ForEach(presentation.diagnosticsRows, id: \.title) { row in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(row.title)
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                    Text(row.value)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+
+            Text(AdvancedSettingsPresentation.diagnosticsPrivacyCopy)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(alignment: .top, spacing: 12) {
+                Text(presentation.diagnosticsCopyText)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+
+                Spacer()
+
+                Button {
+                    copyDiagnostics()
+                } label: {
+                    Label(copiedDiagnosticsInfo ? "Copied" : "Copy", systemImage: copiedDiagnosticsInfo ? "checkmark" : "doc.on.doc")
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    private func copyDiagnostics() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(presentation.diagnosticsCopyText, forType: .string)
+        copiedDiagnosticsInfo = true
+
+        copiedDiagnosticsInfoResetWorkItem?.cancel()
+
+        let resetWorkItem = DispatchWorkItem {
+            copiedDiagnosticsInfo = false
+            copiedDiagnosticsInfoResetWorkItem = nil
+        }
+        copiedDiagnosticsInfoResetWorkItem = resetWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: resetWorkItem)
+    }
+}
+
 private struct SettingsSidebarRow: View {
     let title: String
     let icon: String
@@ -813,44 +1037,11 @@ struct GeneralSettingsView: View {
     @State private var dictionaryFlow = PersonalDictionarySettingsFlow()
     @State private var micPermissionGranted = false
     @State private var showMutedHint = false
-    @State private var copiedBuildInfo = false
-    @State private var copiedBuildInfoResetWorkItem: DispatchWorkItem?
     @ObservedObject private var updateManager = UpdateManager.shared
     private let freeFlowAttributionSourceURL = URL(string: "https://github.com/zachlatta/freeflow")!
 
-    private var appDisplayName: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
-            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
-            ?? "\(AppName.displayName)"
-    }
-
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
-    }
-
-    private var appBuildNumber: String {
-        Bundle.main.object(forInfoDictionaryKey: "RubyWhisperBuildTag") as? String
-            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-            ?? "unknown"
-    }
-
-    private var macOSVersion: String {
-        let version = ProcessInfo.processInfo.operatingSystemVersion
-        return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
-    }
-
-    private var appArchitecture: String {
-        #if arch(arm64)
-        return "arm64"
-        #elseif arch(x86_64)
-        return "x86_64"
-        #else
-        return "unknown"
-        #endif
-    }
-
-    private var buildDiagnosticsText: String {
-        "\(appDisplayName) \(appVersion) (\(appBuildNumber))\nmacOS \(macOSVersion) (\(appArchitecture))"
     }
 
     var body: some View {
@@ -944,9 +1135,6 @@ struct GeneralSettingsView: View {
                 SettingsCard("Clipboard", icon: "doc.on.clipboard") {
                     clipboardSection
                 }
-                SettingsCard("Privacy", icon: "hand.raised.fill") {
-                    privacySection
-                }
                 SettingsCard("Microphone", icon: "mic.fill") {
                     microphoneSection
                 }
@@ -958,9 +1146,6 @@ struct GeneralSettingsView: View {
                 }
                 SettingsCard("Permissions", icon: "lock.shield.fill") {
                     permissionsSection
-                }
-                SettingsCard("Build", icon: "info.circle.fill") {
-                    buildInfoSection
                 }
             }
             .padding(24)
@@ -1135,53 +1320,6 @@ struct GeneralSettingsView: View {
                 .cornerRadius(6)
             }
         }
-    }
-
-    // MARK: Build
-
-    private var buildInfoSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Build number")
-                    .font(.caption.weight(.semibold))
-                Spacer()
-                Text(appBuildNumber)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
-            HStack(alignment: .top, spacing: 12) {
-                Text(buildDiagnosticsText)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-
-                Spacer()
-
-                Button {
-                    copyBuildDiagnostics()
-                } label: {
-                    Label(copiedBuildInfo ? "Copied" : "Copy", systemImage: copiedBuildInfo ? "checkmark" : "doc.on.doc")
-                }
-                .font(.caption)
-            }
-        }
-    }
-
-    private func copyBuildDiagnostics() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(buildDiagnosticsText, forType: .string)
-        copiedBuildInfo = true
-
-        copiedBuildInfoResetWorkItem?.cancel()
-
-        let resetWorkItem = DispatchWorkItem {
-            copiedBuildInfo = false
-            copiedBuildInfoResetWorkItem = nil
-        }
-        copiedBuildInfoResetWorkItem = resetWorkItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: resetWorkItem)
     }
 
     // MARK: API Key
@@ -1431,106 +1569,6 @@ struct GeneralSettingsView: View {
             Text("When the transcription ends with \"press enter\", \(AppName.displayName) removes those words before cleanup, pastes the remaining transcript, then presses Return.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: Privacy
-
-    private var privacyPresentation: PrivacySettingsPresentation {
-        PrivacySettingsPresentation(
-            cleanupEnabled: appState.cleanupEnabled,
-            contextAwareCleanupEnabled: appState.contextAwareCleanupEnabled,
-            recentWisprsHistoryEnabled: appState.isRecentWisprsHistoryEnabled,
-            recentWisprCount: appState.recentWisprs.count
-        )
-    }
-
-    private var privacySection: some View {
-        let presentation = privacyPresentation
-
-        return VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Clean up transcripts", isOn: $appState.cleanupEnabled)
-                    .accessibilityHint("Turns backend cleanup on or off without syncing local content.")
-
-                Text(PrivacySettingsPresentation.cleanupCopy)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let copy = presentation.cleanupStatusCopy {
-                    Label(copy, systemImage: "pause.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Use app context during cleanup", isOn: $appState.contextAwareCleanupEnabled)
-                    .disabled(!presentation.isContextToggleEnabled)
-                    .accessibilityHint("Controls whether app context is included in cleanup uploads.")
-
-                Text(PrivacySettingsPresentation.contextCopy)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let copy = presentation.contextStatusCopy {
-                    Label(copy, systemImage: "eye.slash")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle(isOn: Binding(
-                    get: { appState.isRecentWisprsHistoryEnabled },
-                    set: { appState.setRecentWisprsHistoryEnabled($0) }
-                )) {
-                    Text("Save Recent Wisprs on this Mac")
-                }
-                .accessibilityHint("Controls only local Recent Wisprs history on this Mac.")
-
-                Text(PrivacySettingsPresentation.recentWisprsLocalOnlyCopy)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let copy = presentation.recentWisprsStatusCopy {
-                    Label(copy, systemImage: "clock.badge.xmark")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Text(PrivacySettingsPresentation.recentWisprsClearCopy)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 8) {
-                    Button {
-                        appState.clearRecentWisprs()
-                    } label: {
-                        Label("Clear Local Recent Wisprs", systemImage: "trash")
-                    }
-                    .disabled(!presentation.canClearRecentWisprs)
-
-                    Button(role: .destructive) {
-                        appState.disableAndClearRecentWisprsHistory()
-                    } label: {
-                        Label("Disable and Clear", systemImage: "trash.slash")
-                    }
-                    .disabled(!presentation.canDisableAndClearRecentWisprs)
-                }
-                .controlSize(.small)
-            }
         }
     }
 

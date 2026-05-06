@@ -16,6 +16,7 @@ private struct PrivacySettingsPresentationTests {
         testCleanupDisabledStateUsesStableCopyAndDisablesContext()
         testContextDisabledStatePreservesCleanup()
         testRecentWisprsLocalOnlyDisableAndClearState()
+        testAdvancedSettingsInventoryAndDiagnosticsCopyBoundary()
 
         print("PrivacySettingsPresentationTests passed")
     }
@@ -80,5 +81,53 @@ private struct PrivacySettingsPresentationTests {
         expect(disabledWithItems.canClearRecentWisprs, "disabled history with entries should allow clear")
         expect(disabledWithItems.canDisableAndClearRecentWisprs, "disabled history with entries should allow combined clear")
         expect(disabledWithItems.recentWisprsStatusCopy == PrivacySettingsPresentation.recentWisprsDisabledCopy, "recent wisprs disabled copy should be stable")
+    }
+
+    private static func testAdvancedSettingsInventoryAndDiagnosticsCopyBoundary() {
+        let presentation = AdvancedSettingsPresentation(
+            diagnosticsMetadata: AdvancedSettingsPresentation.DiagnosticsMetadata(
+                appDisplayName: "RubyWhisper",
+                appVersion: "1.2.3",
+                appBuildNumber: "456",
+                macOSVersion: "14.5.0",
+                appArchitecture: "arm64"
+            )
+        )
+
+        expect(
+            AdvancedSettingsPresentation.sectionTitles == ["Privacy", "Diagnostics"],
+            "advanced settings inventory should expose privacy controls and diagnostics"
+        )
+        expect(
+            presentation.diagnosticsRows.map(\.title) == ["App", "Version", "Build number", "macOS", "Architecture"],
+            "diagnostics rows should be limited to app/build/system metadata"
+        )
+        expect(
+            presentation.diagnosticsCopyText == "RubyWhisper 1.2.3 (456)\nmacOS 14.5.0 (arm64)",
+            "diagnostics copy payload should include only metadata values"
+        )
+
+        let forbiddenPayloadFragments = [
+            "transcript",
+            "clipboard",
+            "dictionary",
+            "prompt",
+            "context",
+            "screenshot",
+            "provider",
+            "secret",
+            "env",
+            "window"
+        ]
+        for fragment in forbiddenPayloadFragments {
+            expect(
+                !presentation.diagnosticsCopyText.lowercased().contains(fragment),
+                "diagnostics copy payload should not include \(fragment)"
+            )
+            expect(
+                AdvancedSettingsPresentation.diagnosticsPrivacyCopy.lowercased().contains(fragment),
+                "diagnostics privacy copy should name \(fragment) as excluded"
+            )
+        }
     }
 }
