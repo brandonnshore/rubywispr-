@@ -598,6 +598,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private let recentWisprStore = RecentWisprStore()
     private let personalDictionaryStore: PersonalDictionaryStore
     private let shortcutSessionController = DictationShortcutSessionController()
+    private let directInsertionAttemptGate = DirectInsertionAttemptGate()
     private var activeRecordingTriggerMode: RecordingTriggerMode?
     private var currentSessionIntent: SessionIntent = .dictation
     private var pendingSelectionSnapshot: AppSelectionSnapshot?
@@ -3650,7 +3651,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 }
                 self.performAfterShortcutReleased(action: action)
             },
-            eventSink: OSLogDirectInsertionEventSink(log: recordingLog)
+            eventSink: OSLogDirectInsertionEventSink(log: recordingLog),
+            attemptGate: directInsertionAttemptGate
         )
     }
 
