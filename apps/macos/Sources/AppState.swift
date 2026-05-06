@@ -65,70 +65,6 @@ enum AppBuild {
     }
 }
 
-private struct PreservedPasteboardEntry {
-    let type: NSPasteboard.PasteboardType
-    let value: Value
-
-    enum Value {
-        case string(String)
-        case propertyList(Any)
-        case data(Data)
-    }
-}
-
-private struct PreservedPasteboardItem {
-    let entries: [PreservedPasteboardEntry]
-
-    init(item: NSPasteboardItem) {
-        self.entries = item.types.compactMap { type in
-            if let string = item.string(forType: type) {
-                return PreservedPasteboardEntry(type: type, value: .string(string))
-            }
-            if let propertyList = item.propertyList(forType: type) {
-                return PreservedPasteboardEntry(type: type, value: .propertyList(propertyList))
-            }
-            if let data = item.data(forType: type) {
-                return PreservedPasteboardEntry(type: type, value: .data(data))
-            }
-            return nil
-        }
-    }
-
-    func makePasteboardItem() -> NSPasteboardItem {
-        let item = NSPasteboardItem()
-        for entry in entries {
-            switch entry.value {
-            case .string(let string):
-                item.setString(string, forType: entry.type)
-            case .propertyList(let propertyList):
-                item.setPropertyList(propertyList, forType: entry.type)
-            case .data(let data):
-                item.setData(data, forType: entry.type)
-            }
-        }
-        return item
-    }
-}
-
-private struct PreservedPasteboardSnapshot {
-    let items: [PreservedPasteboardItem]
-
-    init(pasteboard: NSPasteboard) {
-        self.items = (pasteboard.pasteboardItems ?? []).map(PreservedPasteboardItem.init)
-    }
-
-    func restore(to pasteboard: NSPasteboard) {
-        pasteboard.clearContents()
-        guard !items.isEmpty else { return }
-        _ = pasteboard.writeObjects(items.map { $0.makePasteboardItem() })
-    }
-}
-
-private struct PendingClipboardRestore {
-    let snapshot: PreservedPasteboardSnapshot
-    let expectedChangeCount: Int
-}
-
 private struct TranscriptCommandParsingResult {
     let transcript: String
     let shouldPressEnterAfterPaste: Bool
@@ -599,6 +535,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private let personalDictionaryStore: PersonalDictionaryStore
     private let shortcutSessionController = DictationShortcutSessionController()
     private let directInsertionAttemptGate = DirectInsertionAttemptGate()
+    private lazy var clipboardFallbackManager = makeClipboardFallbackManager()
     private var activeRecordingTriggerMode: RecordingTriggerMode?
     private var currentSessionIntent: SessionIntent = .dictation
     private var pendingSelectionSnapshot: AppSelectionSnapshot?
@@ -2454,9 +2391,16 @@ final class AppState: ObservableObject, @unchecked Sendable {
             return false
         }
 
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(trimmedText, forType: .string)
+        guard case .copied = clipboardFallbackManager.copyCleanedText(
+            trimmedText,
+            reason: .manualCopyRecovery,
+            restorePreviousClipboard: false
+        ) else {
+            statusText = "Clipboard unavailable"
+            debugStatusMessage = "Island recovery action: copy_cleaned_text unavailable"
+            return false
+        }
+
         statusText = "Copied"
         overlayManager.showSuccess()
         scheduleOverlayDismissAfterSuccess(after: 1.2)
@@ -2948,13 +2892,13 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
         initTimer.resume()
 
-        // Transition to waveform when first real audio arrives (any non-zero RMS)
+        // Transition to waveform when the first non-zero RMS sample arrives.
         let deviceUID = selectedMicrophoneID
         audioRecorder.onRecordingReady = { [weak self] in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.cancelRecordingInitializationTimer()
-                os_log(.info, log: recordingLog, "first real audio — transitioning to waveform")
+                os_log(.info, log: recordingLog, "first detected audio sample — transitioning to waveform")
                 self.statusText = "Recording..."
                 self.clearPendingOverlayDismissToken()
                 if overlayShown {
@@ -3656,6 +3600,14 @@ final class AppState: ObservableObject, @unchecked Sendable {
         )
     }
 
+    private func makeClipboardFallbackManager() -> ClipboardFallbackManager {
+        ClipboardFallbackManager(
+            pasteboard: SystemClipboardFallbackPasteboardPort(),
+            eventSink: OSLogClipboardFallbackEventSink(log: recordingLog),
+            restoreDelay: clipboardRestoreDelay
+        )
+    }
+
     private func directInsertionAppEligibility() -> DirectInsertionAppEligibility {
         authCoordinatorState.dictationAccountGateDecision == .allowed &&
             firstRunOnboardingStep.allowsNormalDictation
@@ -3702,7 +3654,21 @@ final class AppState: ObservableObject, @unchecked Sendable {
             return
         }
 
-        statusText = "Click a text box first"
+        let fallbackResult = clipboardFallbackManager.copyCleanedText(
+            finalText,
+            reason: .automaticFallback,
+            restorePreviousClipboard: preserveClipboard
+        )
+        statusText = {
+            switch fallbackResult {
+            case .copied:
+                return "Copied. Paste manually."
+            case .emptyText:
+                return "Click a text box first"
+            case .writeFailed:
+                return "Clipboard unavailable"
+            }
+        }()
         overlayManager.showInsertionFailed()
     }
 
@@ -4099,38 +4065,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: false)
         keyUp?.post(tap: .cgSessionEventTap)
-    }
-
-    private func writeTranscriptToPasteboard(_ transcript: String) -> PendingClipboardRestore? {
-        let pasteboard = NSPasteboard.general
-        let snapshot = preserveClipboard ? PreservedPasteboardSnapshot(pasteboard: pasteboard) : nil
-
-        // Append a space when ending with sentence-ending punctuation so the
-        // next dictation does not jam against the prior period.
-        let textToWrite: String
-        if let last = transcript.last, ".!?".contains(last) {
-            textToWrite = transcript + " "
-        } else {
-            textToWrite = transcript
-        }
-
-        pasteboard.clearContents()
-        pasteboard.setString(textToWrite, forType: .string)
-
-        guard let snapshot else { return nil }
-        return PendingClipboardRestore(snapshot: snapshot, expectedChangeCount: pasteboard.changeCount)
-    }
-
-    private func restoreClipboardIfNeeded(_ pendingRestore: PendingClipboardRestore?) {
-        guard let pendingRestore else { return }
-
-        // Some apps consume Cmd-V asynchronously, so restoring too quickly can paste
-        // the pre-dictation clipboard instead of the transcript.
-        DispatchQueue.main.asyncAfter(deadline: .now() + clipboardRestoreDelay) {
-            let pasteboard = NSPasteboard.general
-            guard pasteboard.changeCount == pendingRestore.expectedChangeCount else { return }
-            pendingRestore.snapshot.restore(to: pasteboard)
-        }
     }
 
     private func performAfterShortcutReleased(attempt: Int = 0, action: @escaping () -> Void) {
