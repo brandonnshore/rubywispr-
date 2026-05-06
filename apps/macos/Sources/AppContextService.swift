@@ -37,24 +37,17 @@ Return only two sentences, no labels, no markdown, no extra commentary.
     static let defaultContextPromptDate = "2026-02-24"
     static let defaultScreenshotMaxDimension: CGFloat = 1024
 
-    private let apiKey: String
-    private let baseURL: String
     private let customContextPrompt: String
     private let contextModel: String
     private let maxScreenshotDataURILength = 500_000
     private let screenshotCompressionPrimary = 0.5
     private let screenshotMaxDimension: CGFloat
-    private let contextRequestTimeoutSeconds: TimeInterval = 20
 
     init(
-        apiKey: String,
-        baseURL: String = "https://api.groq.com/openai/v1",
         customContextPrompt: String = "",
         contextModel: String = "meta-llama/llama-4-scout-17b-16e-instruct",
         screenshotMaxDimension: CGFloat = AppContextService.defaultScreenshotMaxDimension
     ) {
-        self.apiKey = apiKey
-        self.baseURL = baseURL
         self.customContextPrompt = customContextPrompt
         let trimmedModel = contextModel.trimmingCharacters(in: .whitespacesAndNewlines)
         self.contextModel = trimmedModel.isEmpty ? "meta-llama/llama-4-scout-17b-16e-instruct" : trimmedModel
@@ -116,39 +109,13 @@ Return only two sentences, no labels, no markdown, no extra commentary.
             appElement: appElement,
             focusedWindowTitle: windowTitle
         )
-        let currentActivity: String
-        let contextPrompt: String?
-        if !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            if let result = await inferActivityWithLLM(
-                appName: appName,
-                bundleIdentifier: bundleIdentifier,
-                windowTitle: windowTitle,
-                selectedText: selectedText,
-                screenshotDataURL: screenshot.dataURL,
-                contextSystemPrompt: contextSystemPrompt
-            ) {
-                currentActivity = result.activity
-                contextPrompt = result.prompt
-            } else {
-                currentActivity = fallbackCurrentActivity(
-                    appName: appName,
-                    bundleIdentifier: bundleIdentifier,
-                    selectedText: selectedText,
-                    windowTitle: windowTitle,
-                    screenshotAvailable: screenshot.dataURL != nil
-                )
-                contextPrompt = nil
-            }
-        } else {
-            currentActivity = fallbackCurrentActivity(
-                appName: appName,
-                bundleIdentifier: bundleIdentifier,
-                selectedText: selectedText,
-                windowTitle: windowTitle,
-                screenshotAvailable: screenshot.dataURL != nil
-            )
-            contextPrompt = nil
-        }
+        let currentActivity = fallbackCurrentActivity(
+            appName: appName,
+            bundleIdentifier: bundleIdentifier,
+            selectedText: selectedText,
+            windowTitle: windowTitle,
+            screenshotAvailable: screenshot.dataURL != nil
+        )
 
         return AppContext(
             appName: appName,
@@ -157,144 +124,11 @@ Return only two sentences, no labels, no markdown, no extra commentary.
             selectedText: selectedText,
             currentActivity: currentActivity,
             contextSystemPrompt: contextSystemPrompt,
-            contextPrompt: contextPrompt,
+            contextPrompt: nil,
             screenshotDataURL: screenshot.dataURL,
             screenshotMimeType: screenshot.mimeType,
             screenshotError: screenshot.error
         )
-    }
-
-    private func inferActivityWithLLM(
-        appName: String?,
-        bundleIdentifier: String?,
-        windowTitle: String?,
-        selectedText: String?,
-        screenshotDataURL: String?,
-        contextSystemPrompt: String
-    ) async -> (activity: String, prompt: String)? {
-        let attempts: [(model: String, screenshotDataURL: String?)] =
-            if let screenshotDataURL {
-                [
-                    (contextModel, screenshotDataURL),
-                    (contextModel, nil)
-                ]
-            } else {
-                [
-                    (contextModel, nil)
-                ]
-            }
-
-        for attempt in attempts {
-            if let inferred = await inferActivityWithLLM(
-                appName: appName,
-                bundleIdentifier: bundleIdentifier,
-                windowTitle: windowTitle,
-                selectedText: selectedText,
-                screenshotDataURL: attempt.screenshotDataURL,
-                contextSystemPrompt: contextSystemPrompt,
-                model: attempt.model
-            ) {
-                return inferred
-            }
-        }
-
-        return nil
-    }
-
-    private func inferActivityWithLLM(
-        appName: String?,
-        bundleIdentifier: String?,
-        windowTitle: String?,
-        selectedText: String?,
-        screenshotDataURL: String?,
-        contextSystemPrompt: String,
-        model: String
-    ) async -> (activity: String, prompt: String)? {
-        do {
-            var request = URLRequest(url: URL(string: "\(baseURL)/chat/completions")!)
-            request.httpMethod = "POST"
-            request.timeoutInterval = contextRequestTimeoutSeconds
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-            let metadata = """
-App: \(appName ?? "Unknown")
-Bundle ID: \(bundleIdentifier ?? "Unknown")
-Window: \(windowTitle ?? "Unknown")
-Selected text: \(selectedText ?? "None")
-"""
-
-            let textOnlyPrompt = "Analyze the context and infer the user's current activity in exactly two sentences.\n\n\(metadata)"
-            var userMessageDescription: String
-            var userMessage: Any = textOnlyPrompt
-
-            if let screenshotDataURL {
-                userMessageDescription = "[screenshot attached]\nAnalyze the screenshot plus metadata to infer current activity.\n\(metadata)"
-                userMessage = [
-                    [
-                        "type": "text",
-                        "text": "Analyze the screenshot plus metadata to infer current activity."
-                    ],
-                    [
-                        "type": "text",
-                        "text": metadata
-                    ],
-                    [
-                        "type": "image_url",
-                        "image_url": ["url": screenshotDataURL]
-                    ]
-                ]
-            } else {
-                userMessageDescription = textOnlyPrompt
-            }
-
-            let fullPrompt = "Model: \(model)\n\n[System]\n\(contextSystemPrompt)\n[User]\n\(userMessageDescription)"
-
-            let payload: [String: Any] = [
-                "model": model,
-                "temperature": 0.2,
-                "messages": [
-                    ["role": "system", "content": contextSystemPrompt],
-                    ["role": "user", "content": userMessage]
-                ]
-            ]
-
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
-            let (data, response) = try await LLMAPITransport.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                return nil
-            }
-            guard httpResponse.statusCode == 200 else {
-                return nil
-            }
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let choices = json["choices"] as? [[String: Any]],
-                  let firstChoice = choices.first,
-                  let message = firstChoice["message"] as? [String: Any],
-                  let content = message["content"] as? String else {
-                return nil
-            }
-
-            let cleaned = content.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !cleaned.isEmpty else { return nil }
-            return (activity: normalizedActivitySummary(cleaned), prompt: fullPrompt)
-        } catch {
-            return nil
-        }
-    }
-
-    private func normalizedActivitySummary(_ value: String) -> String {
-        let sentences = value
-            .split(whereSeparator: { $0 == "." || $0 == "。" || $0 == "!" || $0 == "?" })
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        if sentences.count <= 2 {
-            return value
-        }
-
-        let firstTwo = sentences.prefix(2)
-        return firstTwo.joined(separator: ". ") + "."
     }
 
     private func fallbackCurrentActivity(

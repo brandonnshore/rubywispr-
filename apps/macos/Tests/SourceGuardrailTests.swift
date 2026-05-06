@@ -32,6 +32,7 @@ private struct SourceGuardrailTests {
             let text = try String(contentsOf: file, encoding: .utf8)
             failures.append(contentsOf: forbiddenProviderSecretNameMatches(in: text, path: relativePath))
             failures.append(contentsOf: secretShapedValueMatches(in: text, path: relativePath))
+            failures.append(contentsOf: providerSettingsPersistenceMatches(in: text, path: relativePath))
             failures.append(contentsOf: plaintextAuthPersistenceMatches(in: text, path: relativePath))
         }
 
@@ -121,6 +122,32 @@ private struct SourceGuardrailTests {
             return regex.firstMatch(in: line, range: range) == nil
                 ? nil
                 : "secret-shaped provider value must not appear in the Mac app"
+        }
+    }
+
+    private static func providerSettingsPersistenceMatches(in text: String, path: String) -> [SourceMatch] {
+        let forbiddenFragments = [
+            "appsettingsstorage",
+            "\".settings\"",
+            "groq_api_key",
+            "api_base_url",
+            "transcription_api_key",
+            "transcription_api_url",
+            "advanced provider settings",
+            "openai-compatible provider",
+            "console.groq.com/keys",
+            "paste your api key",
+            "enter your groq api key",
+            "api key required to test",
+            "stream audio while recording (realtime)",
+            "realtimetranscriptionservice",
+        ]
+
+        return lineMatches(in: text, path: path) { line in
+            let lowercased = line.lowercased()
+            return forbiddenFragments.contains { lowercased.contains($0) }
+                ? "Mac app must not persist or request provider API secret settings"
+                : nil
         }
     }
 

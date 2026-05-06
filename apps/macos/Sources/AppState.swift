@@ -142,11 +142,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         case muted(previouslyMuted: Bool)
     }
 
-    private let apiKeyStorageKey = "groq_api_key"
-    private let apiBaseURLStorageKey = "api_base_url"
     private let transcriptionModelStorageKey = "transcription_model"
-    private let transcriptionAPIURLStorageKey = "transcription_api_url"
-    private let transcriptionAPIKeyStorageKey = "transcription_api_key"
     private let postProcessingModelStorageKey = "post_processing_model"
     private let postProcessingFallbackModelStorageKey = "post_processing_fallback_model"
     private let contextModelStorageKey = "context_model"
@@ -173,8 +169,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private let commandModeStyleStorageKey = "command_mode_style"
     private let commandModeManualModifierStorageKey = "command_mode_manual_modifier"
     private let outputLanguageStorageKey = "output_language"
-    private let realtimeStreamingEnabledStorageKey = "realtime_streaming_enabled"
-    private let realtimeStreamingModelStorageKey = "realtime_streaming_model"
     private let dictationAudioInterruptionEnabledStorageKey = "dictation_audio_interruption_enabled"
     private let pasteAfterShortcutReleaseDelay: TimeInterval = 0.03
     private let pressEnterAfterPasteDelay: TimeInterval = 0.08
@@ -225,32 +219,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var hasCompletedSetup: Bool {
         didSet {
             UserDefaults.standard.set(hasCompletedSetup, forKey: "hasCompletedSetup")
-        }
-    }
-
-    @Published var apiKey: String {
-        didSet {
-            persistAPIKey(apiKey)
-            rebuildContextService()
-        }
-    }
-
-    @Published var apiBaseURL: String {
-        didSet {
-            persistAPIBaseURL(apiBaseURL)
-            rebuildContextService()
-        }
-    }
-
-    @Published var transcriptionAPIURL: String {
-        didSet {
-            persistOptionalAPIValue(transcriptionAPIURL, account: transcriptionAPIURLStorageKey)
-        }
-    }
-
-    @Published var transcriptionAPIKey: String {
-        didSet {
-            persistOptionalAPIValue(transcriptionAPIKey, account: transcriptionAPIKeyStorageKey)
         }
     }
 
@@ -398,24 +366,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var shortcutStartDelay: TimeInterval {
         didSet {
             UserDefaults.standard.set(shortcutStartDelay, forKey: shortcutStartDelayStorageKey)
-        }
-    }
-
-    /// Stream audio to the transcription backend during recording via the
-    /// OpenAI Realtime WebSocket. Reduces wall-clock latency between "stop"
-    /// and text-ready because most of the transcription work happens while
-    /// the user is still speaking.
-    @Published var realtimeStreamingEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(realtimeStreamingEnabled, forKey: realtimeStreamingEnabledStorageKey)
-        }
-    }
-
-    /// Model ID the realtime WebSocket should transcribe with. Empty means
-    /// "use the server's default".
-    @Published var realtimeStreamingModel: String {
-        didSet {
-            UserDefaults.standard.set(realtimeStreamingModel, forKey: realtimeStreamingModelStorageKey)
         }
     }
 
@@ -569,7 +519,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var pendingManualCommandInvocation = false
     private var pendingShortcutStartTask: Task<Void, Never>?
     private var pendingShortcutStartMode: RecordingTriggerMode?
-    private var realtimeService: RealtimeTranscriptionService?
     private var automaticTerminationDisabled = false
     private var activeAudioInterruption: ActiveAudioInterruption?
     private var activeTransientRecordingArtifact: TransientRecordingArtifact?
@@ -602,11 +551,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         )
         let firstRunOnboardingCoordinator = FirstRunOnboardingCoordinator()
         let hasCompletedSetup = UserDefaults.standard.bool(forKey: "hasCompletedSetup")
-        let apiKey = Self.loadStoredAPIKey(account: apiKeyStorageKey)
-        let apiBaseURL = Self.loadStoredAPIBaseURL(account: "api_base_url")
         let transcriptionModel = UserDefaults.standard.string(forKey: transcriptionModelStorageKey) ?? Self.defaultTranscriptionModel
-        let transcriptionAPIURL = Self.loadOptionalStoredAPIValue(account: transcriptionAPIURLStorageKey)
-        let transcriptionAPIKey = Self.loadStoredAPIKey(account: transcriptionAPIKeyStorageKey)
         let postProcessingModel = UserDefaults.standard.string(forKey: postProcessingModelStorageKey) ?? Self.defaultPostProcessingModel
         let postProcessingFallbackModel = UserDefaults.standard.string(forKey: postProcessingFallbackModelStorageKey) ?? Self.defaultPostProcessingFallbackModel
         let contextModel = UserDefaults.standard.string(forKey: contextModelStorageKey) ?? Self.defaultContextModel
@@ -657,8 +602,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let preserveClipboard = UserDefaults.standard.object(forKey: preserveClipboardStorageKey) == nil
             ? true
             : UserDefaults.standard.bool(forKey: preserveClipboardStorageKey)
-        let realtimeStreamingEnabled = UserDefaults.standard.bool(forKey: realtimeStreamingEnabledStorageKey)
-        let realtimeStreamingModel = UserDefaults.standard.string(forKey: realtimeStreamingModelStorageKey) ?? ""
         let dictationAudioInterruptionEnabled = UserDefaults.standard.bool(
             forKey: dictationAudioInterruptionEnabledStorageKey
         )
@@ -717,17 +660,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let selectedMicrophoneID = UserDefaults.standard.string(forKey: selectedMicrophoneStorageKey) ?? "default"
 
         self.contextService = Self.makeAppContextService(
-            apiKey: apiKey,
-            baseURL: apiBaseURL,
             customContextPrompt: customContextPrompt,
             contextModel: contextModel,
             contextScreenshotMaxDimension: contextScreenshotMaxDimension
         )
         self.hasCompletedSetup = hasCompletedSetup
-        self.apiKey = apiKey
-        self.apiBaseURL = apiBaseURL
-        self.transcriptionAPIURL = transcriptionAPIURL
-        self.transcriptionAPIKey = transcriptionAPIKey
         self.transcriptionModel = transcriptionModel
         self.postProcessingModel = postProcessingModel
         self.postProcessingFallbackModel = postProcessingFallbackModel
@@ -753,8 +690,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.outputLanguage = outputLanguage
         self.shortcutStartDelay = shortcutStartDelay
         self.preserveClipboard = preserveClipboard
-        self.realtimeStreamingEnabled = realtimeStreamingEnabled
-        self.realtimeStreamingModel = realtimeStreamingModel
         self.dictationAudioInterruptionEnabled = dictationAudioInterruptionEnabled
         self.isPressEnterVoiceCommandEnabled = isPressEnterVoiceCommandEnabled
         self.alertSoundsEnabled = alertSoundsEnabled
@@ -997,24 +932,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         audioDeviceObservers.removeAll()
     }
 
-    private static func loadStoredAPIKey(account: String) -> String {
-        if let storedKey = AppSettingsStorage.load(account: account), !storedKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return storedKey
-        }
-        return ""
-    }
-
-    private func persistAPIKey(_ value: String) {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            AppSettingsStorage.delete(account: apiKeyStorageKey)
-        } else {
-            AppSettingsStorage.save(trimmed, account: apiKeyStorageKey)
-        }
-    }
-
-    static let defaultAPIBaseURL = "https://api.groq.com/openai/v1"
-
     private struct StoredShortcutConfiguration {
         let hold: ShortcutBinding
         let toggle: ShortcutBinding
@@ -1031,13 +948,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let binding: ShortcutBinding?
         let hadStoredValue: Bool
         let didNormalize: Bool
-    }
-
-    private static func loadStoredAPIBaseURL(account: String) -> String {
-        if let stored = AppSettingsStorage.load(account: account), !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return stored
-        }
-        return defaultAPIBaseURL
     }
 
     private static func loadShortcutConfiguration(holdKey: String, toggleKey: String) -> StoredShortcutConfiguration {
@@ -1093,15 +1003,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     static func makeAppContextService(
-        apiKey: String,
-        baseURL: String,
         customContextPrompt: String,
         contextModel: String,
         contextScreenshotMaxDimension: Int
     ) -> AppContextService {
         AppContextService(
-            apiKey: apiKey,
-            baseURL: baseURL,
             customContextPrompt: customContextPrompt,
             contextModel: contextModel,
             screenshotMaxDimension: CGFloat(normalizedContextScreenshotMaxDimension(contextScreenshotMaxDimension))
@@ -1110,8 +1016,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     func makeAppContextService() -> AppContextService {
         Self.makeAppContextService(
-            apiKey: apiKey,
-            baseURL: apiBaseURL,
             customContextPrompt: customContextPrompt,
             contextModel: contextModel,
             contextScreenshotMaxDimension: contextScreenshotMaxDimension
@@ -1122,45 +1026,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
         contextService = makeAppContextService()
     }
 
-    private func persistAPIBaseURL(_ value: String) {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || trimmed == Self.defaultAPIBaseURL {
-            AppSettingsStorage.delete(account: apiBaseURLStorageKey)
-        } else {
-            AppSettingsStorage.save(trimmed, account: apiBaseURLStorageKey)
-        }
-    }
-
-    private func persistOptionalAPIValue(_ value: String, account: String) {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            AppSettingsStorage.delete(account: account)
-        } else {
-            AppSettingsStorage.save(trimmed, account: account)
-        }
-    }
-
-    private static func loadOptionalStoredAPIValue(account: String) -> String {
-        let stored = AppSettingsStorage.load(account: account) ?? ""
-        return stored.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     private static func normalizeTranscriptionLanguage(_ language: String) -> String {
         let normalized = language.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard transcriptionLanguageOptions.contains(where: { $0.code == normalized }) else {
             return ""
         }
         return normalized
-    }
-
-    private var resolvedTranscriptionBaseURL: String {
-        let trimmed = transcriptionAPIURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? apiBaseURL : trimmed
-    }
-
-    private var resolvedTranscriptionAPIKey: String {
-        let trimmed = transcriptionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? apiKey : trimmed
     }
 
     private var cleanupPrivacyControls: CleanupPrivacyControls {
@@ -1484,11 +1355,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         components.queryItems = queryItems.isEmpty ? nil : queryItems
         components.fragment = nil
         return components.url
-    }
-
-    private var resolvedTranscriptionLanguage: String? {
-        let normalized = Self.normalizeTranscriptionLanguage(transcriptionLanguage)
-        return normalized.isEmpty ? nil : normalized
     }
 
     private func persistShortcut(_ binding: ShortcutBinding, key: String) {
@@ -2551,7 +2417,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         debugStatusMessage = "Cancelled"
         statusText = "Cancelled"
         overlayManager.dismiss()
-        tearDownRealtimeService()
         audioRecorder.cancelRecording()
         restoreAudioInterruptionIfNeeded()
         endCriticalDictationActivity()
@@ -2585,7 +2450,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         debugStatusMessage = "Cancelled"
         statusText = "Cancelled"
         overlayManager.dismiss()
-        tearDownRealtimeService()
         audioRecorder.cancelRecording()
         restoreAudioInterruptionIfNeeded()
         endCriticalDictationActivity()
@@ -3015,8 +2879,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
             }
         }
 
-        startRealtimeStreamingIfEnabled()
-
         // Start engine on background thread so UI isn't blocked
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
@@ -3057,7 +2919,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         contextCaptureTask?.cancel()
         contextCaptureTask = nil
         capturedContext = nil
-        tearDownRealtimeService()
         audioRecorder.cleanup()
         restoreAudioInterruptionIfNeeded()
         stopRecordingDurationTimer()
@@ -3335,7 +3196,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
             }
 
             guard self.isTranscribing else {
-                self.tearDownRealtimeService()
                 artifact.delete()
                 self.refreshAvailableMicrophonesIfNeeded()
                 return
@@ -3344,7 +3204,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
             self.activeTransientRecordingArtifact = artifact
             self.statusText = "Transcribing..."
             self.debugStatusMessage = "Uploading audio"
-            self.tearDownRealtimeService()
             self.transcriptionTask?.cancel()
             guard self.isTranscribing else {
                 artifact.delete()
@@ -3522,7 +3381,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         contextCaptureTask?.cancel()
         contextCaptureTask = nil
         capturedContext = nil
-        tearDownRealtimeService()
         restoreAudioInterruptionIfNeeded()
         isRecording = false
         isTranscribing = false
@@ -3559,7 +3417,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         contextCaptureTask?.cancel()
         contextCaptureTask = nil
         capturedContext = nil
-        tearDownRealtimeService()
         restoreAudioInterruptionIfNeeded()
         isRecording = false
         isTranscribing = false
@@ -3762,39 +3619,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func startRealtimeStreamingIfEnabled() {
-        guard realtimeStreamingEnabled else { return }
-        let trimmedBase = resolvedTranscriptionBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedBase.isEmpty else {
-            os_log(.info, log: recordingLog, "realtime streaming requested but base URL is empty — skipping")
-            return
-        }
-        let model = realtimeStreamingModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let config = RealtimeTranscriptionService.Configuration(
-            baseURL: trimmedBase,
-            apiKey: resolvedTranscriptionAPIKey,
-            model: model,
-            language: resolvedTranscriptionLanguage
-        )
-        let service = RealtimeTranscriptionService(config: config)
-        do {
-            try service.start()
-        } catch {
-            os_log(.error, log: recordingLog, "failed to start realtime service: %{public}@", error.localizedDescription)
-            return
-        }
-        realtimeService = service
-        audioRecorder.onPCM16Samples = { [weak service] data in
-            service?.appendPCM16(data)
-        }
-    }
-
-    private func tearDownRealtimeService() {
-        audioRecorder.onPCM16Samples = nil
-        realtimeService?.cancel()
-        realtimeService = nil
-    }
-
     private func startContextCapture() {
         contextCaptureTask?.cancel()
         capturedContext = nil
@@ -3958,7 +3782,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
             hasShownScreenshotPermissionAlert = true
 
             // Permission errors are fatal — stop recording
-            tearDownRealtimeService()
             audioRecorder.cancelRecording()
             audioLevelCancellable?.cancel()
             audioLevelCancellable = nil
