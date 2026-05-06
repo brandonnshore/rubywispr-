@@ -158,12 +158,12 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
             guard let device = Self.defaultCaptureDevice() else {
                 throw AudioRecorderError.missingInputDevice
             }
-            os_log(.info, log: recordingLog, "%{public}@ — using system default device: %{public}@", reason, device.localizedName)
+            os_log(.info, log: recordingLog, "%{public}@ - using system default capture device", reason)
             return device
         }
 
         if let device = Self.captureDevice(forUID: requestedDeviceUID) {
-            os_log(.info, log: recordingLog, "%{public}@ — keeping selected device: %{public}@ [uid=%{public}@]", reason, device.localizedName, device.uniqueID)
+            os_log(.info, log: recordingLog, "%{public}@ - using selected capture device", reason)
             return device
         }
 
@@ -174,11 +174,8 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
         os_log(
             .info,
             log: recordingLog,
-            "%{public}@ — selected device unavailable [uid=%{public}@], falling back to system default: %{public}@ [uid=%{public}@]",
-            reason,
-            requestedDeviceUID,
-            fallbackDevice.localizedName,
-            fallbackDevice.uniqueID
+            "%{public}@ - selected capture device unavailable; falling back to system default",
+            reason
         )
         return fallbackDevice
     }
@@ -623,14 +620,14 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
         }
         installSessionObservers(for: session)
 
-        os_log(.info, log: recordingLog, "configured capture session with device %{public}@ [uid=%{public}@]", device.localizedName, device.uniqueID)
+        os_log(.info, log: recordingLog, "configured capture session with redacted audio input")
 
         session.startRunning()
         guard session.isRunning else {
             throw AudioRecorderError.failedToStartCaptureSession("Session failed to enter running state.")
         }
 
-        os_log(.info, log: recordingLog, "capture session running with device %{public}@ [uid=%{public}@]", device.localizedName, device.uniqueID)
+        os_log(.info, log: recordingLog, "capture session running with redacted audio input")
         tempFileURL = outputURL
     }
 
@@ -878,7 +875,7 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
             fileWriteErrorLock.withLock { _ in
                 fileWriteError = error
             }
-            os_log(.error, log: recordingLog, "audio file write failed: %{public}@", error.localizedDescription)
+            os_log(.error, log: recordingLog, "audio file write failed category=%{public}@", "transient_audio_file_write")
             reportRecordingFailure(error)
             return
         }
