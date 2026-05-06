@@ -438,22 +438,38 @@ Mac app:
 
 - Direct-download distribution first.
 - Signed and notarized through Apple Developer account.
-- Auto-update through Sparkle or chosen updater.
+- Auto-update through the RUB-104A source-level direct-download feed contract
+  until a later ticket explicitly replaces it with Sparkle or another updater.
 - Mac App Store is future/later.
 - Use `docs/MAC_BETA_RELEASE_RUNBOOK.md` as the placeholder-only human release
   checklist for signing, notarization, packaging, attribution, checksum notes,
-  appcast preparation, and clean-Mac validation.
+  update-feed preparation, and clean-Mac validation.
 
 ### Direct-Download macOS Release Spike
 
-Status: recommendation for the future repo-local macOS app. The selected base has
-not been imported into this repo yet; `docs/FREEFLOW_AUDIT_RUB_24.md` confirms
-FreeFlow is a Swift/AppKit/SwiftUI Makefile-based candidate and that its local
-audit build used ad hoc signing only.
+Status: the repo-local macOS app now has a source-level direct-download updater
+contract from RUB-104A. Public URL publication, signing, notarization, release
+secrets, and the first live update check remain human-gated.
 
-Recommendation:
+Current source-level update channel contract:
 
-- Use Sparkle 2 for direct-download auto-updates once the macOS app is imported.
+- `apps/macos/Info.plist` declares `RubyWhisperUpdateChannelEnabled` and
+  `RubyWhisperUpdateReleasesURL`.
+- `apps/macos/Makefile` exposes non-secret `UPDATE_CHANNEL_ENABLED` and
+  `UPDATE_RELEASES_URL` overrides and writes them into the built bundle.
+- `UpdateChannelConfiguration` enables update checks only when the boolean is
+  explicit and the release feed URL is valid HTTPS.
+- The release feed reader accepts GitHub releases-style JSON with semantic
+  `tag_name` values and `.dmg` assets.
+- Default local builds keep the channel disabled and do not call an update
+  service.
+- Mock validation uses synthetic fixtures and example `.test` URLs only; it
+  must not publish or query a public RubyWhisper channel.
+
+Future recommendation:
+
+- Use Sparkle 2 for direct-download auto-updates only if a later release-channel
+  ticket replaces or extends the current GitHub releases-style feed contract.
 - Keep Mac App Store distribution future/later. The first release path should be
   Developer ID direct download from the RubyWhisper website.
 - Revisit the updater only if RW-060 imports a base that cannot support Sparkle
@@ -479,7 +495,8 @@ Release prerequisites and credentials:
 
 Release artifact shape:
 
-- Build archive from the repo-local macOS project after RW-060 imports it.
+- Build archive from the repo-local macOS project after the release-packaging
+  ticket defines the approved release command.
 - Export a Developer ID-signed `.app` with Hardened Runtime.
 - Package the signed app in a `.dmg` with an `/Applications` symlink for website
   distribution and Sparkle updates. A `.zip` can be used for Sparkle if needed,
@@ -490,9 +507,9 @@ Release artifact shape:
 - Verify Gatekeeper launch behavior on a clean, quarantine-preserving download
   path before publishing.
 
-Sparkle appcast and update needs:
+Future Sparkle appcast and update needs, if a later ticket adds Sparkle:
 
-- Add Sparkle through the native app's dependency mechanism after import.
+- Add Sparkle through the native app's dependency mechanism.
 - Add `SUFeedURL`, `SUPublicEDKey`, and a monotonically increasing
   `CFBundleVersion` to the app metadata.
 - Publish `appcast.xml` over HTTPS with release notes and EdDSA signatures for
@@ -511,7 +528,10 @@ Human approval gates:
   machine.
 - Approval before generating or rotating Sparkle EdDSA keys.
 - Approval before the first notarized public build.
-- Approval before publishing or changing the public download URL or appcast.
+- Approval before publishing or changing the public download URL, update feed,
+  or appcast.
+- Approval before configuring the first public `RubyWhisperUpdateReleasesURL`
+  value or running the first live update check against it.
 - Approval before any Mac App Store packaging or entitlement work.
 
 References:

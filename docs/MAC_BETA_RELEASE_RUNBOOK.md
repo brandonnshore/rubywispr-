@@ -14,8 +14,9 @@ Linear, PRs, release notes, or command output.
 - Target distribution: direct download from the RubyWhisper website.
 - Target artifact: Developer ID signed and notarized `.dmg` containing
   `RubyWhisper.app` and an `/Applications` symlink.
-- Update channel: Sparkle 2 appcast after the macOS app import confirms the
-  final updater integration.
+- Update channel: RUB-104A source-level direct-download feed config first;
+  Sparkle 2 appcast metadata remains a future release-channel option until a
+  later ticket replaces or extends the current contract.
 - Future/later: Mac App Store packaging, TestFlight, and production appcast
   publication automation.
 
@@ -34,18 +35,70 @@ owner must perform or approve every step marked `Human gate`.
   FreeFlow MIT attribution requirements, current ad hoc signing evidence, and
   import/rebrand notes.
 - RUB-27 / RW-016: Apple signing, notarization, and updater spike.
+- RUB-310 / RW-104A: source-level update channel configuration.
 - RUB-78 / RW-105: future signed/notarized release artifact ticket.
 
 ## Remaining Blockers
 
-- macOS app source import is not present in this repo yet.
-- Direct-download updater implementation is not present yet.
+- Public direct-download update channel is not configured yet.
 - Apple Developer credentials and certificate private keys are human-held.
 - Notarization submission and stapling have not been run for RubyWhisper.
 - Artifact checksum and version notes cannot be finalized until an artifact
   exists.
 - Clean-Mac install/open QA remains manual and cannot be completed from this
   docs-only ticket.
+
+## RUB-104A Source-Level Update Channel Contract
+
+The imported macOS app currently has a source-safe direct-download updater
+contract. It is not a public release channel by itself.
+
+Source config:
+
+- `RubyWhisperUpdateChannelEnabled`: non-secret `Info.plist` boolean. Default:
+  `false`.
+- `RubyWhisperUpdateReleasesURL`: non-secret `Info.plist` HTTPS JSON release
+  feed URL. Default: empty string.
+- `UPDATE_CHANNEL_ENABLED`: non-secret Makefile override that writes
+  `RubyWhisperUpdateChannelEnabled` into the built bundle.
+- `UPDATE_RELEASES_URL`: non-secret Makefile override that writes
+  `RubyWhisperUpdateReleasesURL` into the built bundle.
+
+Runtime contract:
+
+- The update channel is enabled only when
+  `RubyWhisperUpdateChannelEnabled=true` and `RubyWhisperUpdateReleasesURL`
+  parses as HTTPS.
+- A URL alone does not enable update checks.
+- Development builds with no `RubyWhisperBuildTag` skip automatic checks, but a
+  user-initiated check may fetch the configured feed.
+- The current feed reader accepts a GitHub releases-style JSON array with
+  semantic `tag_name` values and `.dmg` assets whose `browser_download_url`
+  points at the direct-download artifact.
+- `https://updates.example.test/releases.json` is documentation and test
+  fixture syntax only. Do not treat it as a live RubyWhisper channel.
+
+Public/non-secret values:
+
+- The two `Info.plist` keys, the two Makefile override names, semantic app
+  version/build identifiers, and an approved public HTTPS feed URL after human
+  release approval.
+
+Human-gated secret or production values:
+
+- Apple Developer signing identities and certificate private keys.
+- App Store Connect notarization key IDs, issuer IDs, `.p8` files, passwords,
+  and keychain profile details.
+- Sparkle private keys or any appcast/update signing credential if Sparkle is
+  added later.
+- Release upload tokens, appcast publication credentials, and any private
+  release machine paths.
+- The first approved public feed URL, public artifact URL, and first live
+  update check.
+
+Agents may document and validate the source-safe contract. Agents must not set
+the public feed URL, publish releases, upload artifacts, run live public update
+checks, or handle release credentials.
 
 ## Roles And Human Gates
 
@@ -90,6 +143,7 @@ Apple Developer/App Store Connect, or the approved release secret manager. Keep
 | `<SPARKLE_PRIVATE_ED_KEY>` | Private Sparkle EdDSA key for appcast/update signing | Release machine Keychain or approved release secret manager |
 | `<APPCAST_URL>` | HTTPS beta appcast URL | Non-secret release config after update channel approval |
 | `<DOWNLOAD_URL>` | HTTPS artifact download URL | Public web config after artifact approval |
+| `<UPDATE_RELEASES_URL>` | RUB-104A HTTPS JSON release feed URL for `RubyWhisperUpdateReleasesURL` | Non-secret release config only after update channel approval |
 | `<APP_VERSION>` | Marketing version, for example `CFBundleShortVersionString` | Source or release config |
 | `<BUILD_NUMBER>` | Monotonic build number, for example `CFBundleVersion` | Source or release config |
 | `<ARTIFACT_SHA256>` | Published checksum for the approved artifact | Release notes after artifact exists |
@@ -106,15 +160,17 @@ release automation once the macOS source and update channel exist.
 - The macOS import/rebrand ticket has produced a repo-local app build entry
   point, final app name, bundle identifier, icon, entitlements, version keys,
   and release build command.
-- Sparkle is either integrated or explicitly deferred with a documented first
-  beta update policy.
+- The RUB-104A update feed contract is either disabled for the release or
+  configured through an approved public `RubyWhisperUpdateReleasesURL`; Sparkle
+  remains future/later unless a later ticket adds it.
 - `TECHNICAL_SPEC.md`, `TECHNICAL_INFRASTRUCTURE.md`, `docs/setup.md`, and this
   runbook agree on the release path.
 - FreeFlow MIT attribution and any other third-party notices are present in
   source and copied into the distributed app.
 - The release owner has an approved release machine or CI environment with
   Xcode command line tools, signing assets, notary credentials, packaging tools,
-  Sparkle tools, and HTTPS upload access.
+  update-feed tooling, optional Sparkle tools if Sparkle is later added, and
+  HTTPS upload access.
 
 Human gate: confirm the release owner has approved every credential and upload
 target before continuing.
@@ -302,9 +358,64 @@ they contain local paths, account identifiers, or private details.
 
 ### 7. Sparkle Appcast Preparation
 
-Human gate: appcast signing and publication require release-owner approval.
+Human gate: public feed/appcast signing and publication require release-owner
+approval.
 
-Before appcast work:
+### 7A. Mock/Staging Update Feed Validation
+
+This path validates the RUB-104A source contract without publishing a public
+channel and without running a live public update check.
+
+Repo-local validation:
+
+```bash
+make -C apps/macos test-update-manager
+make -C apps/macos clean all \
+  CODESIGN_IDENTITY=- \
+  UPDATE_CHANNEL_ENABLED=true \
+  UPDATE_RELEASES_URL=https://updates.example.test/releases.json
+plutil -p apps/macos/build/RubyWhisper.app/Contents/Info.plist | \
+  rg "RubyWhisperUpdate(ChannelEnabled|ReleasesURL)"
+```
+
+Expected evidence:
+
+- `test-update-manager` passes using synthetic fixture data and injected feed
+  loading.
+- The built bundle contains `RubyWhisperUpdateChannelEnabled => true`.
+- The built bundle contains
+  `RubyWhisperUpdateReleasesURL => "https://updates.example.test/releases.json"`.
+- No real RubyWhisper public URL, release token, signing identity, notary
+  credential, Sparkle private key, or private environment value appears in the
+  output, commit, PR text, or Linear workpad.
+
+Optional staging-only validation, if a future issue provides an approved
+non-public HTTPS feed:
+
+- Use only an approved staging URL in `UPDATE_RELEASES_URL`.
+- The staging feed must be GitHub releases-style JSON with semantic tags and a
+  `.dmg` asset URL that points to a staging-only artifact.
+- Record only sanitized metadata: feed host classification, app version/build,
+  artifact filename, expected update version, pass/fail result, and the fact
+  that no public channel was used.
+- Do not run a live check against a public production feed from this ticket.
+
+### 7B. Live/Manual Update Feed Path
+
+This path is separate from mock/staging validation and remains human-gated.
+
+Before live feed work:
+
+- Release owner approves the public feed URL for `RubyWhisperUpdateReleasesURL`
+  and the public artifact URL used by the release feed.
+- Release owner confirms signing, notarization, checksum, attribution, and
+  clean-Mac QA evidence are complete for the artifact referenced by the feed.
+- The selected app build has an approved `RubyWhisperBuildTag` matching the
+  release tag so automatic checks can identify the current build.
+- A human performs the first live manual update check and records sanitized
+  evidence before RUB-77 is accepted.
+
+For a future Sparkle appcast implementation, before appcast work:
 
 - App metadata includes `SUFeedURL`, `SUPublicEDKey`, and an increasing
   `CFBundleVersion`.
@@ -344,7 +455,7 @@ Release notes should record:
 - `<ARTIFACT_SHA256>`.
 - Notary result and stapling validation status, sanitized.
 - Attribution checklist status.
-- Sparkle appcast status, or a clear note that auto-update is deferred.
+- Update feed/appcast status, or a clear note that auto-update is deferred.
 - Known blockers or beta limitations.
 
 Do not upload until attribution, signing, notarization, stapling, checksum, and
@@ -368,14 +479,44 @@ Minimum clean-Mac checklist:
 - Confirm first-launch permission prompts are expected and branded.
 - Confirm app version/build match the release notes.
 - Confirm third-party notices or About/Acknowledgments are present.
-- If Sparkle is enabled, verify update check behavior against the approved beta
-  appcast without publishing an unintended newer update.
+- If the update channel is enabled, verify update check behavior against the
+  approved beta feed/appcast without publishing an unintended newer update.
 - Record macOS version, architecture, test account type, download URL,
   artifact checksum, and pass/fail notes in the release tracking ticket.
 
 Stop the release if Gatekeeper blocks the app, notarization is not stapled or
-online-verifiable, attribution is missing, or the appcast points at the wrong
-artifact.
+online-verifiable, attribution is missing, or the update feed/appcast points at
+the wrong artifact.
+
+## Evidence Required Before RUB-77 Acceptance
+
+RUB-77 can accept the direct-download update channel only after sanitized
+evidence shows both the source-safe path and the human-gated live path are
+covered.
+
+Required source/mock evidence:
+
+- `make -C apps/macos test-update-manager` passes.
+- A configured mock build writes `RubyWhisperUpdateChannelEnabled=true` and a
+  non-production HTTPS `RubyWhisperUpdateReleasesURL` into the bundle.
+- The release feed parser selects a newer semantic release from synthetic or
+  approved staging JSON without touching a public channel.
+- Default builds leave updates disabled.
+
+Required human/live evidence:
+
+- Release owner approval for the public update feed URL and public artifact
+  URL.
+- Developer ID signing, notarization submission, stapling, checksum,
+  attribution, and clean-Mac launch evidence for the artifact referenced by the
+  feed.
+- Sanitized first-live-update evidence that records macOS version,
+  architecture, app version/build, update feed classification, offered update
+  version, artifact filename, checksum match, and pass/fail result.
+- Confirmation that no signing/notarization credentials, release tokens,
+  private keys, private env values, private release notes, or unapproved
+  production URLs were written to repo files, PR text, Linear comments, or
+  command output.
 
 ## Autonomous Agent Boundaries
 
