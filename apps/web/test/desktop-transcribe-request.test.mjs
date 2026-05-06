@@ -334,6 +334,39 @@ test("desktop transcription parser maps over-duration audio to duration limit me
   );
 });
 
+test("desktop transcription parser ignores Recent Wisprs local history fields", async () => {
+  const parser = await loadDesktopTranscribeRequestModule();
+  const formData = createSyntheticAudioFormData();
+
+  formData.set("recentWisprs", "final_text_placeholder_not_synced");
+  formData.set("recent_wispr", "final_text_placeholder_not_synced");
+  formData.set("finalText", "final_text_placeholder_not_synced");
+  formData.set("cleanedText", "final_text_placeholder_not_synced");
+  formData.set("rawTranscript", "raw_transcript_placeholder_not_synced");
+  formData.set("insertionStatus", "insertion_failed");
+  formData.set("copiedAt", "2026-05-06T00:00:00Z");
+  formData.set("clipboard", "clipboard_placeholder_not_synced");
+
+  const result = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: formData,
+      method: "POST",
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.input.metadata).sort(), [
+    "audioDurationMs",
+    "audioMimeType",
+    "cleanupEnabled",
+    "contextAwareCleanupEnabled",
+  ]);
+  assert.doesNotMatch(
+    JSON.stringify(result.input),
+    /recentWisprs|recent_wispr|finalText|cleanedText|rawTranscript|final_text_placeholder_not_synced|raw_transcript_placeholder_not_synced|clipboard_placeholder_not_synced|insertion_failed|copiedAt|clipboard/,
+  );
+});
+
 test("desktop transcription parser is server-only and privacy neutral", async () => {
   const source = await readFile(desktopTranscribeRequestPath, "utf8");
 

@@ -530,6 +530,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var isDebugOverlayActive = false
     @Published var selectedSettingsTab: SettingsTab? = .general
     @Published var pipelineHistory: [PipelineHistoryItem] = []
+    @Published var recentWisprs: [RecentWispr] = []
+    @Published var isRecentWisprsHistoryEnabled = true
     @Published private(set) var authCoordinatorState: DesktopAuthCoordinatorState
     @Published private(set) var authAccountSnapshot: RubyWhisperDesktopAccountSnapshot
     @Published private(set) var firstRunOnboardingStep: FirstRunOnboardingStep
@@ -593,6 +595,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var audioDeviceObservers: [NSObjectProtocol] = []
     private var needsMicrophoneRefreshAfterRecording = false
     private let pipelineHistoryStore = PipelineHistoryStore()
+    private let recentWisprStore = RecentWisprStore()
     private let personalDictionaryStore: PersonalDictionaryStore
     private let shortcutSessionController = DictationShortcutSessionController()
     private var activeRecordingTriggerMode: RecordingTriggerMode?
@@ -735,6 +738,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
         Self.deletePersistedAudioStorageDirectory()
         let savedHistory = pipelineHistoryStore.loadAllHistory()
+        _ = recentWisprStore.cleanupExpiredItems()
+        let savedRecentWisprs = recentWisprStore.listItems()
+        let isRecentWisprsHistoryEnabled = recentWisprStore.isHistoryEnabled
 
         let selectedMicrophoneID = UserDefaults.standard.string(forKey: selectedMicrophoneStorageKey) ?? "default"
 
@@ -781,6 +787,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.soundVolume = soundVolume
         self.voiceMacros = initialMacros
         self.pipelineHistory = savedHistory
+        self.recentWisprs = savedRecentWisprs
+        self.isRecentWisprsHistoryEnabled = isRecentWisprsHistoryEnabled
         self.personalDictionaryStore = personalDictionaryStore
         self.authStateOwner = authStateOwner
         self.desktopLoginBridge = desktopLoginBridge
@@ -870,6 +878,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
         personalDictionaryTerms = personalDictionaryStore.listTerms()
         isPersonalDictionaryEnabled = personalDictionaryStore.isEnabled
         customVocabulary = personalDictionaryStore.termsForCleanupPayload().joined(separator: "\n")
+    }
+
+    private func refreshRecentWisprs() {
+        recentWisprs = recentWisprStore.listItems()
+        isRecentWisprsHistoryEnabled = recentWisprStore.isHistoryEnabled
     }
 
     private static func makeDesktopAccountSnapshotLoader(
@@ -1582,6 +1595,26 @@ final class AppState: ObservableObject, @unchecked Sendable {
         } catch {
             errorMessage = "Unable to clear run history: \(error.localizedDescription)"
         }
+    }
+
+    func clearRecentWisprs() {
+        recentWisprStore.clearHistory()
+        refreshRecentWisprs()
+    }
+
+    func setRecentWisprsHistoryEnabled(_ enabled: Bool) {
+        recentWisprStore.setHistoryEnabled(enabled)
+        refreshRecentWisprs()
+    }
+
+    func disableAndClearRecentWisprsHistory() {
+        recentWisprStore.disableAndClearHistory()
+        refreshRecentWisprs()
+    }
+
+    func markRecentWisprCopied(id: String) {
+        _ = recentWisprStore.markCopied(id: id)
+        refreshRecentWisprs()
     }
 
     func deleteHistoryEntry(id: UUID) {
@@ -3342,6 +3375,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             self.statusText = completionStatusText
                             self.clearPendingOverlayDismissToken()
                             let updateReminderShown = self.showPostTranscriptionUpdateReminderIfNeeded()
+                            self.recordRecentWispr(
+                                finalText: trimmedFinalTranscript,
+                                insertionStatus: .inserted
+                            )
 
                             let pendingClipboardRestore = self.writeTranscriptToPasteboard(trimmedFinalTranscript)
                             if !updateReminderShown {
@@ -3577,6 +3614,19 @@ final class AppState: ObservableObject, @unchecked Sendable {
         } catch {
             errorMessage = "Unable to save run history entry: \(error.localizedDescription)"
         }
+    }
+
+    private func recordRecentWispr(
+        finalText: String,
+        insertionStatus: RecentWisprInsertionStatus,
+        destinationAppCategory: String? = nil
+    ) {
+        _ = recentWisprStore.recordFinalText(
+            finalText,
+            insertionStatus: insertionStatus,
+            destinationAppCategory: destinationAppCategory
+        )
+        refreshRecentWisprs()
     }
 
     private func startRealtimeStreamingIfEnabled() {
