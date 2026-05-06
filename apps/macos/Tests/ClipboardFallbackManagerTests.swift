@@ -75,12 +75,14 @@ private final class FixtureEventSink: ClipboardFallbackEventSink {
 
 @main
 private struct ClipboardFallbackManagerTests {
-    static func main() {
+    static func main() throws {
         testSupportedSnapshotRestoresOnlyWhileOwned()
         testOwnershipChangedSkipsRestore()
         testUnsupportedSnapshotCopiesAndSkipsRestore()
         testDisabledRestorationDoesNotSnapshot()
         testWriteFailureDoesNotScheduleRestore()
+        try testCopySuccessEventsDoNotExposeClipboardFallbackPayloads()
+        try testWriteFailureEventsDoNotExposeClipboardFallbackPayloads()
 
         print("ClipboardFallbackManagerTests passed")
     }
@@ -236,6 +238,52 @@ private struct ClipboardFallbackManagerTests {
         ], "write failure should emit categorical skip event")
     }
 
+    private static func testCopySuccessEventsDoNotExposeClipboardFallbackPayloads() throws {
+        let pasteboard = FixturePasteboardPort()
+        let scheduler = FixtureScheduler()
+        let sink = FixtureEventSink()
+        let manager = makeManager(pasteboard: pasteboard, scheduler: scheduler, sink: sink)
+
+        let result = manager.copyCleanedText(
+            "clipboard_fallback_text_placeholder_private",
+            reason: .automaticFallback,
+            restorePreviousClipboard: true
+        )
+
+        guard case .copied(.pending) = result else {
+            expect(false, "copy success should schedule restoration for privacy inspection")
+            return
+        }
+
+        scheduler.runScheduled()
+
+        let eventSurface = try encodedEventSurface(sink.events)
+        expect(eventSurface.contains("fallback_copied"), "event surface should include categorical copied state")
+        expect(eventSurface.contains("clipboard_restored"), "event surface should include categorical restoration state")
+        assertNoForbiddenPrivacyPayloads(eventSurface)
+    }
+
+    private static func testWriteFailureEventsDoNotExposeClipboardFallbackPayloads() throws {
+        let pasteboard = FixturePasteboardPort()
+        pasteboard.writeShouldSucceed = false
+        let scheduler = FixtureScheduler()
+        let sink = FixtureEventSink()
+        let manager = makeManager(pasteboard: pasteboard, scheduler: scheduler, sink: sink)
+
+        let result = manager.copyCleanedText(
+            "clipboard_fallback_text_placeholder_write_failed",
+            reason: .automaticFallback,
+            restorePreviousClipboard: true
+        )
+
+        expect(result == .writeFailed, "write failure should remain inspectable without copy success")
+
+        let eventSurface = try encodedEventSurface(sink.events)
+        expect(eventSurface.contains("clipboard_restore_skipped"), "event surface should include categorical skip state")
+        expect(eventSurface.contains("write_failed"), "event surface should include categorical write failure")
+        assertNoForbiddenPrivacyPayloads(eventSurface)
+    }
+
     private static func makeManager(
         pasteboard: FixturePasteboardPort,
         scheduler: FixtureScheduler,
@@ -247,5 +295,28 @@ private struct ClipboardFallbackManagerTests {
             eventSink: sink,
             restoreDelay: 0.25
         )
+    }
+
+    private static func encodedEventSurface(_ events: [ClipboardFallbackEvent]) throws -> String {
+        let encoded = try JSONEncoder().encode(events)
+        return String(data: encoded, encoding: .utf8) ?? ""
+    }
+
+    private static func assertNoForbiddenPrivacyPayloads(_ surface: String) {
+        for forbidden in [
+            "clipboard_fallback_text_placeholder_private",
+            "clipboard_fallback_text_placeholder_write_failed",
+            "previous_clipboard_placeholder_private",
+            "local_history_placeholder_private",
+            "audio_payload_placeholder_private",
+            "raw_transcript_placeholder_private",
+            "app_context_placeholder_private",
+            "selected_text_placeholder_private",
+            "window_title_placeholder_private",
+            "bundle_identifier_placeholder_private",
+            "provider_payload_placeholder_private",
+        ] {
+            expect(!surface.localizedCaseInsensitiveContains(forbidden), "clipboard fallback event surface should not include \(forbidden)")
+        }
     }
 }

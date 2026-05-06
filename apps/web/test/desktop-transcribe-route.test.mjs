@@ -64,6 +64,8 @@ const forbiddenTranscriptionRequestPayloadKeys = [
 ];
 const forbiddenTranscriptionRequestPayloadContent =
   /uh schedule ruby whisper|Schedule RubyWhisper|Synthetic cleanup output|Synthetic provider output|Synthetic route context|Ruby Advisory|SYNTHETIC_RECENT_WISPR_TEXT|term_placeholder_alpha|term_placeholder_beta|term_placeholder_disabled|payload must not echo|Bearer /i;
+const forbiddenClipboardFallbackBoundaryContent =
+  /clipboard_text_placeholder_private|previous_clipboard_placeholder_private|local_history_placeholder_private|app_context_placeholder_private|raw_transcript_placeholder_private|final_text_placeholder_private|clipboardFallback|clipboardText|previousClipboard|localHistory|recentWisprs|rawTranscript|finalText|appContext|selectedText|windowTitle|bundleIdentifier/i;
 const syntheticDictionaryTermContent =
   /term_placeholder_alpha|term_placeholder_beta|term_placeholder_disabled/i;
 
@@ -444,6 +446,58 @@ test("desktop transcribe route returns cleanup-disabled mocked provider success"
   assertNoDictionaryTermContent(calls);
   assertNoDictionaryTermContent(
     calls.find((call) => call.operation === "writeRequestMetadata").input,
+  );
+});
+
+test("desktop transcribe route keeps clipboard fallback payloads out of backend metadata", async () => {
+  const routeModule = await loadDesktopTranscribeRouteModule();
+  const { calls, dependencies } = createRouteDependencies({
+    parseRequest: async () =>
+      parseSuccess({
+        cleanupSettings: {
+          cleanupEnabled: false,
+          contextAwareCleanupEnabled: false,
+          dictionaryTerms: [],
+        },
+        metadata: {
+          appVersion: "0.1.0-test",
+          audioDurationMs: 4200,
+          audioMimeType: "audio/wav",
+          cleanupEnabled: false,
+          contextAwareCleanupEnabled: false,
+          osVersion: "macOS synthetic",
+        },
+        providerInput: {
+          audio: new Blob([new Uint8Array([1, 2, 3, 4])], {
+            type: "audio/wav",
+          }),
+          audioDurationMs: 4200,
+          audioMimeType: "audio/wav",
+        },
+      }),
+  });
+  const handler = routeModule.createDesktopTranscribeRouteHandler(dependencies);
+  const response = await handler(
+    syntheticAudioRequestWithClipboardFallbackPayloads(),
+  );
+  const body = await response.json();
+  const requestMetadataInput = calls.find(
+    (call) => call.operation === "writeRequestMetadata",
+  ).input;
+  const usageIncrementInput = calls.find(
+    (call) => call.operation === "writeUsageCounterIncrement",
+  ).input;
+
+  assert.equal(response.status, 200);
+  assertTranscriptionRequestMetadataOnly(requestMetadataInput);
+  assert.doesNotMatch(JSON.stringify(body), forbiddenClipboardFallbackBoundaryContent);
+  assert.doesNotMatch(
+    JSON.stringify(requestMetadataInput),
+    forbiddenClipboardFallbackBoundaryContent,
+  );
+  assert.doesNotMatch(
+    JSON.stringify(usageIncrementInput),
+    forbiddenClipboardFallbackBoundaryContent,
   );
 });
 
@@ -1161,6 +1215,23 @@ function syntheticAudioRequest() {
     headers: {
       "content-type": "audio/wav",
       "x-rubywhisper-audio-duration-ms": "4200",
+    },
+    method: "POST",
+  });
+}
+
+function syntheticAudioRequestWithClipboardFallbackPayloads() {
+  return new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+    body: new Uint8Array([1, 2, 3, 4]),
+    headers: {
+      "content-type": "audio/wav",
+      "x-rubywhisper-app-context": "app_context_placeholder_private",
+      "x-rubywhisper-audio-duration-ms": "4200",
+      "x-rubywhisper-clipboard-text": "clipboard_text_placeholder_private",
+      "x-rubywhisper-final-text": "final_text_placeholder_private",
+      "x-rubywhisper-local-history": "local_history_placeholder_private",
+      "x-rubywhisper-previous-clipboard": "previous_clipboard_placeholder_private",
+      "x-rubywhisper-raw-transcript": "raw_transcript_placeholder_private",
     },
     method: "POST",
   });

@@ -82,6 +82,7 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testMultipartTranscriptionRequestMapping()
             try await testMultipartTranscriptionOmitsDisabledContextAndDictionary()
             try await testTranscriptionRequestDoesNotShapeRecentWisprsPayload()
+            try await testTranscriptionRequestDoesNotShapeClipboardFallbackPayload()
             try await testTranscriptionRequestRedactedDiagnosticSummary()
             try await testTranscriptionRequestRejectsInvalidDurationWithoutContent()
             try await testTranscriptionSuccessMapsCleanedTextAndUsageOnly()
@@ -701,6 +702,63 @@ private struct RubyWhisperBackendAPIClientTests {
             "clipboard",
         ] {
             expect(!requestSurface.contains(forbidden), "transcription request shape should not include \(forbidden)")
+        }
+    }
+
+    private static func testTranscriptionRequestDoesNotShapeClipboardFallbackPayload() async throws {
+        let audio = Data([0x52, 0x57, 0x71])
+        let request = RubyWhisperDesktopTranscriptionRequest(
+            body: .multipart(
+                audio: audio,
+                context: "context_placeholder_allowed_transient",
+                dictionaryTerms: ["term_placeholder_allowed_transient"]
+            ),
+            audioMimeType: "audio/wav",
+            audioDurationMs: 4567
+        )
+        let metadata = RubyWhisperDesktopTranscriptionRequestMetadata(
+            appVersion: "0.1.0-test",
+            appChannel: "test",
+            osVersion: "macOS synthetic",
+            platform: "macos"
+        )
+
+        let body = String(data: try request.httpBody(metadata: metadata), encoding: .utf8) ?? ""
+        let summary = request.redactedDiagnosticSummary(metadata: metadata)
+        let renderedSummary = summary
+            .map { "\($0.key)=\($0.value)" }
+            .sorted()
+            .joined(separator: "\n")
+        let requestSurface = body + "\n" + renderedSummary
+
+        for forbidden in [
+            "clipboardFallback",
+            "clipboard_fallback",
+            "clipboardText",
+            "clipboard_text",
+            "clipboardContent",
+            "previousClipboard",
+            "previous_clipboard",
+            "localHistory",
+            "local_history",
+            "recentWisprs",
+            "recent_wisprs",
+            "finalText",
+            "final_text",
+            "rawTranscript",
+            "raw_transcript",
+            "transcriptText",
+            "appContext",
+            "selectedText",
+            "windowTitle",
+            "bundleIdentifier",
+            "destinationApp",
+            "clipboard_fallback_text_placeholder_private",
+            "previous_clipboard_placeholder_private",
+            "local_history_placeholder_private",
+            "app_context_placeholder_private",
+        ] {
+            expect(!requestSurface.contains(forbidden), "transcription request shape should not include clipboard fallback payload \(forbidden)")
         }
     }
 
