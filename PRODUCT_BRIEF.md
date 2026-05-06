@@ -29,7 +29,7 @@ RubyWhisper is inspired by tools like Wispr Flow and Superwhisper, but the first
 
 ## V0.1 Core Flow
 
-1. User focuses any text field in any Mac app.
+1. User focuses a text field in an app where typing is available.
 2. User holds `Fn` to record, or presses `Command + Fn` to toggle recording.
 3. A floating, draggable recording island appears without stealing focus.
 4. The island shows a live vocal visualizer so the user can see that audio is being picked up.
