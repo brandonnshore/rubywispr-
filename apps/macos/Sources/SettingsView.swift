@@ -506,6 +506,15 @@ struct SettingsView: View {
 struct AccountSettingsView: View {
     @EnvironmentObject var appState: AppState
 
+    private var presentation: AccountSettingsPresentation {
+        AccountSettingsPresentation(
+            snapshot: appState.authAccountSnapshot,
+            coordinatorState: appState.authCoordinatorState,
+            statusTitle: appState.authStateTitle,
+            statusDetail: appState.authStateDetail
+        )
+    }
+
     private var showsSignOut: Bool {
         appState.authCoordinatorState.canTranscribe ||
             appState.authCoordinatorState == .signedInTermsRequired ||
@@ -515,6 +524,8 @@ struct AccountSettingsView: View {
     }
 
     var body: some View {
+        let presentation = presentation
+
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Account")
@@ -523,16 +534,21 @@ struct AccountSettingsView: View {
                 SettingsCard("Status", icon: appState.authStateSystemImage) {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(appState.authStateTitle)
+                            Text(presentation.statusTitle)
                                 .font(.headline)
                             Spacer()
-                            Text(appState.authCoordinatorState.rawValue)
+                            Text(presentation.stateCode)
                                 .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                         }
 
-                        if appState.authCoordinatorState == .accountRefreshing {
+                        Text(presentation.statusDetail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+
+                        if presentation.isLoading {
                             HStack(spacing: 8) {
                                 ProgressView()
                                     .controlSize(.small)
@@ -542,17 +558,8 @@ struct AccountSettingsView: View {
                             }
                         }
 
-                        if let email = appState.authAccountSnapshot.email?.trimmingCharacters(in: .whitespacesAndNewlines),
-                           !email.isEmpty {
-                            accountRow("Email", value: email)
-                        }
-
-                        if let recovery = appState.authAccountSnapshot.recovery {
-                            accountRow("Recovery", value: recovery.rawValue)
-                        }
-
-                        if let failureCode = appState.authAccountSnapshot.failureCode {
-                            accountRow("Failure code", value: failureCode.rawValue)
+                        ForEach(presentation.statusRows) { row in
+                            accountRow(row.title, value: row.value)
                         }
 
                         HStack(spacing: 8) {
@@ -562,27 +569,24 @@ struct AccountSettingsView: View {
                                 } label: {
                                     Label("Cancel Sign In", systemImage: "xmark.circle")
                                 }
-                            } else if appState.authCoordinatorState == .signedOut ||
-                                        appState.authCoordinatorState == .canceled ||
-                                        appState.authCoordinatorState == .error {
-                                Button {
-                                    appState.startDesktopSignIn()
-                                } label: {
-                                    Label("Sign In", systemImage: "safari")
+                            } else {
+                                if let recoveryButton = presentation.recoveryButton {
+                                    Button {
+                                        _ = appState.performDesktopAccountRecoveryAction(recoveryButton.action)
+                                    } label: {
+                                        Label(recoveryButton.title, systemImage: recoveryButton.systemImage)
+                                    }
+                                    .disabled(appState.authCoordinatorState == .accountRefreshing)
                                 }
 
-                                Button {
-                                    appState.refreshDesktopAccountState()
-                                } label: {
-                                    Label("Refresh Account", systemImage: "arrow.clockwise")
+                                if !isRefreshRecoveryAction(presentation.recoveryButton?.action) {
+                                    Button {
+                                        appState.refreshDesktopAccountState()
+                                    } label: {
+                                        Label("Refresh Account", systemImage: "arrow.clockwise")
+                                    }
+                                    .disabled(appState.authCoordinatorState == .accountRefreshing)
                                 }
-                            } else {
-                                Button {
-                                    appState.refreshDesktopAccountState()
-                                } label: {
-                                    Label("Refresh Account", systemImage: "arrow.clockwise")
-                                }
-                                .disabled(appState.authCoordinatorState == .accountRefreshing)
                             }
 
                             if showsSignOut {
@@ -592,6 +596,22 @@ struct AccountSettingsView: View {
                                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                                 }
                             }
+                        }
+                    }
+                }
+
+                SettingsCard("Plan", icon: "rectangle.badge.person.crop") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(presentation.planRows) { row in
+                            accountRow(row.title, value: row.value)
+                        }
+                    }
+                }
+
+                SettingsCard("Usage", icon: "chart.bar.xaxis") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(presentation.usageRows) { row in
+                            accountRow(row.title, value: row.value)
                         }
                     }
                 }
@@ -610,6 +630,16 @@ struct AccountSettingsView: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
+        }
+    }
+
+    private func isRefreshRecoveryAction(_ action: RubyWhisperDesktopRecoveryAction?) -> Bool {
+        switch action {
+        case .retry, .retryAfter, .retryOrContactSupport:
+            return true
+        case .openSignIn, .openTermsAcceptance, .openCheckout, .openBilling,
+             .openAccount, .startNewWhisper, .recordAgain, .unknown, nil:
+            return false
         }
     }
 }
