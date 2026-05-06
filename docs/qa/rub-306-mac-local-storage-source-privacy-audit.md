@@ -45,13 +45,13 @@ or production/staging logs.
 | Keychain/session | `apps/macos/Sources/DesktopSessionStore.swift`, `apps/macos/Sources/DesktopAuthStateOwner.swift`, `apps/macos/Sources/RubyWhisperBackendAPIClient.swift` | macOS Keychain service `com.rubywhisper.desktop.session`, account `primary` | Access token, optional refresh token, optional expiry, optional account id; redacted descriptions only | Plaintext auth/session in UserDefaults, Application Support, local history, diagnostics, logs, support evidence | Source-safe. Keychain add/update/delete paths are typed, malformed values are deleted, blank tokens fail encoding, and diagnostics descriptions redact token values. |
 | Clipboard fallback | `apps/macos/Sources/ClipboardFallbackManager.swift`, `apps/macos/Sources/AppState.swift`, `apps/macos/Sources/SettingsView.swift` | Pasteboard only; previous snapshot in memory only | Cleaned text copied for fallback/manual recovery; previous string snapshot in memory for best-effort restore; categorical event states | Persisted previous clipboard contents, backend upload, logs with payload text, unsupported data capture, diagnostics with pasteboard payloads | Source-safe for fallback manager. Event sink logs state/reason/snapshot/skip categories only. Diagnostics copy writes only app/build/system metadata. |
 | Diagnostics/support copy | `apps/macos/Sources/AdvancedSettingsPresentation.swift`, `apps/macos/Sources/SettingsView.swift`, `apps/macos/Sources/TestCaseExporter.swift` | Clipboard for diagnostics copy; user-selected ZIP export for test case metadata | App name/version/build, macOS version, architecture, run UUID/timestamp, lifecycle statuses, fixed false payload-export flags | Transcript text, clipboard content, dictionary terms, prompts, context, screenshots, provider payloads, secrets, env values, private app/window data | Source-safe for diagnostics copy and current exporter shape. After RUB-308, test-case export metadata omits private app/window fields and does not derive payload-presence flags from potentially corrupt history rows. |
-| Local debug logs | `apps/macos/Sources/AudioRecorder.swift`, `apps/macos/Sources/AppState.swift`, other OSLog sources | OSLog/standard output | Categories, enums, counts, durations, booleans, non-content statuses | User/device-derived strings, selected/focused text, clipboard, transcripts, prompts, dictionary terms, provider payloads, auth material, private env values | Needs follow-up. Clipboard/direct insertion/session logs are mostly categorical, but AudioRecorder logs microphone names/UIDs and AppState logs voice macro command strings as public values. Follow-up: RUB-309. |
+| Local debug logs | `apps/macos/Sources/AudioRecorder.swift`, `apps/macos/Sources/AppState.swift`, `apps/macos/Sources/PipelineHistoryStore.swift`, other OSLog sources | OSLog/standard output | Categories, enums, counts, durations, booleans, non-content statuses | User/device-derived strings, selected/focused text, clipboard, transcripts, prompts, dictionary terms, provider payloads, auth material, private env values | Source-safe after RUB-309. AudioRecorder no longer logs microphone localized names, device UIDs, requested UIDs, or audio write error descriptions. AppState no longer logs voice macro commands, post-processing error descriptions, edit-mode error descriptions, raw screenshot issue text, or pipeline trim error objects. PipelineHistoryStore no longer prints the local SQLite path on load failure. Source guardrails scan local log statements for these payload classes. |
 
 ## Follow-Up Tickets
 
 - RUB-307: Remove Mac provider-secret settings storage. Source remediation is complete; any live/manual cleanup of pre-existing user files remains outside this source audit and requires an approved human-run plan.
 - RUB-308: Harden Mac pipeline history store against content persistence. Source remediation is complete; any live/manual cleanup of pre-existing user stores remains outside this source audit and requires an approved human-run plan.
-- RUB-309: Redact Mac local logs for user and device-derived strings.
+- RUB-309: Redact Mac local logs for user and device-derived strings. Source remediation is complete; live Console review remains out of scope and would require an approved human-run plan.
 
 ## Manual/Live Gaps For RUB-73
 
@@ -85,8 +85,15 @@ runtime artifacts. No private data values were opened or copied.
   force legacy content-bearing columns to metadata-only values, and
   `TestCaseExporter` emits metadata-only JSON even for legacy/corrupt rows loaded
   through the hardened store.
-- Log scan found mostly categorical OSLog/print surfaces, with follow-up findings
-  for public microphone name/UID logs and voice macro command logs.
+- RUB-309 log scan found categorical OSLog/print surfaces after redaction:
+  microphone names/UIDs, requested device UIDs, voice macro commands, raw
+  screenshot issue text, public localized error descriptions, and local
+  pipeline store paths are not written by current Mac source logs.
+- `apps/macos/Tests/SourceGuardrailTests.swift` now fails if local log
+  statements include common source expressions for device names/UIDs, local
+  paths, transcripts, selected text, dictionary terms, prompts, screenshot
+  payloads/errors, app/window metadata, clipboard contents, macro commands, or
+  localized error descriptions.
 - Runtime artifact scan found only `.env.local` as a private local file at the
   workspace root; it was not opened, printed, summarized, or committed.
 
@@ -119,3 +126,16 @@ make -C apps/macos clean all CODESIGN_IDENTITY=-
 Result: passed. No live Application Support stores, real run logs, private env
 files, clipboard contents, screenshots, transcripts, audio, dictionary terms, or
 customer data were inspected.
+
+RUB-309 source log-redaction validation from the rebased issue workspace:
+
+```bash
+git diff --check origin/main...HEAD
+make -C apps/macos test-secret-guardrails CODESIGN_IDENTITY=-
+make -C apps/macos test CODESIGN_IDENTITY=-
+make -C apps/macos clean all CODESIGN_IDENTITY=-
+```
+
+Result: passed on 2026-05-06. No live Console logs, Application Support stores,
+real run logs, private env files, clipboard contents, screenshots, transcripts,
+audio, dictionary terms, or customer data were inspected.

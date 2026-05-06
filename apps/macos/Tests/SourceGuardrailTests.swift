@@ -34,6 +34,7 @@ private struct SourceGuardrailTests {
             failures.append(contentsOf: secretShapedValueMatches(in: text, path: relativePath))
             failures.append(contentsOf: providerSettingsPersistenceMatches(in: text, path: relativePath))
             failures.append(contentsOf: plaintextAuthPersistenceMatches(in: text, path: relativePath))
+            failures.append(contentsOf: localLogPrivacyMatches(in: text, path: relativePath))
         }
 
         if !failures.isEmpty {
@@ -165,6 +166,90 @@ private struct SourceGuardrailTests {
                 ? "auth/session material must not be persisted outside Keychain"
                 : nil
         }
+    }
+
+    private static func localLogPrivacyMatches(in text: String, path: String) -> [SourceMatch] {
+        let forbiddenFragments: [(String, String)] = [
+            (".localizedName", "device localized names must not be written to local logs"),
+            (".uniqueID", "device unique IDs must not be written to local logs"),
+            ("requestedDeviceUID", "requested device IDs must not be written to local logs"),
+            ("storeURL.path", "local filesystem paths must not be written to local logs"),
+            ("error.localizedDescription", "localized error descriptions must not be written to local logs"),
+            ("macro.command", "voice macro commands must not be written to local logs"),
+            ("rawTranscript", "transcripts must not be written to local logs"),
+            ("trimmedRawTranscript", "transcripts must not be written to local logs"),
+            ("selectedText", "selected text must not be written to local logs"),
+            ("customVocabulary", "dictionary terms must not be written to local logs"),
+            ("customSystemPrompt", "prompts must not be written to local logs"),
+            ("contextPrompt", "context prompts must not be written to local logs"),
+            ("screenshotDataURL", "screenshot payloads must not be written to local logs"),
+            ("screenshotError", "raw screenshot errors must not be written to local logs"),
+            ("windowTitle", "window titles must not be written to local logs"),
+            ("bundleIdentifier", "app bundle identifiers must not be written to local logs"),
+            ("appName", "application names must not be written to local logs"),
+            ("currentActivity", "context summaries must not be written to local logs"),
+            ("pasteboard.string", "clipboard contents must not be written to local logs"),
+            ("clipboardString", "clipboard contents must not be written to local logs"),
+            ("previousString", "clipboard contents must not be written to local logs"),
+            ("[uid=", "device unique IDs must not be written to local logs"),
+            ("device %{public}@", "device names must not be written to local logs"),
+            ("Voice macro triggered: %{public}@", "voice macro commands must not be written to local logs"),
+            ("Screenshot capture issue: %{public}@", "raw screenshot error text must not be written to local logs"),
+        ]
+
+        return logStatementMatches(in: text, path: path) { statement in
+            for (fragment, reason) in forbiddenFragments where statement.contains(fragment) {
+                return reason
+            }
+            return nil
+        }
+    }
+
+    private static func logStatementMatches(
+        in text: String,
+        path: String,
+        matcher: (String) -> String?
+    ) -> [SourceMatch] {
+        let lines = text.components(separatedBy: .newlines)
+        var matches: [SourceMatch] = []
+        var index = 0
+
+        while index < lines.count {
+            let line = lines[index]
+            guard containsLogCallStart(line) else {
+                index += 1
+                continue
+            }
+
+            let startLine = index + 1
+            var statementLines: [String] = []
+            var balance = 0
+
+            repeat {
+                let currentLine = lines[index]
+                statementLines.append(currentLine)
+                balance += currentLine.reduce(0) { partial, character in
+                    if character == "(" { return partial + 1 }
+                    if character == ")" { return partial - 1 }
+                    return partial
+                }
+                index += 1
+            } while index < lines.count && balance > 0
+
+            let statement = statementLines.joined(separator: "\n")
+            if let reason = matcher(statement) {
+                matches.append(SourceMatch(path: path, line: startLine, reason: reason))
+            }
+        }
+
+        return matches
+    }
+
+    private static func containsLogCallStart(_ line: String) -> Bool {
+        line.contains("os_log(") ||
+            line.contains("print(") ||
+            line.contains("debugPrint(") ||
+            line.contains("NSLog(")
     }
 
     private static func lineMatches(

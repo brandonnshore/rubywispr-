@@ -646,7 +646,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
             removedAudioFileNames += try pipelineHistoryStore.sanitizePersistedContentReferences()
             removedAudioFileNames += try pipelineHistoryStore.trim(to: maxPipelineHistoryCount)
         } catch {
-            print("Failed to trim pipeline history during init: \(error)")
+            print("Failed to trim pipeline history during init.")
         }
         for audioFileName in removedAudioFileNames {
             Self.deleteAudioFile(audioFileName)
@@ -3068,7 +3068,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     private enum TranscriptProcessingOutcome {
         case skippedEmptyRawTranscript
-        case voiceMacro(command: String)
+        case voiceMacro
         case postProcessingSucceeded
         case postProcessingFailedFallback
         case commandModeSucceeded(invocation: CommandInvocation)
@@ -3078,8 +3078,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
             switch self {
             case .skippedEmptyRawTranscript:
                 return "Skipped macros and post-processing for empty raw transcript"
-            case .voiceMacro(let command):
-                return "Voice macro used: \(command)"
+            case .voiceMacro:
+                return "Voice macro used"
             case .postProcessingSucceeded:
                 return isRetry ? "Post-processing succeeded (retried)" : "Post-processing succeeded"
             case .postProcessingFailedFallback:
@@ -3120,14 +3120,14 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 )
                 return (result.transcript, .commandModeSucceeded(invocation: invocation), result.prompt)
             } catch {
-                os_log(.error, log: recordingLog, "Edit mode failed: %{public}@", error.localizedDescription)
+                os_log(.error, log: recordingLog, "Edit mode failed invocation=%{public}@", invocation.rawValue)
                 return (selectedText, .commandModeFailedFallback(invocation: invocation), "")
             }
         }
 
         if let macro = findMatchingMacro(for: trimmedRawTranscript) {
-            os_log(.info, log: recordingLog, "Voice macro triggered: %{public}@", macro.command)
-            return (macro.payload, .voiceMacro(command: macro.command), "")
+            os_log(.info, log: recordingLog, "Voice macro triggered macro_count=%{public}d", precomputedMacros.count)
+            return (macro.payload, .voiceMacro, "")
         }
 
         do {
@@ -3140,7 +3140,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
             )
             return (result.transcript, .postProcessingSucceeded, result.prompt)
         } catch {
-            os_log(.error, log: recordingLog, "Post-processing failed: %{public}@", error.localizedDescription)
+            os_log(.error, log: recordingLog, "Post-processing failed category=%{public}@", "cleanup_transform")
             return (trimmedRawTranscript, .postProcessingFailedFallback, "")
         }
     }
@@ -3758,7 +3758,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
             return
         }
 
-        os_log(.error, "Screenshot capture issue: %{public}@", message)
+        os_log(.error, "Screenshot capture issue category=%{public}@", screenshotCaptureIssueCategory(for: message))
 
         if isScreenCapturePermissionError(message) && !hasShownScreenshotPermissionAlert {
             hasScreenRecordingPermission = false
@@ -3790,6 +3790,26 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private func isScreenCapturePermissionError(_ message: String) -> Bool {
         let lowered = message.lowercased()
         return lowered.contains("permission") || lowered.contains("screen recording")
+    }
+
+    private func screenshotCaptureIssueCategory(for message: String) -> String {
+        let lowered = message.lowercased()
+        if isScreenCapturePermissionError(message) {
+            return "permission"
+        }
+        if lowered.contains("frontmost application") {
+            return "no_frontmost_application"
+        }
+        if lowered.contains("window list") {
+            return "window_list_unavailable"
+        }
+        if lowered.contains("size limits") {
+            return "size_limit"
+        }
+        if lowered.contains("capture screenshot") {
+            return "capture_failed"
+        }
+        return "unknown"
     }
 
     private func showScreenshotPermissionAlert(message: String) {

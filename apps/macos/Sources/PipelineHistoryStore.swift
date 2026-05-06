@@ -30,7 +30,7 @@ final class PipelineHistoryStore {
             isStoreLoaded = true
         } else {
             if let storeURL {
-                print("[PipelineHistoryStore] Failed to load persistent store at \(storeURL.path). Attempting recovery.")
+                print("[PipelineHistoryStore] Failed to load persistent store. Attempting recovery.")
                 Self.destroySQLiteStoreFiles(at: storeURL)
 
                 // Clear any partially loaded stores and reset descriptions before retrying.
