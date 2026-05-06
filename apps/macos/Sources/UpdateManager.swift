@@ -116,6 +116,94 @@ private struct SemanticRelease {
     let releaseDateString: String
 }
 
+struct UpdateChannelConfiguration: Equatable {
+    static let enabledInfoKey = "RubyWhisperUpdateChannelEnabled"
+    static let releasesURLInfoKey = "RubyWhisperUpdateReleasesURL"
+
+    enum State: Equatable {
+        case disabled
+        case enabled(URL)
+        case invalid(String)
+    }
+
+    let state: State
+
+    init(state: State) {
+        self.state = state
+    }
+
+    init(infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:]) {
+        let isExplicitlyEnabled = Self.boolValue(from: infoDictionary[Self.enabledInfoKey]) ?? false
+        guard isExplicitlyEnabled else {
+            state = .disabled
+            return
+        }
+
+        guard let rawURL = infoDictionary[Self.releasesURLInfoKey] as? String,
+              !rawURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            state = .invalid("Update channel is enabled but no releases URL is configured.")
+            return
+        }
+
+        let trimmedURL = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmedURL),
+              url.scheme?.lowercased() == "https",
+              url.host?.isEmpty == false else {
+            state = .invalid("Update releases URL must be a valid HTTPS URL.")
+            return
+        }
+
+        state = .enabled(url)
+    }
+
+    var isEnabled: Bool {
+        releasesURL != nil
+    }
+
+    var releasesURL: URL? {
+        if case let .enabled(url) = state {
+            return url
+        }
+        return nil
+    }
+
+    var disabledMessage: String {
+        switch state {
+        case .disabled:
+            return "Updates are disabled until RUB-77 configures RubyWhisper's release channel."
+        case .invalid(let reason):
+            return "Updates are disabled because the update channel configuration is invalid. \(reason)"
+        case .enabled:
+            return ""
+        }
+    }
+
+    private static func boolValue(from value: Any?) -> Bool? {
+        switch value {
+        case let value as Bool:
+            return value
+        case let value as NSNumber:
+            return value.boolValue
+        case let value as String:
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "yes", "1":
+                return true
+            case "false", "no", "0", "":
+                return false
+            default:
+                return nil
+            }
+        default:
+            return nil
+        }
+    }
+}
+
+struct UpdateFeedResponse {
+    let data: Data
+    let statusCode: Int?
+}
+
 // MARK: - Update Status
 
 enum UpdateStatus: Equatable {
@@ -131,6 +219,7 @@ enum UpdateStatus: Equatable {
 @MainActor
 final class UpdateManager: ObservableObject {
     static let shared = UpdateManager()
+    typealias ReleaseFeedLoader = (URLRequest) async throws -> UpdateFeedResponse
 
     @Published var updateAvailable = false
     @Published var latestRelease: GitHubRelease?
@@ -142,49 +231,74 @@ final class UpdateManager: ObservableObject {
     @Published var lastCheckDate: Date? {
         didSet {
             if let date = lastCheckDate {
-                UserDefaults.standard.set(date, forKey: "updateLastCheckDate")
+                defaults.set(date, forKey: "updateLastCheckDate")
             }
         }
     }
 
     var autoCheckEnabled: Bool {
         get {
-            guard Self.updateChannelEnabled else { return false }
-            return UserDefaults.standard.object(forKey: "updateAutoCheckEnabled") as? Bool ?? false
+            guard configuration.isEnabled else { return false }
+            return defaults.object(forKey: "updateAutoCheckEnabled") as? Bool ?? false
         }
-        set { UserDefaults.standard.set(newValue, forKey: "updateAutoCheckEnabled") }
+        set { defaults.set(newValue, forKey: "updateAutoCheckEnabled") }
     }
 
     var isUpdateChannelEnabled: Bool {
-        Self.updateChannelEnabled
+        configuration.isEnabled
+    }
+
+    var updateChannelDisabledMessage: String {
+        configuration.disabledMessage
     }
 
     private var skippedVersion: String? {
-        get { UserDefaults.standard.string(forKey: "updateSkippedVersion") }
-        set { UserDefaults.standard.set(newValue, forKey: "updateSkippedVersion") }
+        get { defaults.string(forKey: "updateSkippedVersion") }
+        set { defaults.set(newValue, forKey: "updateSkippedVersion") }
     }
 
     private var lastPostTranscriptionReminderVersion: String? {
-        get { UserDefaults.standard.string(forKey: "updateLastPostTranscriptionReminderVersion") }
-        set { UserDefaults.standard.set(newValue, forKey: "updateLastPostTranscriptionReminderVersion") }
+        get { defaults.string(forKey: "updateLastPostTranscriptionReminderVersion") }
+        set { defaults.set(newValue, forKey: "updateLastPostTranscriptionReminderVersion") }
     }
 
     private var lastPostTranscriptionReminderDate: Date? {
-        get { UserDefaults.standard.object(forKey: "updateLastPostTranscriptionReminderDate") as? Date }
-        set { UserDefaults.standard.set(newValue, forKey: "updateLastPostTranscriptionReminderDate") }
+        get { defaults.object(forKey: "updateLastPostTranscriptionReminderDate") as? Date }
+        set { defaults.set(newValue, forKey: "updateLastPostTranscriptionReminderDate") }
     }
 
-    private static let updateChannelEnabled = false
-    // Disabled placeholder until RUB-77 configures the final RubyWhisper update channel.
-    private let releasesURL = URL(string: "https://updates.rubywhisper.invalid/releases?per_page=100")!
     private let stabilityBufferDays: TimeInterval = 3
     private let checkIntervalSeconds: TimeInterval = 7 * 24 * 60 * 60 // 7 days
     private let postTranscriptionReminderInterval: TimeInterval = 24 * 60 * 60 // 1 day
+    private let configuration: UpdateChannelConfiguration
+    private let defaults: UserDefaults
+    private let releaseFeedLoader: ReleaseFeedLoader
+    private let appInfoDictionary: () -> [String: Any]
+    private let now: () -> Date
     private var periodicTimer: Timer?
     private var activeDownloadTask: Task<Void, Never>?
 
-    private init() {
-        lastCheckDate = UserDefaults.standard.object(forKey: "updateLastCheckDate") as? Date
+    init(
+        configuration: UpdateChannelConfiguration = UpdateChannelConfiguration(),
+        defaults: UserDefaults = .standard,
+        appInfoDictionary: @escaping () -> [String: Any] = { Bundle.main.infoDictionary ?? [:] },
+        now: @escaping () -> Date = Date.init,
+        releaseFeedLoader: @escaping ReleaseFeedLoader = UpdateManager.defaultReleaseFeedLoader
+    ) {
+        self.configuration = configuration
+        self.defaults = defaults
+        self.appInfoDictionary = appInfoDictionary
+        self.now = now
+        self.releaseFeedLoader = releaseFeedLoader
+        lastCheckDate = defaults.object(forKey: "updateLastCheckDate") as? Date
+    }
+
+    private static func defaultReleaseFeedLoader(request: URLRequest) async throws -> UpdateFeedResponse {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        return UpdateFeedResponse(
+            data: data,
+            statusCode: (response as? HTTPURLResponse)?.statusCode
+        )
     }
 
     // MARK: - Periodic Checks
@@ -213,17 +327,17 @@ final class UpdateManager: ObservableObject {
     }
 
     private func shouldAutoCheck() -> Bool {
-        guard Self.updateChannelEnabled else { return false }
+        guard configuration.isEnabled else { return false }
         guard autoCheckEnabled else { return false }
         guard let lastCheck = lastCheckDate else { return true }
-        return Date().timeIntervalSince(lastCheck) > checkIntervalSeconds
+        return now().timeIntervalSince(lastCheck) > checkIntervalSeconds
     }
 
     // MARK: - Check for Updates
 
     @MainActor
     func checkForUpdates(userInitiated: Bool) async {
-        guard Self.updateChannelEnabled else {
+        guard let releasesURL = configuration.releasesURL else {
             clearAvailableUpdate()
             updateStatus = .idle
             if userInitiated {
@@ -232,8 +346,9 @@ final class UpdateManager: ObservableObject {
             return
         }
 
-        let currentBuildTag = Bundle.main.infoDictionary?["RubyWhisperBuildTag"] as? String
-        let currentVersionString = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+        let infoDictionary = appInfoDictionary()
+        let currentBuildTag = infoDictionary["RubyWhisperBuildTag"] as? String
+        let currentVersionString = infoDictionary["CFBundleShortVersionString"] as? String ?? "0.0.0"
 
         // Dev builds (no embedded tag): skip auto-checks, but allow manual checks
         if !userInitiated && currentBuildTag == nil {
@@ -248,35 +363,34 @@ final class UpdateManager: ObservableObject {
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             request.cachePolicy = .reloadIgnoringLocalCacheData
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let feedResponse = try await releaseFeedLoader(request)
 
-            guard let httpResponse = response as? HTTPURLResponse else {
+            guard let statusCode = feedResponse.statusCode else {
+                clearAvailableUpdate()
                 if userInitiated { showErrorAlert("Could not reach the update server.") }
                 return
             }
 
             // 404 means no releases exist yet
-            if httpResponse.statusCode == 404 {
-                lastCheckDate = Date()
-                updateAvailable = false
-                latestRelease = nil
-                latestReleaseVersion = ""
-                latestReleaseDate = ""
+            if statusCode == 404 {
+                lastCheckDate = now()
+                clearAvailableUpdate()
                 if userInitiated { showUpToDateAlert() }
                 return
             }
 
-            guard (200..<300).contains(httpResponse.statusCode) else {
-                if userInitiated { showErrorAlert("The update server returned status \(httpResponse.statusCode).") }
+            guard (200..<300).contains(statusCode) else {
+                clearAvailableUpdate()
+                if userInitiated { showErrorAlert("The update server returned status \(statusCode).") }
                 return
             }
 
             let decoder = JSONDecoder()
-            let releases = try decoder.decode([GitHubRelease].self, from: data)
-            lastCheckDate = Date()
+            let releases = try decoder.decode([GitHubRelease].self, from: feedResponse.data)
+            lastCheckDate = now()
 
             guard let currentVersion = SemanticVersion(currentVersionString) else {
-                updateAvailable = false
+                clearAvailableUpdate()
                 if userInitiated {
                     showErrorAlert("The current app version does not use semantic versioning.")
                 }
@@ -318,7 +432,7 @@ final class UpdateManager: ObservableObject {
             }
 
             // Check stability buffer (3 days since published)
-            let daysSincePublished = Date().timeIntervalSince(latestSemanticRelease.publishedDate) / (24 * 60 * 60)
+            let daysSincePublished = now().timeIntervalSince(latestSemanticRelease.publishedDate) / (24 * 60 * 60)
             if daysSincePublished < stabilityBufferDays {
                 if !userInitiated {
                     // Auto-check: silently skip, too new
@@ -343,6 +457,7 @@ final class UpdateManager: ObservableObject {
                 showUpdateAlert()
             }
         } catch {
+            clearAvailableUpdate()
             if userInitiated {
                 showErrorAlert("Failed to check for updates: \(error.localizedDescription)")
             }
@@ -427,18 +542,18 @@ final class UpdateManager: ObservableObject {
             return true
         }
 
-        return Date().timeIntervalSince(lastReminder) > postTranscriptionReminderInterval
+        return now().timeIntervalSince(lastReminder) > postTranscriptionReminderInterval
     }
 
     func markPostTranscriptionReminderShown() {
         guard let release = latestRelease else { return }
         lastPostTranscriptionReminderVersion = release.tagName
-        lastPostTranscriptionReminderDate = Date()
+        lastPostTranscriptionReminderDate = now()
     }
 
     private func suppressPostTranscriptionReminder(for tagName: String) {
         lastPostTranscriptionReminderVersion = tagName
-        lastPostTranscriptionReminderDate = Date()
+        lastPostTranscriptionReminderDate = now()
     }
 
     private func clearAvailableUpdate() {
@@ -709,7 +824,7 @@ final class UpdateManager: ObservableObject {
     private func showUpdateChannelDisabledAlert() {
         let alert = NSAlert()
         alert.messageText = "Updates Are Disabled"
-        alert.informativeText = "RubyWhisper does not have an update channel yet. Update checks are blocked until RUB-77 configures the release channel."
+        alert.informativeText = configuration.disabledMessage
         alert.alertStyle = .informational
         alert.icon = NSApp.applicationIconImage
         alert.addButton(withTitle: "OK")

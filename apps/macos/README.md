@@ -71,6 +71,29 @@ The output name, bundle identifier, entitlements filename, and resources use
 RubyWhisper development placeholders until later release-packaging tickets set
 approved production values.
 
+## Update Channel Configuration
+
+Development builds are update-disabled by default. The app reads these
+non-secret `Info.plist` keys after the Makefile copies metadata into the bundle:
+
+- `RubyWhisperUpdateChannelEnabled`: boolean, defaults to `false`.
+- `RubyWhisperUpdateReleasesURL`: HTTPS JSON release feed URL, defaults to empty.
+
+The Makefile exposes matching overrides for synthetic or approved configured
+builds:
+
+```bash
+make -C apps/macos clean all \
+  CODESIGN_IDENTITY=- \
+  UPDATE_CHANNEL_ENABLED=true \
+  UPDATE_RELEASES_URL=https://updates.example.test/releases.json
+```
+
+The channel is considered enabled only when the boolean is explicit and the feed
+URL is valid HTTPS. A URL by itself does not enable update checks. Tests use
+synthetic fixtures and an injected feed loader; default local builds do not call
+any update service.
+
 `xcodebuild` is not authoritative for this imported source. There is no Xcode
 project, workspace, Swift package, or scheme under `apps/macos`; `xcodebuild -list`
 exits 66 in this directory.
