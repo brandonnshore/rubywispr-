@@ -20,6 +20,8 @@ const desktopTranscribeRequestPath = path.join(
   "request.ts",
 );
 const syntheticOrigin = "https://rubywhisper-desktop.test";
+const forbiddenClipboardFallbackBoundaryPattern =
+  /clipboard_text_placeholder_private|previous_clipboard_placeholder_private|local_history_placeholder_private|app_context_placeholder_private|raw_transcript_placeholder_private|final_text_placeholder_private|clipboardFallback|clipboardText|previousClipboard|localHistory|recentWisprs|rawTranscript|finalText|appContext|selectedText|windowTitle|bundleIdentifier/i;
 
 test("desktop transcription parser accepts synthetic multipart requests", async () => {
   const parser = await loadDesktopTranscribeRequestModule();
@@ -101,6 +103,64 @@ test("desktop transcription parser accepts synthetic binary audio requests", asy
     contextAwareCleanupEnabled: false,
     osVersion: "macOS synthetic",
   });
+});
+
+test("desktop transcription parser ignores clipboard fallback headers", async () => {
+  const parser = await loadDesktopTranscribeRequestModule();
+  const audioBytes = new Uint8Array([9, 8, 7]);
+  const result = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: audioBytes,
+      headers: {
+        "content-type": "audio/wav",
+        "x-rubywhisper-app-context": "app_context_placeholder_private",
+        "x-rubywhisper-audio-duration-ms": "4200",
+        "x-rubywhisper-clipboard-text": "clipboard_text_placeholder_private",
+        "x-rubywhisper-final-text": "final_text_placeholder_private",
+        "x-rubywhisper-local-history": "local_history_placeholder_private",
+        "x-rubywhisper-previous-clipboard": "previous_clipboard_placeholder_private",
+        "x-rubywhisper-raw-transcript": "raw_transcript_placeholder_private",
+      },
+      method: "POST",
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.doesNotMatch(
+    JSON.stringify({
+      cleanupSettings: result.input.cleanupSettings,
+      metadata: result.input.metadata,
+    }),
+    forbiddenClipboardFallbackBoundaryPattern,
+  );
+});
+
+test("desktop transcription parser ignores clipboard fallback multipart fields", async () => {
+  const parser = await loadDesktopTranscribeRequestModule();
+  const formData = createSyntheticAudioFormData();
+
+  formData.set("appContext", "app_context_placeholder_private");
+  formData.set("clipboardText", "clipboard_text_placeholder_private");
+  formData.set("finalText", "final_text_placeholder_private");
+  formData.set("localHistory", "local_history_placeholder_private");
+  formData.set("previousClipboard", "previous_clipboard_placeholder_private");
+  formData.set("rawTranscript", "raw_transcript_placeholder_private");
+
+  const result = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: formData,
+      method: "POST",
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.doesNotMatch(
+    JSON.stringify({
+      cleanupSettings: result.input.cleanupSettings,
+      metadata: result.input.metadata,
+    }),
+    forbiddenClipboardFallbackBoundaryPattern,
+  );
 });
 
 test("desktop transcription parser defaults cleanup settings on unless explicitly disabled", async () => {

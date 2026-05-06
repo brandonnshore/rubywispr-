@@ -127,6 +127,7 @@ private struct DirectInsertionCoordinatorTests {
         await testFailedAndAmbiguousWriteResultsAreTerminal()
         await testTimeoutsMapToAmbiguous()
         try await testResultsAndEventsAreCategoricalOnly()
+        try await testFailureResultsAndEventsAreCategoricalOnly()
 
         print("DirectInsertionCoordinatorTests passed")
     }
@@ -419,6 +420,55 @@ private struct DirectInsertionCoordinatorTests {
             "providerPayload",
         ] {
             expect(!encoded.localizedCaseInsensitiveContains(forbidden), "metadata should not include \(forbidden)")
+        }
+    }
+
+    private static func testFailureResultsAndEventsAreCategoricalOnly() async throws {
+        let sink = FixtureEventSink()
+        let finalText = "fixture_final_payload_failure"
+        let coordinator = makeCoordinator(
+            insertion: MockInsertionPort(.rejected),
+            sink: sink
+        )
+
+        let result = await coordinator.attempt(DirectInsertionRequest(
+            requestId: "request_id_placeholder_privacy_failure",
+            finalText: finalText
+        ))
+
+        let metadata = DirectInsertionPrivacyFixtureMetadata(
+            result: result,
+            events: sink.events,
+            destinationAppCategory: result.destinationAppCategory
+        )
+        guard let data = try? JSONEncoder().encode(metadata),
+              let encoded = String(data: data, encoding: .utf8) else {
+            expect(false, "failure metadata and events should encode for privacy inspection")
+            return
+        }
+
+        expect(encoded.contains("direct_insertion_failed"), "failure metadata should include categorical outcome")
+        expect(encoded.contains("deterministic_failure"), "failure metadata should include categorical reason")
+        expect(encoded.contains("plain_text_editor"), "failure metadata should include support-safe target category")
+        for forbidden in [
+            finalText,
+            "clipboard_fallback_text_placeholder_private",
+            "previous_clipboard_placeholder_private",
+            "local_history_placeholder_private",
+            "audio_payload_placeholder_private",
+            "raw_transcript_placeholder_private",
+            "app_context_placeholder_private",
+            "targetText",
+            "selectedText",
+            "clipboard",
+            "windowTitle",
+            "bundleIdentifier",
+            "appName",
+            "rawTranscript",
+            "audio",
+            "providerPayload",
+        ] {
+            expect(!encoded.localizedCaseInsensitiveContains(forbidden), "failure metadata should not include \(forbidden)")
         }
     }
 
