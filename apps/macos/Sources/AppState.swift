@@ -22,6 +22,7 @@ struct PrecomputedMacro {
 
 enum SettingsTab: String, CaseIterable, Identifiable {
     case account
+    case appearance
     case general
     case prompts
     case macros
@@ -39,6 +40,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .account: return "Account"
+        case .appearance: return "Appearance"
         case .general: return "General"
         case .prompts: return "Prompts"
         case .macros: return "Voice Macros"
@@ -50,6 +52,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .account: return "person.crop.circle"
+        case .appearance: return "circle.lefthalf.filled"
         case .general: return "gearshape"
         case .prompts: return "text.bubble"
         case .macros: return "music.mic"
@@ -446,6 +449,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
+    @Published var appearancePreference: MacAppearancePreference {
+        didSet {
+            UserDefaultsAppearanceSettingsStore().selectedPreference = appearancePreference
+        }
+    }
+
     private var precomputedMacros: [PrecomputedMacro] = []
 
     @Published var voiceMacros: [VoiceMacro] = [] {
@@ -658,6 +667,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let alertSoundsEnabled = UserDefaults.standard.object(forKey: alertSoundsEnabledStorageKey) != nil
             ? UserDefaults.standard.bool(forKey: alertSoundsEnabledStorageKey)
             : soundVolume > 0
+        let appearancePreference = UserDefaultsAppearanceSettingsStore().selectedPreference
 
         let initialMacros: [VoiceMacro]
         if let data = UserDefaults.standard.data(forKey: "voice_macros"),
@@ -746,6 +756,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.isPressEnterVoiceCommandEnabled = isPressEnterVoiceCommandEnabled
         self.alertSoundsEnabled = alertSoundsEnabled
         self.soundVolume = soundVolume
+        self.appearancePreference = appearancePreference
         self.voiceMacros = initialMacros
         self.pipelineHistory = savedHistory
         self.recentWisprs = savedRecentWisprs

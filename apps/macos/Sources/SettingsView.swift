@@ -484,6 +484,8 @@ struct SettingsView: View {
                 switch appState.selectedSettingsTab {
                 case .account:
                     AccountSettingsView()
+                case .appearance:
+                    AppearanceSettingsView()
                 case .general, .none:
                     GeneralSettingsView()
                 case .prompts:
@@ -498,6 +500,7 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .preferredColorScheme(appState.appearancePreference.preferredColorScheme)
     }
 }
 
@@ -649,6 +652,62 @@ struct AccountSettingsView: View {
         case .openSignIn, .openTermsAcceptance, .openCheckout, .openBilling,
              .openAccount, .startNewWhisper, .recordAgain, .unknown, nil:
             return false
+        }
+    }
+}
+
+// MARK: - Appearance Settings
+
+struct AppearanceSettingsView: View {
+    @EnvironmentObject var appState: AppState
+
+    private var presentation: AppearanceSettingsPresentation {
+        AppearanceSettingsPresentation(selectedPreference: appState.appearancePreference)
+    }
+
+    var body: some View {
+        let presentation = presentation
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Appearance")
+                    .font(.largeTitle.bold())
+
+                SettingsCard("Appearance", icon: "circle.lefthalf.filled") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("Appearance", selection: $appState.appearancePreference) {
+                            ForEach(AppearanceSettingsPresentation.options) { option in
+                                Text(option.title).tag(option)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityHint("Changes the local appearance preference for RubyWhisper app surfaces.")
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(presentation.selectedTitle)
+                                .font(.caption.weight(.semibold))
+                            Text(presentation.selectedDetail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Divider()
+
+                        Text(AppearanceSettingsPresentation.launchDirectionCopy)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(AppearanceSettingsPresentation.localOnlyCopy)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

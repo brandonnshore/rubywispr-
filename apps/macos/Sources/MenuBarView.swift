@@ -445,5 +445,6 @@ struct MenuBarView: View {
             .keyboardShortcut("q")
         }
         .padding(4)
+        .preferredColorScheme(appState.appearancePreference.preferredColorScheme)
     }
 }

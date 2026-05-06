@@ -26,7 +26,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-secret-guardrails
+.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-secret-guardrails
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -363,6 +363,16 @@ test-privacy-settings-presentation:
 		Tests/PrivacySettingsPresentationTests.swift
 	$(BUILD_DIR)/tests/PrivacySettingsPresentationTests
 
+test-appearance-settings-presentation:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-o $(BUILD_DIR)/tests/AppearanceSettingsPresentationTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Sources/AppearanceSettingsPresentation.swift \
+		Tests/AppearanceSettingsPresentationTests.swift
+	$(BUILD_DIR)/tests/AppearanceSettingsPresentationTests
+
 test-recent-wisprs-history-menu-state:
 	@mkdir -p $(BUILD_DIR)/tests
 	swiftc \
@@ -416,4 +426,4 @@ test-secret-guardrails:
 		Tests/SourceGuardrailTests.swift
 	$(BUILD_DIR)/tests/SourceGuardrailTests
 
-test: test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-secret-guardrails
+test: test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-secret-guardrails
