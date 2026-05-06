@@ -28,7 +28,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg codesign-dmg notarize test test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-update-manager test-secret-guardrails
+.PHONY: all clean run icon dmg local-dmg-preflight codesign-dmg release-signing-preflight notarize notarize-preflight test test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-update-manager test-secret-guardrails
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -92,7 +92,7 @@ $(ICON_ICNS): $(ICON_SOURCE)
 	@rm -rf $(BUILD_DIR)/AppIcon.iconset
 	@echo "Generated $@"
 
-dmg: all
+dmg: local-dmg-preflight all
 	@rm -f "$(BUILD_DIR)/$(APP_NAME).dmg"
 	@rm -rf $(BUILD_DIR)/dmg-staging
 	@mkdir -p $(BUILD_DIR)/dmg-staging
@@ -116,13 +116,76 @@ dmg: all
 	@rm -rf $(BUILD_DIR)/dmg-staging
 	@echo "Created $(BUILD_DIR)/$(APP_NAME).dmg"
 
-codesign-dmg: dmg
+local-dmg-preflight:
+	@missing=""; \
+	for tool in create-dmg fileicon; do \
+		if ! command -v "$$tool" >/dev/null 2>&1; then \
+			missing="$$missing $$tool"; \
+		fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo "Local DMG packaging prerequisites missing:$$missing"; \
+		echo "Install the missing non-secret tool(s), then rerun make -C apps/macos dmg CODESIGN_IDENTITY=-."; \
+		echo "This target creates a local/ad hoc testing artifact only; it does not sign, notarize, upload, or publish a release."; \
+		exit 2; \
+	fi
+
+codesign-dmg: release-signing-preflight dmg
 	codesign --force --sign "$(CODESIGN_IDENTITY)" "$(BUILD_DIR)/$(APP_NAME).dmg"
 
-notarize:
+release-signing-preflight:
+	@if [ -z "$(strip $(CODESIGN_IDENTITY))" ] || [ "$(strip $(CODESIGN_IDENTITY))" = "-" ]; then \
+		echo "Release signing blocked: set CODESIGN_IDENTITY to an installed Developer ID Application identity."; \
+		echo "Ad hoc signing (CODESIGN_IDENTITY=-) is allowed only for local builds and local DMG testing."; \
+		exit 2; \
+	fi
+	@case "$(strip $(CODESIGN_IDENTITY))" in \
+		*"<"*|*">"*|*PLACEHOLDER*|*Placeholder*|*placeholder*|*EXAMPLE*|*Example*|*example*|*ADHOC*|*AdHoc*|*adhoc*|*"ad hoc"*|*"Ad Hoc"*) \
+			echo "Release signing blocked: CODESIGN_IDENTITY must not be a placeholder or ad hoc value."; \
+			exit 2; \
+			;; \
+	esac
+	@case "$(strip $(CODESIGN_IDENTITY))" in \
+		*"Developer ID Application"*) ;; \
+		*) \
+			echo "Release signing blocked: CODESIGN_IDENTITY must be a Developer ID Application identity."; \
+			exit 2; \
+			;; \
+	esac
+	@if ! security find-identity -v -p codesigning | grep -Fq "$(strip $(CODESIGN_IDENTITY))"; then \
+		echo "Release signing blocked: the requested Developer ID Application identity is not installed in the active keychain search list."; \
+		exit 2; \
+	fi
+
+notarize: release-signing-preflight notarize-preflight
 	xcrun notarytool submit "$(BUILD_DIR)/$(APP_NAME).dmg" \
 		--keychain-profile "$(NOTARIZE_PROFILE)" --wait
 	xcrun stapler staple "$(BUILD_DIR)/$(APP_NAME).dmg"
+
+notarize-preflight:
+	@if [ -z "$(strip $(NOTARIZE_PROFILE))" ]; then \
+		echo "Notarization blocked: set NOTARIZE_PROFILE to an approved notarytool keychain profile on the release machine."; \
+		exit 2; \
+	fi
+	@case "$(strip $(NOTARIZE_PROFILE))" in \
+		*"<"*|*">"*|*PLACEHOLDER*|*Placeholder*|*placeholder*|*EXAMPLE*|*Example*|*example*) \
+			echo "Notarization blocked: NOTARIZE_PROFILE must not be a placeholder value."; \
+			exit 2; \
+			;; \
+	esac
+	@if ! xcrun --find notarytool >/dev/null 2>&1; then \
+		echo "Notarization blocked: xcrun notarytool is unavailable."; \
+		exit 2; \
+	fi
+	@if ! xcrun --find stapler >/dev/null 2>&1; then \
+		echo "Notarization blocked: xcrun stapler is unavailable."; \
+		exit 2; \
+	fi
+	@if [ ! -f "$(BUILD_DIR)/$(APP_NAME).dmg" ]; then \
+		echo "Notarization blocked: expected $(BUILD_DIR)/$(APP_NAME).dmg to exist before submission."; \
+		echo "Do not submit local ad hoc artifacts as RubyWhisper release artifacts."; \
+		exit 2; \
+	fi
 
 clean:
 	rm -rf $(BUILD_DIR)
