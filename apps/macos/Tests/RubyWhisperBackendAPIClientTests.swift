@@ -81,6 +81,7 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testBinaryTranscriptionRequestMapping()
             try await testMultipartTranscriptionRequestMapping()
             try await testMultipartTranscriptionOmitsDisabledContextAndDictionary()
+            try await testTranscriptionRequestDoesNotShapeRecentWisprsPayload()
             try await testTranscriptionRequestRedactedDiagnosticSummary()
             try await testTranscriptionRequestRejectsInvalidDurationWithoutContent()
             try await testTranscriptionSuccessMapsCleanedTextAndUsageOnly()
@@ -660,6 +661,47 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(!contextDisabledBody.contains("name=\"context\""), "multipart body should omit context when context-aware cleanup is disabled")
         expect(!contextDisabledBody.contains("context_placeholder_context_disabled"), "multipart body should omit disabled context content")
         expect(contextDisabledBody.contains("name=\"dictionaryTerms\""), "multipart body may include dictionary terms when cleanup remains enabled")
+    }
+
+    private static func testTranscriptionRequestDoesNotShapeRecentWisprsPayload() async throws {
+        let audio = Data([0x52, 0x57, 0x70])
+        let request = RubyWhisperDesktopTranscriptionRequest(
+            body: .multipart(
+                audio: audio,
+                context: "context_placeholder_allowed_transient",
+                dictionaryTerms: ["term_placeholder_allowed_transient"]
+            ),
+            audioMimeType: "audio/wav",
+            audioDurationMs: 4567
+        )
+        let metadata = RubyWhisperDesktopTranscriptionRequestMetadata(
+            appVersion: "0.1.0-test",
+            appChannel: "test",
+            osVersion: "macOS synthetic",
+            platform: "macos"
+        )
+
+        let body = String(data: try request.httpBody(metadata: metadata), encoding: .utf8) ?? ""
+        let summary = request.redactedDiagnosticSummary(metadata: metadata)
+        let renderedSummary = summary
+            .map { "\($0.key)=\($0.value)" }
+            .sorted()
+            .joined(separator: "\n")
+        let requestSurface = body + "\n" + renderedSummary
+
+        for forbidden in [
+            "recentWispr",
+            "RecentWispr",
+            "recent_wispr",
+            "finalText",
+            "cleanedText",
+            "rawTranscript",
+            "insertionStatus",
+            "copiedAt",
+            "clipboard",
+        ] {
+            expect(!requestSurface.contains(forbidden), "transcription request shape should not include \(forbidden)")
+        }
     }
 
     private static func testTranscriptionRequestRedactedDiagnosticSummary() async throws {
