@@ -144,6 +144,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private let postProcessingModelStorageKey = "post_processing_model"
     private let postProcessingFallbackModelStorageKey = "post_processing_fallback_model"
     private let contextModelStorageKey = "context_model"
+    private let cleanupEnabledStorageKey = "cleanup_enabled"
+    private let contextAwareCleanupEnabledStorageKey = "context_aware_cleanup_enabled"
     private let holdShortcutStorageKey = "hold_shortcut"
     private let toggleShortcutStorageKey = "toggle_shortcut"
     private let savedHoldCustomShortcutStorageKey = "saved_hold_custom_shortcut"
@@ -268,6 +270,18 @@ final class AppState: ObservableObject, @unchecked Sendable {
         didSet {
             UserDefaults.standard.set(contextModel, forKey: contextModelStorageKey)
             rebuildContextService()
+        }
+    }
+
+    @Published var cleanupEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(cleanupEnabled, forKey: cleanupEnabledStorageKey)
+        }
+    }
+
+    @Published var contextAwareCleanupEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(contextAwareCleanupEnabled, forKey: contextAwareCleanupEnabledStorageKey)
         }
     }
 
@@ -584,6 +598,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let postProcessingModel = UserDefaults.standard.string(forKey: postProcessingModelStorageKey) ?? Self.defaultPostProcessingModel
         let postProcessingFallbackModel = UserDefaults.standard.string(forKey: postProcessingFallbackModelStorageKey) ?? Self.defaultPostProcessingFallbackModel
         let contextModel = UserDefaults.standard.string(forKey: contextModelStorageKey) ?? Self.defaultContextModel
+        let cleanupEnabled = UserDefaults.standard.object(forKey: cleanupEnabledStorageKey) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: cleanupEnabledStorageKey)
+        let contextAwareCleanupEnabled = UserDefaults.standard.object(forKey: contextAwareCleanupEnabledStorageKey) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: contextAwareCleanupEnabledStorageKey)
         let shortcuts = Self.loadShortcutConfiguration(
             holdKey: holdShortcutStorageKey,
             toggleKey: toggleShortcutStorageKey
@@ -699,6 +719,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.postProcessingModel = postProcessingModel
         self.postProcessingFallbackModel = postProcessingFallbackModel
         self.contextModel = contextModel
+        self.cleanupEnabled = cleanupEnabled
+        self.contextAwareCleanupEnabled = contextAwareCleanupEnabled
         self.holdShortcut = shortcuts.hold
         self.toggleShortcut = shortcuts.toggle
         self.savedHoldCustomShortcut = savedHoldCustomShortcut.binding
@@ -1127,6 +1149,13 @@ final class AppState: ObservableObject, @unchecked Sendable {
         return trimmed.isEmpty ? apiKey : trimmed
     }
 
+    private var cleanupPrivacyControls: CleanupPrivacyControls {
+        CleanupPrivacyControls(
+            cleanupEnabled: cleanupEnabled,
+            contextAwareCleanupEnabled: contextAwareCleanupEnabled
+        )
+    }
+
     func transcribeTransientRecordingArtifact(
         _ artifact: TransientRecordingArtifact,
         context: AppContext? = nil
@@ -1145,16 +1174,15 @@ final class AppState: ObservableObject, @unchecked Sendable {
         guard authStateOwner.authenticatedRequestGeneration == uploadGeneration else {
             throw CancellationError()
         }
-        let request = RubyWhisperDesktopTranscriptionRequest(
-            body: .multipart(
-                audio: audio,
-                context: context?.contextSummary,
-                dictionaryTerms: personalDictionaryStore.termsForCleanupPayload()
-            ),
+        let request = RubyWhisperDesktopTranscriptionRequest.desktopMultipart(
+            audio: audio,
+            context: context?.contextSummary,
+            dictionaryTerms: cleanupPrivacyControls.includesCleanupPayloads
+                ? personalDictionaryStore.termsForCleanupPayload()
+                : [],
             audioMimeType: Self.audioMimeType(for: artifact.metadata),
             audioDurationMs: artifact.metadata.durationMs,
-            cleanupEnabled: true,
-            contextAwareCleanupEnabled: context != nil
+            privacyControls: cleanupPrivacyControls
         )
 
         do {
@@ -2985,7 +3013,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 DispatchQueue.main.async {
                     guard self.isRecording, let activeMode = self.activeRecordingTriggerMode else { return }
                     self.startRecordingDurationTimer(mode: activeMode)
-                    self.startContextCapture()
+                    if self.shouldCaptureContextForCurrentSession {
+                        self.startContextCapture()
+                    } else {
+                        self.clearContextCaptureForDisabledCleanup()
+                    }
                     self.audioLevelCancellable = self.audioRecorder.$audioLevel
                         .receive(on: DispatchQueue.main)
                         .sink { [weak self] level in
@@ -3314,14 +3346,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     artifact.delete()
                 }
                 do {
-                    let appContext: AppContext
-                    if let sessionContext {
-                        appContext = sessionContext
-                    } else if let inFlightContext = await inFlightContextTask?.value {
-                        appContext = inFlightContext
-                    } else {
-                        appContext = self.fallbackContextAtStop()
-                    }
+                    let appContext = await self.uploadContext(
+                        sessionContext: sessionContext,
+                        inFlightContextTask: inFlightContextTask
+                    )
                     try Task.checkCancellation()
                     let uploadSuccess = try await self.transcribeTransientRecordingArtifact(
                         artifact,
@@ -3351,7 +3379,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             postProcessedTranscript: "",
                             postProcessingPrompt: "",
                             systemPrompt: Self.resolvedSystemPrompt(self.customSystemPrompt),
-                            context: appContext,
+                            context: appContext ?? self.privacyDisabledContextAtStop(),
                             processingStatus: processingStatus,
                             intent: sessionIntent
                         )
@@ -3420,14 +3448,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         }
                     }
                 } catch {
-                    let resolvedContext: AppContext
-                    if let sessionContext {
-                        resolvedContext = sessionContext
-                    } else if let inFlightContext = await inFlightContextTask?.value {
-                        resolvedContext = inFlightContext
-                    } else {
-                        resolvedContext = self.fallbackContextAtStop()
-                    }
+                    let resolvedContext = await self.uploadContext(
+                        sessionContext: sessionContext,
+                        inFlightContextTask: inFlightContextTask
+                    )
                     await MainActor.run {
                         guard self.isTranscribing else { return }
                         self.transcriptionTask = nil
@@ -3458,7 +3482,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             postProcessedTranscript: "",
                             postProcessingPrompt: "",
                             systemPrompt: Self.resolvedSystemPrompt(self.customSystemPrompt),
-                            context: resolvedContext,
+                            context: resolvedContext ?? self.privacyDisabledContextAtStop(),
                             processingStatus: failure.map { "Upload failed: \($0.code.rawValue)" }
                                 ?? "Upload failed",
                             intent: sessionIntent
@@ -3784,6 +3808,60 @@ final class AppState: ObservableObject, @unchecked Sendable {
             }
             return context
         }
+    }
+
+    private var shouldCaptureContextForCurrentSession: Bool {
+        cleanupPrivacyControls.includesContextPayload
+    }
+
+    private func clearContextCaptureForDisabledCleanup() {
+        contextCaptureTask?.cancel()
+        contextCaptureTask = nil
+        capturedContext = nil
+        lastContextSummary = ""
+        lastContextScreenshotDataURL = nil
+        lastContextScreenshotStatus = "Context-aware cleanup disabled"
+        lastContextAppName = ""
+        lastContextBundleIdentifier = ""
+        lastContextWindowTitle = ""
+        lastContextSelectedText = ""
+        lastContextLLMPrompt = ""
+    }
+
+    private func uploadContext(
+        sessionContext: AppContext?,
+        inFlightContextTask: Task<AppContext?, Never>?
+    ) async -> AppContext? {
+        guard cleanupPrivacyControls.includesContextPayload else {
+            inFlightContextTask?.cancel()
+            return nil
+        }
+
+        if let sessionContext {
+            return sessionContext
+        }
+        if let inFlightContext = await inFlightContextTask?.value {
+            return inFlightContext
+        }
+        return fallbackContextAtStop()
+    }
+
+    private func privacyDisabledContextAtStop() -> AppContext {
+        let status = cleanupEnabled
+            ? "Context-aware cleanup disabled in Settings"
+            : "Cleanup disabled in Settings"
+        return AppContext(
+            appName: nil,
+            bundleIdentifier: nil,
+            windowTitle: nil,
+            selectedText: nil,
+            currentActivity: status,
+            contextSystemPrompt: "",
+            contextPrompt: nil,
+            screenshotDataURL: nil,
+            screenshotMimeType: nil,
+            screenshotError: status
+        )
     }
 
     private func fallbackContextAtStop() -> AppContext {

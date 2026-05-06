@@ -885,6 +885,9 @@ struct GeneralSettingsView: View {
                 SettingsCard("Clipboard", icon: "doc.on.clipboard") {
                     clipboardSection
                 }
+                SettingsCard("Privacy", icon: "hand.raised.fill") {
+                    privacySection
+                }
                 SettingsCard("Microphone", icon: "mic.fill") {
                     microphoneSection
                 }
@@ -1369,6 +1372,106 @@ struct GeneralSettingsView: View {
             Text("When the transcription ends with \"press enter\", \(AppName.displayName) removes those words before cleanup, pastes the remaining transcript, then presses Return.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Privacy
+
+    private var privacyPresentation: PrivacySettingsPresentation {
+        PrivacySettingsPresentation(
+            cleanupEnabled: appState.cleanupEnabled,
+            contextAwareCleanupEnabled: appState.contextAwareCleanupEnabled,
+            recentWisprsHistoryEnabled: appState.isRecentWisprsHistoryEnabled,
+            recentWisprCount: appState.recentWisprs.count
+        )
+    }
+
+    private var privacySection: some View {
+        let presentation = privacyPresentation
+
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Clean up transcripts", isOn: $appState.cleanupEnabled)
+                    .accessibilityHint("Turns backend cleanup on or off without syncing local content.")
+
+                Text(PrivacySettingsPresentation.cleanupCopy)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let copy = presentation.cleanupStatusCopy {
+                    Label(copy, systemImage: "pause.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Use app context during cleanup", isOn: $appState.contextAwareCleanupEnabled)
+                    .disabled(!presentation.isContextToggleEnabled)
+                    .accessibilityHint("Controls whether app context is included in cleanup uploads.")
+
+                Text(PrivacySettingsPresentation.contextCopy)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let copy = presentation.contextStatusCopy {
+                    Label(copy, systemImage: "eye.slash")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: Binding(
+                    get: { appState.isRecentWisprsHistoryEnabled },
+                    set: { appState.setRecentWisprsHistoryEnabled($0) }
+                )) {
+                    Text("Save Recent Wisprs on this Mac")
+                }
+                .accessibilityHint("Controls only local Recent Wisprs history on this Mac.")
+
+                Text(PrivacySettingsPresentation.recentWisprsLocalOnlyCopy)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let copy = presentation.recentWisprsStatusCopy {
+                    Label(copy, systemImage: "clock.badge.xmark")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Text(PrivacySettingsPresentation.recentWisprsClearCopy)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Button {
+                        appState.clearRecentWisprs()
+                    } label: {
+                        Label("Clear Local Recent Wisprs", systemImage: "trash")
+                    }
+                    .disabled(!presentation.canClearRecentWisprs)
+
+                    Button(role: .destructive) {
+                        appState.disableAndClearRecentWisprsHistory()
+                    } label: {
+                        Label("Disable and Clear", systemImage: "trash.slash")
+                    }
+                    .disabled(!presentation.canDisableAndClearRecentWisprs)
+                }
+                .controlSize(.small)
+            }
         }
     }
 

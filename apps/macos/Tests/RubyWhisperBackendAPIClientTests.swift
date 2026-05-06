@@ -81,6 +81,7 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testBinaryTranscriptionRequestMapping()
             try await testMultipartTranscriptionRequestMapping()
             try await testMultipartTranscriptionOmitsDisabledContextAndDictionary()
+            try await testDesktopMultipartFactoryAppliesCleanupPrivacyControls()
             try await testTranscriptionRequestDoesNotShapeRecentWisprsPayload()
             try await testTranscriptionRequestDoesNotShapeClipboardFallbackPayload()
             try await testTranscriptionRequestRedactedDiagnosticSummary()
@@ -662,6 +663,54 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(!contextDisabledBody.contains("name=\"context\""), "multipart body should omit context when context-aware cleanup is disabled")
         expect(!contextDisabledBody.contains("context_placeholder_context_disabled"), "multipart body should omit disabled context content")
         expect(contextDisabledBody.contains("name=\"dictionaryTerms\""), "multipart body may include dictionary terms when cleanup remains enabled")
+    }
+
+    private static func testDesktopMultipartFactoryAppliesCleanupPrivacyControls() async throws {
+        let metadata = RubyWhisperDesktopTranscriptionRequestMetadata(
+            appVersion: "0.1.0-test",
+            appChannel: "test",
+            osVersion: "macOS synthetic",
+            platform: "macos"
+        )
+        let disabledCleanup = RubyWhisperDesktopTranscriptionRequest.desktopMultipart(
+            audio: Data([0x52, 0x57, 0x08]),
+            context: "context_placeholder_disabled_cleanup",
+            dictionaryTerms: ["term_placeholder_disabled_cleanup"],
+            audioMimeType: "audio/wav",
+            audioDurationMs: 5678,
+            privacyControls: CleanupPrivacyControls(
+                cleanupEnabled: false,
+                contextAwareCleanupEnabled: true
+            )
+        )
+
+        expect(!disabledCleanup.cleanupEnabled, "factory should preserve disabled cleanup flag")
+        expect(!disabledCleanup.contextAwareCleanupEnabled, "disabled cleanup should make context-aware cleanup ineffective")
+        let disabledCleanupBody = String(data: try disabledCleanup.httpBody(metadata: metadata), encoding: .utf8) ?? ""
+        expect(!disabledCleanupBody.contains("name=\"context\""), "disabled cleanup should omit context field at assembly seam")
+        expect(!disabledCleanupBody.contains("name=\"dictionaryTerms\""), "disabled cleanup should omit dictionary terms at assembly seam")
+        expect(!disabledCleanupBody.contains("context_placeholder_disabled_cleanup"), "disabled cleanup should omit context content")
+        expect(!disabledCleanupBody.contains("term_placeholder_disabled_cleanup"), "disabled cleanup should omit dictionary content")
+
+        let disabledContext = RubyWhisperDesktopTranscriptionRequest.desktopMultipart(
+            audio: Data([0x52, 0x57, 0x09]),
+            context: "context_placeholder_disabled_context",
+            dictionaryTerms: ["term_placeholder_cleanup_still_enabled"],
+            audioMimeType: "audio/wav",
+            audioDurationMs: 5678,
+            privacyControls: CleanupPrivacyControls(
+                cleanupEnabled: true,
+                contextAwareCleanupEnabled: false
+            )
+        )
+
+        expect(disabledContext.cleanupEnabled, "cleanup should remain enabled when only context-aware cleanup is off")
+        expect(!disabledContext.contextAwareCleanupEnabled, "factory should preserve disabled context-aware cleanup flag")
+        let disabledContextBody = String(data: try disabledContext.httpBody(metadata: metadata), encoding: .utf8) ?? ""
+        expect(!disabledContextBody.contains("name=\"context\""), "disabled context-aware cleanup should omit context field")
+        expect(!disabledContextBody.contains("context_placeholder_disabled_context"), "disabled context-aware cleanup should omit context content")
+        expect(disabledContextBody.contains("name=\"dictionaryTerms\""), "dictionary terms should remain when cleanup is enabled")
+        expect(disabledContextBody.contains("term_placeholder_cleanup_still_enabled"), "cleanup-enabled request should include dictionary content in body only")
     }
 
     private static func testTranscriptionRequestDoesNotShapeRecentWisprsPayload() async throws {
