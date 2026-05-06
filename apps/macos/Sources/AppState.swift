@@ -536,6 +536,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private let shortcutSessionController = DictationShortcutSessionController()
     private let directInsertionAttemptGate = DirectInsertionAttemptGate()
     private lazy var clipboardFallbackManager = makeClipboardFallbackManager()
+    private var lastRecoveryWisprID: String?
     private var activeRecordingTriggerMode: RecordingTriggerMode?
     private var currentSessionIntent: SessionIntent = .dictation
     private var pendingSelectionSnapshot: AppSelectionSnapshot?
@@ -2402,6 +2403,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         case .retryInsertion:
             return retryRecoveredInsertion()
         case .recordAgain, .startNewWhisper:
+            lastRecoveryWisprID = nil
             statusText = "Ready"
             overlayManager.dismiss()
             return true
@@ -2410,6 +2412,28 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     @discardableResult
     private func copyRecoveredCleanedTextToPasteboard() -> Bool {
+        if let recoveredID = lastRecoveryWisprID {
+            let controller = RecentWisprRecoveryController(
+                store: recentWisprStore,
+                clipboard: ClipboardFallbackRecentWisprRecoveryClipboard(manager: clipboardFallbackManager)
+            )
+            switch controller.copyWispr(id: recoveredID) {
+            case .copied:
+                refreshRecentWisprs()
+                statusText = "Copied"
+                overlayManager.showFallbackCopied()
+                return true
+            case .writeFailed:
+                refreshRecentWisprs()
+                statusText = "Clipboard unavailable"
+                debugStatusMessage = "Island recovery action: copy_cleaned_text unavailable"
+                return false
+            case .notFound:
+                lastRecoveryWisprID = nil
+                refreshRecentWisprs()
+            }
+        }
+
         let trimmedText = lastTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
             statusText = "No text to copy"
@@ -2428,8 +2452,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
 
         statusText = "Copied"
-        overlayManager.showSuccess()
-        scheduleOverlayDismissAfterSuccess(after: 1.2)
+        overlayManager.showFallbackCopied()
         return true
     }
 
@@ -3597,17 +3620,19 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
+    @discardableResult
     private func recordRecentWispr(
         finalText: String,
         insertionStatus: RecentWisprInsertionStatus,
         destinationAppCategory: String? = nil
-    ) {
-        _ = recentWisprStore.recordFinalText(
+    ) -> RecentWispr? {
+        let item = recentWisprStore.recordFinalText(
             finalText,
             insertionStatus: insertionStatus,
             destinationAppCategory: destinationAppCategory
         )
         refreshRecentWisprs()
+        return item
     }
 
     private func makeDirectInsertionCoordinator() -> DirectInsertionCoordinator {
@@ -3649,19 +3674,20 @@ final class AppState: ObservableObject, @unchecked Sendable {
         completionStatusText: String
     ) {
         guard let historyStatus = result.localHistoryStatus else {
-            statusText = "Click a text box first"
-            overlayManager.showInsertionFailed()
+            statusText = RecordingIslandStateMachine.directInsertionRecovery(for: result).title
+            overlayManager.showDirectInsertionRecovery(for: result)
             return
         }
 
         let recentStatus: RecentWisprInsertionStatus = historyStatus == .inserted
             ? .inserted
             : .insertionFailed
-        recordRecentWispr(
+        let recentWispr = recordRecentWispr(
             finalText: finalText,
             insertionStatus: recentStatus,
             destinationAppCategory: result.destinationAppCategory
         )
+        lastRecoveryWisprID = recentStatus == .insertionFailed ? recentWispr?.id : nil
 
         if result.state == .inserted {
             statusText = completionStatusText
@@ -3685,17 +3711,17 @@ final class AppState: ObservableObject, @unchecked Sendable {
             reason: .automaticFallback,
             restorePreviousClipboard: preserveClipboard
         )
-        statusText = {
-            switch fallbackResult {
-            case .copied:
-                return "Copied. Paste manually."
-            case .emptyText:
-                return "Click a text box first"
-            case .writeFailed:
-                return "Clipboard unavailable"
-            }
-        }()
-        overlayManager.showInsertionFailed()
+        switch fallbackResult {
+        case .copied:
+            statusText = "Copied. Paste manually."
+            overlayManager.showFallbackCopied(after: result)
+        case .emptyText:
+            statusText = "Click a text box first"
+            overlayManager.showDirectInsertionRecovery(for: result)
+        case .writeFailed:
+            statusText = "Clipboard unavailable"
+            overlayManager.showDirectInsertionRecovery(for: result)
+        }
     }
 
     private func startRealtimeStreamingIfEnabled() {

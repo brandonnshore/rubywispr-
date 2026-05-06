@@ -21,6 +21,8 @@ enum RecordingIslandStateName: String, CaseIterable, Equatable, Codable {
     case processingUploading = "processing_uploading"
     case inserting
     case success
+    case insertionUnavailable = "insertion_unavailable"
+    case fallbackCopied = "fallback_copied"
     case insertionFailed = "insertion_failed"
     case rateLimited = "rate_limited"
     case networkError = "network_error"
@@ -37,9 +39,9 @@ enum RecordingIslandStateName: String, CaseIterable, Equatable, Codable {
              .termsRequired, .trialExhausted, .paymentFailed, .accountBlocked,
              .microphoneRecovery, .accessibilityRecovery, .hotkeyUnavailable,
              .hotkeyConflict, .recorderBusy, .durationLimitReached,
-             .processingUploading, .inserting, .success, .insertionFailed,
-             .rateLimited, .networkError, .providerError, .invalidAudio,
-             .serviceError, .unsafeRetryRequired:
+             .processingUploading, .inserting, .success, .insertionUnavailable,
+             .fallbackCopied, .insertionFailed, .rateLimited, .networkError,
+             .providerError, .invalidAudio, .serviceError, .unsafeRetryRequired:
             return false
         }
     }
@@ -53,8 +55,9 @@ enum RecordingIslandStateName: String, CaseIterable, Equatable, Codable {
              .microphoneRecovery, .accessibilityRecovery, .hotkeyUnavailable,
              .hotkeyConflict, .recorderBusy, .recordingHold, .recordingToggle,
              .nearingDurationLimit, .durationLimitReached, .success,
-             .insertionFailed, .rateLimited, .networkError, .providerError,
-             .invalidAudio, .serviceError, .unsafeRetryRequired:
+             .insertionUnavailable, .fallbackCopied, .insertionFailed,
+             .rateLimited, .networkError, .providerError, .invalidAudio,
+             .serviceError, .unsafeRetryRequired:
             return false
         }
     }
@@ -64,9 +67,9 @@ enum RecordingIslandStateName: String, CaseIterable, Equatable, Codable {
         case .onboardingBlocked, .signedOut, .termsRequired, .trialExhausted,
              .paymentFailed, .accountBlocked, .microphoneRecovery,
              .accessibilityRecovery, .hotkeyUnavailable, .hotkeyConflict,
-             .recorderBusy, .durationLimitReached, .insertionFailed,
-             .rateLimited, .networkError, .providerError, .invalidAudio,
-             .serviceError, .unsafeRetryRequired:
+             .recorderBusy, .durationLimitReached, .insertionUnavailable,
+             .fallbackCopied, .insertionFailed, .rateLimited, .networkError,
+             .providerError, .invalidAudio, .serviceError, .unsafeRetryRequired:
             return true
         case .hiddenIdle, .accountRefreshing, .recordingHold, .recordingToggle,
              .nearingDurationLimit, .processingUploading, .inserting, .success:
@@ -173,6 +176,8 @@ enum RecordingIslandStateMachine {
         .hotkeyUnavailable,
         .hotkeyConflict,
         .durationLimitReached,
+        .insertionUnavailable,
+        .fallbackCopied,
         .insertionFailed,
         .networkError,
         .providerError,
@@ -230,6 +235,68 @@ enum RecordingIslandStateMachine {
             primaryAction: .copyCleanedText,
             secondaryAction: .retryInsertion
         )
+    }
+
+    static func insertionUnavailable(
+        secondaryAction: RecordingIslandAction? = .retryInsertion
+    ) -> RecordingIslandPresentation {
+        presentation(
+            for: .insertionUnavailable,
+            primaryAction: .copyCleanedText,
+            secondaryAction: secondaryAction
+        )
+    }
+
+    static func fallbackCopied(
+        after result: DirectInsertionResult? = nil
+    ) -> RecordingIslandPresentation {
+        var presentation = presentation(
+            for: .fallbackCopied,
+            primaryAction: fallbackCopiedPrimaryAction(after: result),
+            secondaryAction: fallbackCopiedSecondaryAction(after: result)
+        )
+
+        guard let result else { return presentation }
+        switch result.state {
+        case .ambiguous:
+            presentation.title = "Copied, check app"
+        case .failed:
+            presentation.title = "Copied after fail"
+        case .blocked where isPermissionFailure(result.reason):
+            presentation.title = "Copied; allow access"
+        case .inserted, .unavailable, .blocked:
+            break
+        }
+        return presentation
+    }
+
+    static func directInsertionRecovery(
+        for result: DirectInsertionResult
+    ) -> RecordingIslandPresentation {
+        switch result.state {
+        case .inserted:
+            return success()
+        case .unavailable:
+            return insertionUnavailable(secondaryAction: .retryInsertion)
+        case .blocked:
+            if result.reason == .duplicateAttempt {
+                return unsafeRetryRequired()
+            }
+            if isPermissionFailure(result.reason) {
+                return insertionUnavailable(secondaryAction: .openSystemSettingsAccessibility)
+            }
+            return insertionUnavailable(secondaryAction: .startNewWhisper)
+        case .failed:
+            return insertionFailed()
+        case .ambiguous:
+            var presentation = presentation(
+                for: .insertionFailed,
+                primaryAction: .copyCleanedText,
+                secondaryAction: .startNewWhisper
+            )
+            presentation.title = "Insert unclear"
+            return presentation
+        }
     }
 
     static func unsafeRetryRequired() -> RecordingIslandPresentation {
@@ -491,8 +558,12 @@ enum RecordingIslandStateMachine {
             return ("Inserting", "text.cursor", nil, nil)
         case .success:
             return ("Done", "checkmark", nil, nil)
-        case .insertionFailed:
+        case .insertionUnavailable:
             return ("Click a text box first", "text.cursor", .copyCleanedText, .retryInsertion)
+        case .fallbackCopied:
+            return ("Copied to paste", "doc.on.clipboard", .retryInsertion, .startNewWhisper)
+        case .insertionFailed:
+            return ("Could not insert", "text.cursor", .copyCleanedText, .retryInsertion)
         case .rateLimited:
             return ("Rate limited", "hourglass", .retryAfter, nil)
         case .networkError:
@@ -505,6 +576,46 @@ enum RecordingIslandStateMachine {
             return ("Service unavailable", "exclamationmark.triangle.fill", .retryOrContactSupport, nil)
         case .unsafeRetryRequired:
             return ("Start a new whisper", "arrow.clockwise.circle", .startNewWhisper, nil)
+        }
+    }
+
+    private static func fallbackCopiedPrimaryAction(
+        after result: DirectInsertionResult?
+    ) -> RecordingIslandAction? {
+        guard let result else { return .retryInsertion }
+        switch result.state {
+        case .ambiguous:
+            return .copyCleanedText
+        case .blocked where isPermissionFailure(result.reason):
+            return .openSystemSettingsAccessibility
+        case .inserted, .unavailable, .blocked, .failed:
+            return .retryInsertion
+        }
+    }
+
+    private static func fallbackCopiedSecondaryAction(
+        after result: DirectInsertionResult?
+    ) -> RecordingIslandAction? {
+        guard let result else { return .startNewWhisper }
+        switch result.state {
+        case .ambiguous:
+            return .startNewWhisper
+        case .inserted, .unavailable, .blocked, .failed:
+            return .startNewWhisper
+        }
+    }
+
+    private static func isPermissionFailure(
+        _ reason: DirectInsertionFailureReason?
+    ) -> Bool {
+        switch reason {
+        case .permissionDenied, .permissionUnavailable, .permissionPolicyBlocked:
+            return true
+        case .noFinalText, .appIneligible, .islandNotInserting,
+             .duplicateAttempt, .noFocusedTarget, .unsafeTarget,
+             .deterministicFailure, .preflightTimeout, .attemptTimeout,
+             .targetAmbiguous, nil:
+            return false
         }
     }
 }

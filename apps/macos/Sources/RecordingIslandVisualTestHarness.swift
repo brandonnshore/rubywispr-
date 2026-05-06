@@ -193,6 +193,20 @@ enum RecordingIslandVisualTestHarness {
                 evidenceGuidance: "Capture busy state only; no duplicate recording or audio evidence."
             ),
             scenario(
+                id: "ISLAND-041U",
+                state: .insertionUnavailable,
+                area: .recovery,
+                presentation: RecordingIslandStateMachine.insertionUnavailable(),
+                evidenceGuidance: "Capture unavailable insertion recovery only; do not render target content or cleaned text."
+            ),
+            scenario(
+                id: "ISLAND-041C",
+                state: .fallbackCopied,
+                area: .recovery,
+                presentation: RecordingIslandStateMachine.fallbackCopied(),
+                evidenceGuidance: "Capture copied fallback state only; do not show clipboard contents or cleaned text."
+            ),
+            scenario(
                 id: "ISLAND-041",
                 state: .insertionFailed,
                 area: .recovery,
