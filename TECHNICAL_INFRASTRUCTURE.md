@@ -604,9 +604,23 @@ Forbidden:
 
 Crash/error reporting:
 
-- Configure data scrubbing.
-- Disable automatic capture of request bodies.
-- Disable screenshots/session replay unless explicitly approved later.
+- Source evidence lives in
+  `apps/web/src/lib/observability/error-reporter.ts` and
+  `apps/web/src/lib/observability/privacy-logger.ts`.
+- Test evidence lives in
+  `apps/web/test/error-reporting-adapter.test.mjs` and
+  `apps/web/test/privacy-logging-guardrails.test.mjs`.
+- The checked-in adapter is server-only, provider-neutral, and no-op by default.
+  It does not read runtime environment values, import provider SDKs, call a
+  network sink, or require live provider credentials.
+- A future crash/log provider may only receive the sanitized metadata event
+  shape from the privacy logger allowlist.
+- Configure data scrubbing before any live sink is enabled.
+- Disable automatic capture of request bodies, response bodies, screenshots,
+  session replay, audio, transcripts, clipboard contents, provider payloads, and
+  auth/session material.
+- Live provider configuration, production/staging credentials, and
+  captured-event inspection remain blocked on RUB-123 and human approval.
 
 ## Rollback And Recovery
 
