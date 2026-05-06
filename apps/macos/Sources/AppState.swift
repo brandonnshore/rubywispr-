@@ -2471,13 +2471,25 @@ final class AppState: ObservableObject, @unchecked Sendable {
             return false
         }
 
-        let pendingClipboardRestore = writeTranscriptToPasteboard(trimmedText)
         overlayManager.showInserting()
-        pasteAtCursorWhenShortcutReleased { [weak self] in
-            guard let self else { return }
-            self.restoreClipboardIfNeeded(pendingClipboardRestore)
-            self.overlayManager.showSuccess()
-            self.scheduleOverlayDismissAfterSuccess(after: 1.2)
+        let coordinator = makeDirectInsertionCoordinator()
+        let request = DirectInsertionRequest(
+            finalText: trimmedText,
+            appEligibility: directInsertionAppEligibility(),
+            islandIsInserting: true
+        )
+        Task { [weak self] in
+            let result = await coordinator.attempt(request)
+            guard let appState = self else { return }
+            await MainActor.run {
+                appState.handleDirectInsertionResult(
+                    result,
+                    finalText: trimmedText,
+                    shouldPressEnterAfterInsertion: false,
+                    updateReminderShown: false,
+                    completionStatusText: "Inserted"
+                )
+            }
         }
         return true
     }
@@ -3357,7 +3369,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         self.isTranscribing = false
                         self.endCriticalDictationActivity()
                         self.debugStatusMessage = "Done"
-                        let completionStatusText = self.preserveClipboard ? "Pasted at cursor!" : "Copied to clipboard!"
+                        let completionStatusText = "Inserted"
                         let enterOnlyStatusText = "Pressed Enter"
                         let shouldPressEnterAfterPaste = parsedTranscript.shouldPressEnterAfterPaste
 
@@ -3372,33 +3384,31 @@ final class AppState: ObservableObject, @unchecked Sendable {
                                 self.pressEnterWhenShortcutReleased()
                             }
                         } else {
-                            self.statusText = completionStatusText
+                            self.statusText = "Inserting"
                             self.clearPendingOverlayDismissToken()
                             let updateReminderShown = self.showPostTranscriptionUpdateReminderIfNeeded()
-                            self.recordRecentWispr(
-                                finalText: trimmedFinalTranscript,
-                                insertionStatus: .inserted
-                            )
-
-                            let pendingClipboardRestore = self.writeTranscriptToPasteboard(trimmedFinalTranscript)
                             if !updateReminderShown {
                                 self.overlayManager.showInserting()
                             }
-                            self.pasteAtCursorWhenShortcutReleased {
-                                if shouldPressEnterAfterPaste {
-                                    self.pressEnterAfterPaste {
-                                        self.restoreClipboardIfNeeded(pendingClipboardRestore)
-                                        if !updateReminderShown {
-                                            self.overlayManager.showSuccess()
-                                            self.scheduleOverlayDismissAfterSuccess(after: 1.2)
-                                        }
-                                    }
-                                } else {
-                                    self.restoreClipboardIfNeeded(pendingClipboardRestore)
-                                    if !updateReminderShown {
-                                        self.overlayManager.showSuccess()
-                                        self.scheduleOverlayDismissAfterSuccess(after: 1.2)
-                                    }
+
+                            let coordinator = self.makeDirectInsertionCoordinator()
+                            let request = DirectInsertionRequest(
+                                requestId: insertionInput.requestId,
+                                finalText: trimmedFinalTranscript,
+                                appEligibility: self.directInsertionAppEligibility(),
+                                islandIsInserting: true
+                            )
+                            Task { [weak self] in
+                                let insertionResult = await coordinator.attempt(request)
+                                guard let appState = self else { return }
+                                await MainActor.run {
+                                    appState.handleDirectInsertionResult(
+                                        insertionResult,
+                                        finalText: trimmedFinalTranscript,
+                                        shouldPressEnterAfterInsertion: shouldPressEnterAfterPaste,
+                                        updateReminderShown: updateReminderShown,
+                                        completionStatusText: completionStatusText
+                                    )
                                 }
                             }
                         }
@@ -3627,6 +3637,71 @@ final class AppState: ObservableObject, @unchecked Sendable {
             destinationAppCategory: destinationAppCategory
         )
         refreshRecentWisprs()
+    }
+
+    private func makeDirectInsertionCoordinator() -> DirectInsertionCoordinator {
+        DirectInsertionCoordinator(
+            permissionPort: MacAccessibilityInsertionPermissionPort(),
+            targetClassifier: MacAccessibilityInsertionTargetClassifier(),
+            insertionPort: ShortcutReleasedDirectInsertionPort { [weak self] action in
+                guard let self else {
+                    action()
+                    return
+                }
+                self.performAfterShortcutReleased(action: action)
+            },
+            eventSink: OSLogDirectInsertionEventSink(log: recordingLog)
+        )
+    }
+
+    private func directInsertionAppEligibility() -> DirectInsertionAppEligibility {
+        authCoordinatorState.dictationAccountGateDecision == .allowed &&
+            firstRunOnboardingStep.allowsNormalDictation
+            ? .eligible
+            : .ineligible
+    }
+
+    private func handleDirectInsertionResult(
+        _ result: DirectInsertionResult,
+        finalText: String,
+        shouldPressEnterAfterInsertion: Bool,
+        updateReminderShown: Bool,
+        completionStatusText: String
+    ) {
+        guard let historyStatus = result.localHistoryStatus else {
+            statusText = "Click a text box first"
+            overlayManager.showInsertionFailed()
+            return
+        }
+
+        let recentStatus: RecentWisprInsertionStatus = historyStatus == .inserted
+            ? .inserted
+            : .insertionFailed
+        recordRecentWispr(
+            finalText: finalText,
+            insertionStatus: recentStatus,
+            destinationAppCategory: result.destinationAppCategory
+        )
+
+        if result.state == .inserted {
+            statusText = completionStatusText
+            if shouldPressEnterAfterInsertion {
+                pressEnterAfterPaste { [weak self] in
+                    guard let self else { return }
+                    if !updateReminderShown {
+                        self.overlayManager.showSuccess()
+                        self.scheduleOverlayDismissAfterSuccess(after: 1.2)
+                    }
+                }
+            } else if !updateReminderShown {
+                overlayManager.showSuccess()
+                scheduleOverlayDismissAfterSuccess(after: 1.2)
+            }
+            return
+        }
+
+        statusText = "Click a text box first"
+        overlayManager.showInsertionFailed()
     }
 
     private func startRealtimeStreamingIfEnabled() {
