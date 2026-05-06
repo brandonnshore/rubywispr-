@@ -318,6 +318,7 @@ private struct DirectInsertionCoordinatorTests {
         expect(result.state == .unavailable, "unfocused target should be unavailable")
         expect(result.outcome == .insertionUnavailable, "unfocused target should use unavailable outcome")
         expect(result.unsafeTargetCategory == .noFocusedTarget, "unfocused target should preserve category")
+        expect(result.localHistoryStatus == .insertionFailed, "unfocused final text should feed recovery history")
         expect(insertion.callCount == 0, "unfocused target must not attempt insertion")
     }
 

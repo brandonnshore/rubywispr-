@@ -1555,6 +1555,32 @@ final class AppState: ObservableObject, @unchecked Sendable {
         refreshRecentWisprs()
     }
 
+    @discardableResult
+    func copyRecentWisprToPasteboard(id: String) -> Bool {
+        let controller = RecentWisprRecoveryController(
+            store: recentWisprStore,
+            clipboard: ClipboardFallbackRecentWisprRecoveryClipboard(manager: clipboardFallbackManager)
+        )
+
+        switch controller.copyWispr(id: id) {
+        case .copied:
+            statusText = "Copied"
+            debugStatusMessage = "Recent Wispr recovery action: copy_cleaned_text"
+            refreshRecentWisprs()
+            return true
+        case .notFound:
+            statusText = "No text to copy"
+            debugStatusMessage = "Recent Wispr recovery action: copy_cleaned_text missing"
+            refreshRecentWisprs()
+            return false
+        case .writeFailed:
+            statusText = "Clipboard unavailable"
+            debugStatusMessage = "Recent Wispr recovery action: copy_cleaned_text unavailable"
+            refreshRecentWisprs()
+            return false
+        }
+    }
+
     func deleteHistoryEntry(id: UUID) {
         guard let index = pipelineHistory.firstIndex(where: { $0.id == id }) else { return }
         do {
