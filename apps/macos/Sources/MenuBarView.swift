@@ -12,8 +12,11 @@ struct MenuBarView: View {
         Array(appState.pipelineHistory.filter { !transcriptText(for: $0).isEmpty }.prefix(10))
     }
 
-    private var recentWisprItems: [RecentWispr] {
-        Array(appState.recentWisprs.prefix(10))
+    private var recentWisprsMenuState: RecentWisprsHistoryMenuState {
+        RecentWisprsHistoryMenuState.make(
+            items: appState.recentWisprs,
+            isHistoryEnabled: appState.isRecentWisprsHistoryEnabled
+        )
     }
 
     private func transcriptText(for item: PipelineHistoryItem) -> String {
@@ -43,23 +46,6 @@ struct MenuBarView: View {
         guard !transcript.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(transcript, forType: .string)
-    }
-
-    private func recentWisprSnippet(for item: RecentWispr) -> String {
-        let text = item.finalText
-            .replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return "(no text)" }
-        return text.count > 42 ? String(text.prefix(42)) + "..." : text
-    }
-
-    private func recentWisprStatusText(for item: RecentWispr) -> String {
-        switch item.insertionStatus {
-        case .inserted:
-            return "Inserted"
-        case .insertionFailed:
-            return "Needs text box"
-        }
     }
 
     private func openRunLog() {
@@ -249,26 +235,23 @@ struct MenuBarView: View {
             }
 
             Menu("Recent Wisprs") {
-                if !appState.isRecentWisprsHistoryEnabled {
-                    Text("History disabled")
-                } else if recentWisprItems.isEmpty {
-                    Text("No Recent Wisprs")
-                } else {
-                    ForEach(recentWisprItems) { item in
-                        Button {
-                            _ = appState.copyRecentWisprToPasteboard(id: item.id)
-                        } label: {
-                            Text("Copy Whisper (\(recentWisprStatusText(for: item))) - \(recentWisprSnippet(for: item))")
+                ForEach(recentWisprsMenuState.rows) { row in
+                    if let copyID = row.copyID {
+                        Button(row.title) {
+                            _ = appState.copyRecentWisprToPasteboard(id: copyID)
                         }
+                        .disabled(!row.isEnabled)
+                    } else {
+                        Text(row.title)
                     }
-
-                    Divider()
                 }
+
+                Divider()
 
                 Button("Clear Recent Wisprs") {
                     appState.clearRecentWisprs()
                 }
-                .disabled(appState.recentWisprs.isEmpty)
+                .disabled(!recentWisprsMenuState.canClearHistory)
             }
 
             Divider()
