@@ -570,6 +570,15 @@ struct AccountSettingsView: View {
                                     Label("Cancel Sign In", systemImage: "xmark.circle")
                                 }
                             } else {
+                                if let accountAction = presentation.accountAction {
+                                    Button {
+                                        _ = appState.performDesktopAccountRecoveryAction(accountAction.action)
+                                    } label: {
+                                        Label(accountAction.title, systemImage: accountAction.systemImage)
+                                    }
+                                    .disabled(appState.authCoordinatorState == .accountRefreshing)
+                                }
+
                                 if let recoveryButton = presentation.recoveryButton {
                                     Button {
                                         _ = appState.performDesktopAccountRecoveryAction(recoveryButton.action)

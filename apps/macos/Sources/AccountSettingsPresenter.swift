@@ -13,6 +13,12 @@ struct AccountSettingsPresentation: Equatable {
         var action: RubyWhisperDesktopRecoveryAction
     }
 
+    struct AccountAction: Equatable {
+        var title: String
+        var systemImage: String
+        var action: RubyWhisperDesktopRecoveryAction
+    }
+
     var statusTitle: String
     var statusDetail: String
     var stateCode: String
@@ -20,6 +26,7 @@ struct AccountSettingsPresentation: Equatable {
     var statusRows: [Row]
     var planRows: [Row]
     var usageRows: [Row]
+    var accountAction: AccountAction?
     var recoveryButton: RecoveryButton?
 
     init(
@@ -35,6 +42,7 @@ struct AccountSettingsPresentation: Equatable {
         self.statusRows = Self.makeStatusRows(snapshot: snapshot, coordinatorState: coordinatorState)
         self.planRows = Self.makePlanRows(snapshot: snapshot, coordinatorState: coordinatorState)
         self.usageRows = Self.makeUsageRows(snapshot: snapshot)
+        self.accountAction = Self.makeAccountAction(snapshot: snapshot, coordinatorState: coordinatorState)
         self.recoveryButton = Self.makeRecoveryButton(snapshot: snapshot, coordinatorState: coordinatorState)
     }
 
@@ -139,6 +147,34 @@ struct AccountSettingsPresentation: Equatable {
         case .retry, .retryAfter, .retryOrContactSupport:
             return RecoveryButton(title: "Refresh Account", systemImage: "arrow.clockwise", action: action)
         case .startNewWhisper, .recordAgain, .unknown:
+            return nil
+        }
+    }
+
+    private static func makeAccountAction(
+        snapshot: RubyWhisperDesktopAccountSnapshot,
+        coordinatorState: DesktopAuthCoordinatorState
+    ) -> AccountAction? {
+        guard coordinatorState.canTranscribe,
+              !coordinatorState.isLoginBridgePending,
+              coordinatorState != .accountRefreshing else {
+            return nil
+        }
+
+        switch snapshot.state {
+        case .paidActive:
+            if snapshot.billingPortalAvailable == true || snapshot.recovery == .openBilling {
+                return AccountAction(title: "Manage Billing", systemImage: "creditcard", action: .openBilling)
+            }
+            if snapshot.recovery == .openAccount {
+                return AccountAction(title: "Manage Account", systemImage: "person.crop.circle", action: .openAccount)
+            }
+            return nil
+        case .friendOfRubyActive:
+            return AccountAction(title: "Manage Account", systemImage: "person.crop.circle", action: .openAccount)
+        case .signedOut, .signedInTermsRequired, .trialActive, .trialExhausted,
+             .paymentFailed, .blocked, .durationLimitReached, .providerError,
+             .networkError, .error, .unknown:
             return nil
         }
     }

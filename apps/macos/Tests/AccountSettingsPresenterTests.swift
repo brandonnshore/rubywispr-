@@ -14,6 +14,7 @@ private func expect(_ condition: @autoclosure () -> Bool, _ message: String) -> 
 private struct AccountSettingsPresenterTests {
     static func main() {
         testPlanAndUsageRowsCoverCanonicalStates()
+        testActiveAccountActionsUseSafeRouting()
         testRecoveryButtonsUseSafeActions()
         testUnknownAndEmptyMetadataStayStable()
         print("AccountSettingsPresenterTests passed")
@@ -172,6 +173,93 @@ private struct AccountSettingsPresenterTests {
         }
     }
 
+    private static func testActiveAccountActionsUseSafeRouting() {
+        let cases: [(name: String, snapshot: RubyWhisperDesktopAccountSnapshot, state: DesktopAuthCoordinatorState, action: RubyWhisperDesktopRecoveryAction?, title: String?)] = [
+            (
+                "paid active billing portal",
+                snapshot(state: .paidActive, planState: .paidActive),
+                .paidActive,
+                .openBilling,
+                "Manage Billing"
+            ),
+            (
+                "paid active billing recovery",
+                snapshot(state: .paidActive, planState: .paidActive, recovery: .openBilling, billingPortalAvailable: false),
+                .paidActive,
+                .openBilling,
+                "Manage Billing"
+            ),
+            (
+                "paid active unsupported",
+                snapshot(state: .paidActive, planState: .paidActive, billingPortalAvailable: false),
+                .paidActive,
+                nil,
+                nil
+            ),
+            (
+                "Friend of Ruby",
+                snapshot(state: .friendOfRubyActive, planState: .friendOfRubyActive),
+                .friendOfRubyActive,
+                .openAccount,
+                "Manage Account"
+            ),
+            (
+                "trial active",
+                snapshot(state: .trialActive, planState: .trialActive),
+                .trialActive,
+                nil,
+                nil
+            ),
+            (
+                "payment failed",
+                snapshot(state: .paymentFailed, planState: .paymentFailed, recovery: .openBilling, failureCode: .paymentFailed),
+                .paymentFailed,
+                nil,
+                nil
+            ),
+            (
+                "trial exhausted",
+                snapshot(state: .trialExhausted, planState: .trialExhausted, remaining: 0, recovery: .openCheckout),
+                .trialExhausted,
+                nil,
+                nil
+            ),
+            (
+                "signed out",
+                .signedOut,
+                .signedOut,
+                nil,
+                nil
+            ),
+            (
+                "loading",
+                snapshot(state: .paidActive, planState: .paidActive),
+                .accountRefreshing,
+                nil,
+                nil
+            ),
+            (
+                "unknown",
+                RubyWhisperDesktopAccountSnapshot(
+                    state: .unknown("future_state"),
+                    canTranscribe: false,
+                    recovery: .openBilling,
+                    accountStatus: .unknown("future_account"),
+                    planState: .unknown("future_plan")
+                ),
+                .unknown("future_state"),
+                nil,
+                nil
+            ),
+        ]
+
+        for testCase in cases {
+            let action = presentation(snapshot: testCase.snapshot, state: testCase.state).accountAction
+            expect(action?.action == testCase.action, "\(testCase.name) should map account action")
+            expect(action?.title == testCase.title, "\(testCase.name) should map account action title")
+        }
+    }
+
     private static func testUnknownAndEmptyMetadataStayStable() {
         let presentation = presentation(
             snapshot: RubyWhisperDesktopAccountSnapshot(
@@ -191,6 +279,7 @@ private struct AccountSettingsPresenterTests {
         expect(rowValue("Account status", in: presentation.planRows) == "custom_status", "unknown account status should show stable raw metadata")
         expect(rowValue("Plan state", in: presentation.planRows) == "custom_plan", "unknown plan state should show stable raw metadata")
         expect(rowValue("Email", in: presentation.statusRows) == nil, "blank email should not render")
+        expect(presentation.accountAction == nil, "unknown state should not create an unsafe account action")
         expect(presentation.recoveryButton == nil, "unknown recovery should not create an unsafe action")
     }
 
@@ -213,7 +302,8 @@ private struct AccountSettingsPresenterTests {
         isTrialLow: Bool? = nil,
         isTrialExhausted: Bool? = nil,
         recovery: RubyWhisperDesktopRecoveryAction? = nil,
-        failureCode: RubyWhisperBackendErrorCode? = nil
+        failureCode: RubyWhisperBackendErrorCode? = nil,
+        billingPortalAvailable: Bool? = nil
     ) -> RubyWhisperDesktopAccountSnapshot {
         RubyWhisperDesktopAccountSnapshot(
             state: state,
@@ -233,7 +323,7 @@ private struct AccountSettingsPresenterTests {
             monthlyWordsUsed: nil,
             monthlyPeriodStart: nil,
             lifetimeWordsUsed: nil,
-            billingPortalAvailable: planState == .paidActive || planState == .paymentFailed,
+            billingPortalAvailable: billingPortalAvailable ?? (planState == .paidActive || planState == .paymentFailed),
             failureCode: failureCode
         )
     }
