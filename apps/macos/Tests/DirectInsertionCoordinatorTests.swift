@@ -45,6 +45,7 @@ private final class MockInsertionPort: DirectInsertionPort {
     private(set) var insertedTextValues: [String] = []
     private(set) var targetCategories: [DirectInsertionTargetCategory] = []
     var afterInsert: (() -> Void)?
+    var beforeReturn: (() async -> Void)?
 
     init(_ result: DirectInsertionWriteResult = .accepted) {
         self.result = result
@@ -54,6 +55,7 @@ private final class MockInsertionPort: DirectInsertionPort {
         insertedTextValues.append(finalText)
         targetCategories.append(targetCategory)
         afterInsert?()
+        await beforeReturn?()
         return result
     }
 }
@@ -82,17 +84,49 @@ private final class FixtureClock: DirectInsertionClock {
     }
 }
 
+private final class AsyncRelease {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if released {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    func release() {
+        lock.lock()
+        released = true
+        let continuation = continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume()
+    }
+}
+
 @main
 private struct DirectInsertionCoordinatorTests {
     static func main() async throws {
         await testAllowedTargetInsertsAndMapsHistory()
+        await testEveryAllowedTargetCategoryCanInsert()
         await testFinalTextAndAppStateGatesPreventInsertion()
+        await testDuplicateAttemptFailsClosedBeforeTargetInspection()
         await testDeniedPermissionFailsClosedBeforeTargetInspection()
+        await testPermissionFailureCategoriesFailClosed()
         await testUnsafeTargetCategoriesDoNotAttemptInsertion()
         await testUnavailableFocusedTargetMapsCategorically()
+        await testAmbiguousTargetClassificationIsTerminal()
         await testFailedAndAmbiguousWriteResultsAreTerminal()
         await testTimeoutsMapToAmbiguous()
-        try await testEventsAreCategoricalOnly()
+        try await testResultsAndEventsAreCategoricalOnly()
 
         print("DirectInsertionCoordinatorTests passed")
     }
@@ -122,6 +156,28 @@ private struct DirectInsertionCoordinatorTests {
         expect(sink.events.map(\.outcome) == [.directInsertionSucceeded], "event should record categorical success")
     }
 
+    private static func testEveryAllowedTargetCategoryCanInsert() async {
+        for targetCategory in [
+            DirectInsertionTargetCategory.plainTextEditor,
+            .richTextEditor,
+            .browserTextField,
+            .messagingDraftField,
+            .emailDraftField,
+            .codeEditor,
+        ] {
+            let classifier = MockTargetClassifier(.allowed(targetCategory))
+            let insertion = MockInsertionPort(.accepted)
+            let coordinator = makeCoordinator(classifier: classifier, insertion: insertion)
+
+            let result = await coordinator.attempt(DirectInsertionRequest(finalText: "final_text_placeholder_allowed_category"))
+
+            expect(result.state == .inserted, "\(targetCategory.rawValue) should be eligible for direct insertion")
+            expect(result.outcome == .directInsertionSucceeded, "\(targetCategory.rawValue) should map to success")
+            expect(result.targetCategory == targetCategory, "\(targetCategory.rawValue) should stay categorical")
+            expect(insertion.targetCategories == [targetCategory], "\(targetCategory.rawValue) should be passed as metadata")
+        }
+    }
+
     private static func testFinalTextAndAppStateGatesPreventInsertion() async {
         let empty = await closedGateResult(finalText: "   ")
         expect(empty.result.state == .unavailable, "empty final text should be unavailable")
@@ -139,6 +195,57 @@ private struct DirectInsertionCoordinatorTests {
         expect(notInserting.insertion.callCount == 0, "non-inserting island state must not attempt insertion")
     }
 
+    private static func testDuplicateAttemptFailsClosedBeforeTargetInspection() async {
+        let releaseFirstAttempt = AsyncRelease()
+        let permission = MockPermissionPort()
+        let firstClassifier = MockTargetClassifier(.allowed(.plainTextEditor))
+        let insertion = MockInsertionPort(.accepted)
+        insertion.beforeReturn = {
+            await releaseFirstAttempt.wait()
+        }
+        let attemptGate = DirectInsertionAttemptGate()
+        let coordinator = makeCoordinator(
+            permission: permission,
+            classifier: firstClassifier,
+            insertion: insertion,
+            gate: attemptGate
+        )
+        let firstAttempt = Task {
+            await coordinator.attempt(DirectInsertionRequest(
+                requestId: "request_id_placeholder_duplicate_first",
+                finalText: "final_text_placeholder_duplicate_first"
+            ))
+        }
+
+        while insertion.callCount == 0 {
+            await Task.yield()
+        }
+
+        let duplicateClassifier = MockTargetClassifier(.allowed(.browserTextField))
+        let duplicateInsertion = MockInsertionPort(.accepted)
+        let duplicate = await makeCoordinator(
+            permission: permission,
+            classifier: duplicateClassifier,
+            insertion: duplicateInsertion,
+            gate: attemptGate
+        ).attempt(DirectInsertionRequest(
+            requestId: "request_id_placeholder_duplicate_second",
+            finalText: "final_text_placeholder_duplicate_second"
+        ))
+
+        expect(duplicate.state == .blocked, "duplicate insertion attempt should be blocked")
+        expect(duplicate.outcome == .insertionUnavailable, "duplicate insertion attempt should use unavailable outcome")
+        expect(duplicate.reason == .duplicateAttempt, "duplicate insertion attempt should be categorical")
+        expect(duplicate.localHistoryStatus == nil, "duplicate insertion attempt should not create a second recovery record")
+        expect(duplicateClassifier.callCount == 0, "duplicate insertion attempt must not inspect target")
+        expect(duplicateInsertion.callCount == 0, "duplicate insertion attempt must not write text")
+
+        releaseFirstAttempt.release()
+        let first = await firstAttempt.value
+        expect(first.state == .inserted, "original insertion should complete after duplicate is blocked")
+        expect(insertion.callCount == 1, "original insertion should only write once")
+    }
+
     private static func testDeniedPermissionFailsClosedBeforeTargetInspection() async {
         let permission = MockPermissionPort(.denied)
         let classifier = MockTargetClassifier(.allowed(.plainTextEditor))
@@ -152,6 +259,29 @@ private struct DirectInsertionCoordinatorTests {
         expect(result.reason == .permissionDenied, "denied permission should be categorical")
         expect(classifier.callCount == 0, "denied permission must not inspect focused target")
         expect(insertion.callCount == 0, "denied permission must not attempt insertion")
+    }
+
+    private static func testPermissionFailureCategoriesFailClosed() async {
+        for permissionCategory in [
+            DirectInsertionPermissionCategory.denied,
+            .unavailable,
+            .policyBlocked,
+        ] {
+            let permission = MockPermissionPort(permissionCategory)
+            let classifier = MockTargetClassifier(.allowed(.plainTextEditor))
+            let insertion = MockInsertionPort(.accepted)
+            let result = await makeCoordinator(
+                permission: permission,
+                classifier: classifier,
+                insertion: insertion
+            ).attempt(DirectInsertionRequest(finalText: "final_text_placeholder_permission_category"))
+
+            expect(result.state == .blocked, "\(permissionCategory.rawValue) permission should be blocked")
+            expect(result.outcome == .insertionUnavailable, "\(permissionCategory.rawValue) permission should be unavailable")
+            expect(result.permissionCategory == permissionCategory, "\(permissionCategory.rawValue) should stay categorical")
+            expect(classifier.callCount == 0, "\(permissionCategory.rawValue) permission must not inspect target")
+            expect(insertion.callCount == 0, "\(permissionCategory.rawValue) permission must not attempt insertion")
+        }
     }
 
     private static func testUnsafeTargetCategoriesDoNotAttemptInsertion() async {
@@ -188,6 +318,19 @@ private struct DirectInsertionCoordinatorTests {
         expect(result.outcome == .insertionUnavailable, "unfocused target should use unavailable outcome")
         expect(result.unsafeTargetCategory == .noFocusedTarget, "unfocused target should preserve category")
         expect(insertion.callCount == 0, "unfocused target must not attempt insertion")
+    }
+
+    private static func testAmbiguousTargetClassificationIsTerminal() async {
+        let classifier = MockTargetClassifier(.ambiguous)
+        let insertion = MockInsertionPort(.accepted)
+        let result = await makeCoordinator(classifier: classifier, insertion: insertion)
+            .attempt(DirectInsertionRequest(finalText: "final_text_placeholder_ambiguous_target"))
+
+        expect(result.state == .ambiguous, "ambiguous classification should be ambiguous")
+        expect(result.outcome == .directInsertionAmbiguous, "ambiguous classification should use ambiguous outcome")
+        expect(result.reason == .targetAmbiguous, "ambiguous classification reason should be categorical")
+        expect(result.localHistoryStatus == .insertionFailed, "ambiguous classification should feed recovery history")
+        expect(insertion.callCount == 0, "ambiguous classification must not attempt insertion")
     }
 
     private static func testFailedAndAmbiguousWriteResultsAreTerminal() async {
@@ -233,26 +376,37 @@ private struct DirectInsertionCoordinatorTests {
         expect(attempt.reason == .attemptTimeout, "attempt timeout reason should be categorical")
     }
 
-    private static func testEventsAreCategoricalOnly() async throws {
+    private static func testResultsAndEventsAreCategoricalOnly() async throws {
         let sink = FixtureEventSink()
-        let finalText = "final_text_placeholder_privacy_not_event"
+        let targetPayload = "fixture_target_payload_alpha"
+        let selectedPayload = "fixture_selected_payload_beta"
+        let clipboardPayload = "fixture_clipboard_payload_gamma"
+        let finalText = "fixture_final_payload_delta"
         let coordinator = makeCoordinator(sink: sink)
 
-        _ = await coordinator.attempt(DirectInsertionRequest(
+        let result = await coordinator.attempt(DirectInsertionRequest(
             requestId: "request_id_placeholder_privacy",
             finalText: finalText
         ))
 
-        guard let data = try? JSONEncoder().encode(sink.events),
+        let metadata = DirectInsertionPrivacyFixtureMetadata(
+            result: result,
+            events: sink.events,
+            destinationAppCategory: result.destinationAppCategory
+        )
+        guard let data = try? JSONEncoder().encode(metadata),
               let encoded = String(data: data, encoding: .utf8) else {
-            expect(false, "events should encode for privacy inspection")
+            expect(false, "result metadata and events should encode for privacy inspection")
             return
         }
 
-        expect(encoded.contains("direct_insertion_succeeded"), "event should include categorical outcome")
-        expect(encoded.contains("plain_text_editor"), "event should include support-safe target category")
-        expect(encoded.contains("trusted"), "event should include permission category")
+        expect(encoded.contains("direct_insertion_succeeded"), "metadata should include categorical outcome")
+        expect(encoded.contains("plain_text_editor"), "metadata should include support-safe target category")
+        expect(encoded.contains("trusted"), "metadata should include permission category")
         for forbidden in [
+            targetPayload,
+            selectedPayload,
+            clipboardPayload,
             finalText,
             "targetText",
             "selectedText",
@@ -264,7 +418,7 @@ private struct DirectInsertionCoordinatorTests {
             "audio",
             "providerPayload",
         ] {
-            expect(!encoded.localizedCaseInsensitiveContains(forbidden), "event should not include \(forbidden)")
+            expect(!encoded.localizedCaseInsensitiveContains(forbidden), "metadata should not include \(forbidden)")
         }
     }
 
@@ -289,16 +443,24 @@ private struct DirectInsertionCoordinatorTests {
         classifier: MockTargetClassifier = MockTargetClassifier(),
         insertion: MockInsertionPort = MockInsertionPort(),
         sink: FixtureEventSink = FixtureEventSink(),
-        clock: DirectInsertionClock = FixtureClock()
+        clock: DirectInsertionClock = FixtureClock(),
+        gate: DirectInsertionAttemptGate = DirectInsertionAttemptGate()
     ) -> DirectInsertionCoordinator {
         DirectInsertionCoordinator(
             permissionPort: permission,
             targetClassifier: classifier,
             insertionPort: insertion,
             eventSink: sink,
-            clock: clock
+            clock: clock,
+            attemptGate: gate
         )
     }
+}
+
+private struct DirectInsertionPrivacyFixtureMetadata: Codable {
+    var result: DirectInsertionResult
+    var events: [DirectInsertionEvent]
+    var destinationAppCategory: String?
 }
 
 private extension MockInsertionPort {

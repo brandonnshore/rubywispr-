@@ -53,6 +53,7 @@ enum DirectInsertionFailureReason: String, Codable, Equatable {
     case noFinalText = "no_final_text"
     case appIneligible = "app_ineligible"
     case islandNotInserting = "island_not_inserting"
+    case duplicateAttempt = "duplicate_attempt"
     case permissionDenied = "permission_denied"
     case permissionUnavailable = "permission_unavailable"
     case permissionPolicyBlocked = "permission_policy_blocked"
@@ -122,7 +123,7 @@ struct DirectInsertionRequest: Equatable {
     }
 }
 
-struct DirectInsertionResult: Equatable {
+struct DirectInsertionResult: Codable, Equatable {
     var state: DirectInsertionResultState
     var outcome: DirectInsertionOutcome
     var reason: DirectInsertionFailureReason?
@@ -173,6 +174,25 @@ protocol DirectInsertionClock {
     func now() -> Date
 }
 
+final class DirectInsertionAttemptGate {
+    private let lock = NSLock()
+    private var attemptInFlight = false
+
+    func beginAttempt() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !attemptInFlight else { return false }
+        attemptInFlight = true
+        return true
+    }
+
+    func endAttempt() {
+        lock.lock()
+        attemptInFlight = false
+        lock.unlock()
+    }
+}
+
 struct SystemDirectInsertionClock: DirectInsertionClock {
     func now() -> Date {
         Date()
@@ -196,6 +216,7 @@ struct DirectInsertionCoordinator {
     private let eventSink: DirectInsertionEventSink
     private let clock: DirectInsertionClock
     private let timeouts: DirectInsertionTimeouts
+    private let attemptGate: DirectInsertionAttemptGate
 
     init(
         permissionPort: DirectInsertionPermissionPort,
@@ -203,7 +224,8 @@ struct DirectInsertionCoordinator {
         insertionPort: DirectInsertionPort,
         eventSink: DirectInsertionEventSink = NoOpDirectInsertionEventSink(),
         clock: DirectInsertionClock = SystemDirectInsertionClock(),
-        timeouts: DirectInsertionTimeouts = .conservative
+        timeouts: DirectInsertionTimeouts = .conservative,
+        attemptGate: DirectInsertionAttemptGate = DirectInsertionAttemptGate()
     ) {
         self.permissionPort = permissionPort
         self.targetClassifier = targetClassifier
@@ -211,6 +233,7 @@ struct DirectInsertionCoordinator {
         self.eventSink = eventSink
         self.clock = clock
         self.timeouts = timeouts
+        self.attemptGate = attemptGate
     }
 
     func attempt(_ request: DirectInsertionRequest) async -> DirectInsertionResult {
@@ -251,6 +274,21 @@ struct DirectInsertionCoordinator {
                 startedAt: startedAt,
                 hasFinalText: true
             )
+        }
+
+        guard attemptGate.beginAttempt() else {
+            return finish(
+                state: .blocked,
+                outcome: .insertionUnavailable,
+                reason: .duplicateAttempt,
+                permissionCategory: .unavailable,
+                requestId: request.requestId,
+                startedAt: startedAt,
+                hasFinalText: false
+            )
+        }
+        defer {
+            attemptGate.endAttempt()
         }
 
         let permission = permissionPort.currentPermissionCategory()
