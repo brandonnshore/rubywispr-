@@ -24,6 +24,33 @@ struct TestCaseExporter {
         }
     }
 
+    static func metadataJSONData(
+        for item: PipelineHistoryItem,
+        exportedAt: Date = Date()
+    ) throws -> Data {
+        let pipeline: [String: Any] = [
+            "post_processing_status": item.postProcessingStatus,
+            "screenshot_status": item.contextScreenshotStatus,
+            "debug_status": item.debugStatus,
+            "has_audio_artifact": false,
+            "has_source_text_payload": false,
+            "has_final_text_payload": false,
+            "has_context_payload": false,
+            "has_post_processing_prompt": false
+        ]
+
+        let json: [String: Any] = [
+            "id": "case-\(isoTimestamp(from: item.timestamp))",
+            "exported_at": ISO8601DateFormatter().string(from: exportedAt),
+            "intent": item.intent.rawValue,
+            "run_uuid": item.id.uuidString,
+            "run_timestamp": ISO8601DateFormatter().string(from: item.timestamp),
+            "pipeline": pipeline
+        ]
+
+        return try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+    }
+
     /// Presents a NSSavePanel and writes the ZIP to the chosen location.
     /// Must be called on the main thread.
     @MainActor
@@ -69,6 +96,7 @@ struct TestCaseExporter {
         to destination: URL
     ) throws {
         _ = audioDirURL
+        _ = timestamp
         let fm = FileManager.default
         let tempDir = fm.temporaryDirectory
             .appendingPathComponent("rubywhisper-case-\(UUID().uuidString)", isDirectory: true)
@@ -80,31 +108,7 @@ struct TestCaseExporter {
             throw ExportError.tempDirectoryCreationFailed(underlying: error)
         }
 
-        let pipeline: [String: Any] = [
-            "post_processing_status": item.postProcessingStatus,
-            "screenshot_status": item.contextScreenshotStatus,
-            "debug_status": item.debugStatus,
-            "has_audio_artifact": false,
-            "has_source_text_payload": !item.rawTranscript.isEmpty,
-            "has_final_text_payload": !item.postProcessedTranscript.isEmpty,
-            "has_context_payload": !item.contextSummary.isEmpty || item.contextScreenshotDataURL != nil,
-            "has_post_processing_prompt": item.postProcessingPrompt?.isEmpty == false
-        ]
-
-        let json: [String: Any] = [
-            "id": "case-\(timestamp)",
-            "exported_at": ISO8601DateFormatter().string(from: Date()),
-            "intent": item.intent.rawValue,
-            "run_uuid": item.id.uuidString,
-            "run_timestamp": ISO8601DateFormatter().string(from: item.timestamp),
-            "metadata": [
-                "app_name": item.contextAppName ?? "",
-                "bundle_identifier": item.contextBundleIdentifier ?? ""
-            ] as [String: Any],
-            "pipeline": pipeline
-        ]
-
-        let jsonData = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+        let jsonData = try metadataJSONData(for: item)
         try jsonData.write(to: tempDir.appendingPathComponent("case.json"))
 
         let archiveWorkDir = tempDir.appendingPathComponent("__archive-work", isDirectory: true)

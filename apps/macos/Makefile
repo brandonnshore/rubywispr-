@@ -313,12 +313,14 @@ test-transient-recording-artifact:
 test-pipeline-history-privacy:
 	@mkdir -p $(BUILD_DIR)/tests
 	swiftc \
+		-D DEBUG \
 		-o $(BUILD_DIR)/tests/PipelineHistoryPrivacyTests \
 		-sdk $(shell xcrun --show-sdk-path) \
 		-target $(ARCH)-apple-macosx13.0 \
 		Sources/AppName.swift \
 		Sources/PipelineHistoryItem.swift \
 		Sources/PipelineHistoryStore.swift \
+		Sources/TestCaseExporter.swift \
 		Tests/PipelineHistoryPrivacyTests.swift
 	$(BUILD_DIR)/tests/PipelineHistoryPrivacyTests
 

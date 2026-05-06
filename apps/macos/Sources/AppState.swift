@@ -3484,25 +3484,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
             ?? (context.screenshotDataURL == nil ? "No screenshot" : "available")
         let newEntry = PipelineHistoryItem(
             intent: intent.persistedIntent,
-            selectedText: nil,
-            capturedSelection: nil,
             timestamp: Date(),
-            rawTranscript: "",
-            postProcessedTranscript: "",
-            postProcessingPrompt: nil,
-            systemPrompt: nil,
-            contextSummary: "",
-            contextSystemPrompt: nil,
-            contextPrompt: nil,
-            contextScreenshotDataURL: nil,
             contextScreenshotStatus: sanitizedScreenshotStatus,
             postProcessingStatus: processingStatus,
-            debugStatus: debugStatusMessage,
-            customVocabulary: "",
-            audioFileName: nil,
-            contextAppName: nil,
-            contextBundleIdentifier: nil,
-            contextWindowTitle: nil
+            debugStatus: debugStatusMessage
         )
         do {
             let removedAudioFileNames = try pipelineHistoryStore.append(newEntry, maxCount: maxPipelineHistoryCount)
