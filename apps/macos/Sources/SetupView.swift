@@ -182,6 +182,7 @@ struct SetupView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(width: 520, height: 680)
+        .preferredColorScheme(appState.appearancePreference.preferredColorScheme)
         .onAppear {
             apiKeyInput = appState.apiKey
             apiBaseURLInput = appState.apiBaseURL
