@@ -15,7 +15,7 @@ import {
 export const supabaseTranscriptionRequestsTableName =
   "transcription_requests" as const;
 export const supabaseTranscriptionRequestsColumns =
-  "request_id,clerk_user_id,status,provider,plan_state,audio_duration_ms,cleaned_word_count,latency_ms,error_code,app_version,os_version,created_at" as const;
+  "request_id,clerk_user_id,status,provider,plan_state,audio_duration_ms,cleaned_word_count,latency_ms,total_backend_latency_ms,error_code,app_version,os_version,created_at" as const;
 
 export type SupabaseTranscriptionRequestStatus = "success" | "failure";
 
@@ -32,6 +32,7 @@ export type SupabaseTranscriptionRequestInsert = Readonly<{
   error_code?: RubyWhisperApiErrorCode;
   latency_ms?: number;
   os_version?: string;
+  total_backend_latency_ms?: number;
 }>;
 
 export type SupabaseTranscriptionRequestRow =
@@ -40,6 +41,7 @@ export type SupabaseTranscriptionRequestRow =
 export type RubyWhisperTranscriptionRequestMetadataError = Readonly<{
   code:
     | "missing_transcription_request_metadata"
+    | "supabase_transcription_request_update_failed"
     | "supabase_transcription_request_write_failed";
   message: string;
 }>;
@@ -47,12 +49,20 @@ export type RubyWhisperTranscriptionRequestMetadataError = Readonly<{
 export type RubyWhisperTranscriptionRequestMetadataFailure = Readonly<{
   error: RubyWhisperTranscriptionRequestMetadataError;
   ok: false;
-  status: "missing_metadata" | "write_failed";
+  status: "missing_metadata" | "update_failed" | "write_failed";
 }>;
 
 export type RubyWhisperTranscriptionRequestMetadataWriteResult =
   | Readonly<{
       action: "inserted";
+      ok: true;
+      request: SupabaseTranscriptionRequestInsert;
+    }>
+  | RubyWhisperTranscriptionRequestMetadataFailure;
+
+export type RubyWhisperTranscriptionRequestTotalBackendLatencyUpdateResult =
+  | Readonly<{
+      action: "updated";
       ok: true;
       request: SupabaseTranscriptionRequestInsert;
     }>
@@ -71,7 +81,14 @@ export type WriteRubyWhisperTranscriptionRequestMetadataInput = Readonly<{
   latencyMs?: unknown;
   now?: Date | string;
   osVersion?: string | null;
+  totalBackendLatencyMs?: unknown;
 }>;
+
+export type UpdateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadataInput =
+  Readonly<{
+    requestId?: string | null;
+    totalBackendLatencyMs?: unknown;
+  }>;
 
 export type SupabaseTranscriptionRequestsInsertQuery = Readonly<{
   select: (
@@ -84,10 +101,34 @@ export type SupabaseTranscriptionRequestsInsertQuery = Readonly<{
   }>;
 }>;
 
+export type SupabaseTranscriptionRequestsUpdateFilterQuery = Readonly<{
+  select: (
+    columns: typeof supabaseTranscriptionRequestsColumns,
+  ) => Readonly<{
+    maybeSingle: () => PromiseLike<Readonly<{
+      data: SupabaseTranscriptionRequestRow | null;
+      error: unknown | null;
+    }>>;
+  }>;
+}>;
+
+export type SupabaseTranscriptionRequestsUpdateQuery = Readonly<{
+  eq: (
+    columnName: "request_id",
+    requestId: string,
+  ) => SupabaseTranscriptionRequestsUpdateFilterQuery;
+}>;
+
 export type SupabaseTranscriptionRequestsTableQuery = Readonly<{
   insert: (
     requestMetadata: SupabaseTranscriptionRequestInsert,
   ) => SupabaseTranscriptionRequestsInsertQuery;
+  update: (
+    requestMetadata: Pick<
+      SupabaseTranscriptionRequestInsert,
+      "total_backend_latency_ms"
+    >,
+  ) => SupabaseTranscriptionRequestsUpdateQuery;
 }>;
 
 export type SupabaseTranscriptionRequestsClient = Readonly<{
@@ -133,6 +174,47 @@ export async function writeRubyWhisperTranscriptionRequestMetadata<
   };
 }
 
+export async function updateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadata<
+  Client extends SupabaseTranscriptionRequestsClient,
+>(
+  input: UpdateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadataInput,
+  createClient: SupabaseServiceRoleClientFactory<Client>,
+): Promise<RubyWhisperTranscriptionRequestTotalBackendLatencyUpdateResult> {
+  const requestId = normalizeText(input.requestId);
+  const totalBackendLatencyMs = normalizeOptionalLatencyMs(
+    input.totalBackendLatencyMs,
+  );
+
+  if (!requestId || totalBackendLatencyMs === undefined) {
+    return missingMetadataResult();
+  }
+
+  const client = createSupabaseServiceRoleClient(createClient);
+  const { data, error } = await client
+    .from(supabaseTranscriptionRequestsTableName)
+    .update({ total_backend_latency_ms: totalBackendLatencyMs })
+    .eq("request_id", requestId)
+    .select(supabaseTranscriptionRequestsColumns)
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      error: {
+        code: "supabase_transcription_request_update_failed",
+        message: "Unable to update transcription request metadata.",
+      },
+      ok: false,
+      status: "update_failed",
+    };
+  }
+
+  return {
+    action: "updated",
+    ok: true,
+    request: data,
+  };
+}
+
 export function prepareTranscriptionRequestMetadata(
   input: WriteRubyWhisperTranscriptionRequestMetadataInput,
 ): SupabaseTranscriptionRequestInsert | undefined {
@@ -150,6 +232,9 @@ export function prepareTranscriptionRequestMetadata(
   const errorCode =
     status === "failure" && input.errorCode ? input.errorCode : undefined;
   const latencyMs = normalizeOptionalLatencyMs(input.latencyMs);
+  const totalBackendLatencyMs = normalizeOptionalLatencyMs(
+    input.totalBackendLatencyMs,
+  );
   const audioDurationMs = normalizeOptionalCount(input.audioDurationMs);
   const cleanedWordCount = normalizeOptionalCount(input.cleanedWordCount);
 
@@ -168,6 +253,9 @@ export function prepareTranscriptionRequestMetadata(
     provider,
     request_id: requestId,
     status,
+    ...(totalBackendLatencyMs !== undefined
+      ? { total_backend_latency_ms: totalBackendLatencyMs }
+      : {}),
   };
 }
 

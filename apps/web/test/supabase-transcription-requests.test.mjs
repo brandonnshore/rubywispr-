@@ -46,6 +46,7 @@ test("transcription request helper prepares metadata-only success rows", async (
     provider: "mock_provider",
     requestId: " req_rw_synthetic_route_001 ",
     status: "success",
+    totalBackendLatencyMs: 38.9,
     finalText: "SYNTHETIC_RECENT_WISPR_TEXT",
     recentWisprs: [{ finalText: "SYNTHETIC_RECENT_WISPR_TEXT" }],
     recent_wisprs: "SYNTHETIC_RECENT_WISPR_TEXT",
@@ -65,6 +66,7 @@ test("transcription request helper prepares metadata-only success rows", async (
     provider: "mock_provider",
     request_id: "req_rw_synthetic_route_001",
     status: "success",
+    total_backend_latency_ms: 38,
   });
   assert.deepEqual(Object.keys(request).sort(), [
     "app_version",
@@ -78,6 +80,7 @@ test("transcription request helper prepares metadata-only success rows", async (
     "provider",
     "request_id",
     "status",
+    "total_backend_latency_ms",
   ]);
   assert.doesNotMatch(JSON.stringify(request), forbiddenPrivateFixturePattern);
   assert.doesNotMatch(
@@ -110,6 +113,32 @@ test("transcription request helper omits invalid latency metadata", async () => 
   }
 });
 
+test("transcription request helper omits invalid total backend latency metadata", async () => {
+  const helper = await loadRequestMetadataHelper();
+
+  for (const invalidTotalBackendLatencyMs of [
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    -1,
+    "38",
+  ]) {
+    const request = helper.prepareTranscriptionRequestMetadata({
+      clerkUserId: "user_rw_synthetic_member_001",
+      latencyMs: 24,
+      now: "2026-05-04T07:30:00.000Z",
+      planState: "trial_active",
+      provider: "mock_provider",
+      requestId: "req_rw_synthetic_route_001",
+      status: "success",
+      totalBackendLatencyMs: invalidTotalBackendLatencyMs,
+    });
+
+    assert.equal(Object.hasOwn(request, "total_backend_latency_ms"), false);
+    assert.equal(request.latency_ms, 24);
+    assert.doesNotMatch(JSON.stringify(request), forbiddenPrivateFixturePattern);
+  }
+});
+
 test("transcription request helper writes through service-role Supabase access", async () => {
   const helper = await loadRequestMetadataHelper();
   const { calls, client } = createRequestMetadataClient();
@@ -125,6 +154,7 @@ test("transcription request helper writes through service-role Supabase access",
       provider: "mock_provider",
       requestId: "req_rw_synthetic_route_001",
       status: "success",
+      totalBackendLatencyMs: 38,
     },
     () => client,
   );
@@ -144,15 +174,67 @@ test("transcription request helper writes through service-role Supabase access",
         provider: "mock_provider",
         request_id: "req_rw_synthetic_route_001",
         status: "success",
+        total_backend_latency_ms: 38,
       },
     },
     {
       columns:
-        "request_id,clerk_user_id,status,provider,plan_state,audio_duration_ms,cleaned_word_count,latency_ms,error_code,app_version,os_version,created_at",
+        "request_id,clerk_user_id,status,provider,plan_state,audio_duration_ms,cleaned_word_count,latency_ms,total_backend_latency_ms,error_code,app_version,os_version,created_at",
       operation: "select_after_insert",
     },
     { operation: "maybeSingle", phase: "insert" },
   ]);
+});
+
+test("transcription request helper updates total backend latency metadata", async () => {
+  const helper = await loadRequestMetadataHelper();
+  const { calls, client } = createRequestMetadataClient({
+    updateRow: {
+      audio_duration_ms: 4200,
+      cleaned_word_count: 3,
+      clerk_user_id: "user_rw_synthetic_member_001",
+      created_at: "2026-05-04T07:30:00.000Z",
+      latency_ms: 24,
+      plan_state: "trial_active",
+      provider: "mock_provider",
+      request_id: "req_rw_synthetic_route_001",
+      status: "success",
+      total_backend_latency_ms: 41,
+    },
+  });
+
+  const result =
+    await helper.updateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadata(
+      {
+        requestId: " req_rw_synthetic_route_001 ",
+        totalBackendLatencyMs: 41.9,
+      },
+      () => client,
+    );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(toPlainObject(calls), [
+    { tableName: "transcription_requests" },
+    {
+      operation: "update",
+      requestMetadata: {
+        total_backend_latency_ms: 41,
+      },
+    },
+    {
+      columnName: "request_id",
+      operation: "eq",
+      requestId: "req_rw_synthetic_route_001",
+    },
+    {
+      columns:
+        "request_id,clerk_user_id,status,provider,plan_state,audio_duration_ms,cleaned_word_count,latency_ms,total_backend_latency_ms,error_code,app_version,os_version,created_at",
+      operation: "select_after_update",
+    },
+    { operation: "maybeSingle", phase: "update" },
+  ]);
+  assert.equal(result.request.total_backend_latency_ms, 41);
+  assert.doesNotMatch(JSON.stringify(result), forbiddenPrivateFixturePattern);
 });
 
 test("transcription request helper returns sanitized metadata failures", async () => {
@@ -205,6 +287,47 @@ test("transcription request helper returns sanitized metadata failures", async (
     },
     ok: false,
     status: "write_failed",
+  });
+
+  const invalidUpdate =
+    await helper.updateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadata(
+      {
+        requestId: "req_rw_synthetic_route_001",
+        totalBackendLatencyMs: Number.NaN,
+      },
+      () => {
+        throw new Error("Client factory must not be called for invalid latency.");
+      },
+    );
+
+  assert.deepEqual(toPlainObject(invalidUpdate), {
+    error: {
+      code: "missing_transcription_request_metadata",
+      message: "Required transcription request metadata is missing.",
+    },
+    ok: false,
+    status: "missing_metadata",
+  });
+
+  const { client: updateClient } = createRequestMetadataClient({
+    updateError: { message: "database detail must not echo" },
+  });
+  const updateFailure =
+    await helper.updateRubyWhisperTranscriptionRequestTotalBackendLatencyMetadata(
+      {
+        requestId: "req_rw_synthetic_route_001",
+        totalBackendLatencyMs: 42,
+      },
+      () => updateClient,
+    );
+
+  assert.deepEqual(toPlainObject(updateFailure), {
+    error: {
+      code: "supabase_transcription_request_update_failed",
+      message: "Unable to update transcription request metadata.",
+    },
+    ok: false,
+    status: "update_failed",
   });
 });
 
@@ -292,7 +415,11 @@ async function loadUsageQuotaModule() {
   return import(`data:text/javascript;base64,${encodedSource}`);
 }
 
-function createRequestMetadataClient({ writeError = null } = {}) {
+function createRequestMetadataClient({
+  updateError = null,
+  updateRow = null,
+  writeError = null,
+} = {}) {
   const calls = [];
   const client = {
     from(tableName) {
@@ -314,6 +441,32 @@ function createRequestMetadataClient({ writeError = null } = {}) {
                     data: requestMetadata,
                     error: writeError,
                   });
+                },
+              };
+            },
+          };
+        },
+        update(requestMetadata) {
+          calls.push({ operation: "update", requestMetadata });
+
+          return {
+            eq(columnName, requestId) {
+              calls.push({ columnName, operation: "eq", requestId });
+
+              return {
+                select(columns) {
+                  calls.push({ columns, operation: "select_after_update" });
+
+                  return {
+                    maybeSingle() {
+                      calls.push({ operation: "maybeSingle", phase: "update" });
+
+                      return Promise.resolve({
+                        data: updateRow,
+                        error: updateError,
+                      });
+                    },
+                  };
                 },
               };
             },
