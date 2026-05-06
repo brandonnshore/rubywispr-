@@ -823,7 +823,7 @@ struct GeneralSettingsView: View {
             .disabled(!updateManager.isUpdateChannelEnabled)
 
             if !updateManager.isUpdateChannelEnabled {
-                Label("Updates are disabled until RUB-77 configures RubyWhisper's release channel.", systemImage: "lock.fill")
+                Label(updateManager.updateChannelDisabledMessage, systemImage: "lock.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

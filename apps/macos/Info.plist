@@ -20,6 +20,10 @@
     <string>https://rubywhisper.invalid</string>
     <key>RubyWhisperAppChannel</key>
     <string>development</string>
+    <key>RubyWhisperUpdateChannelEnabled</key>
+    <false/>
+    <key>RubyWhisperUpdateReleasesURL</key>
+    <string></string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
