@@ -86,6 +86,7 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testTranscriptionSuccessMapsCleanedTextAndUsageOnly()
             try await testUploadTerminalStateRoutesSuccessToInsertionAndCleanedTextRecoveryPolicy()
             try await testCanceledUploadTerminalStateDropsInsertionFailureAndRecovery()
+            testLocalDurationLimitFailureMapsToStartNewWhisperWithoutRetry()
             try await testTranscriptionBackendErrorMappingUsesStableRecovery()
             print("RubyWhisperBackendAPIClientTests passed")
         } catch {
@@ -804,6 +805,31 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(canceled.insertionInput == nil, "canceled upload should not route insertion input")
         expect(canceled.failure == nil, "canceled upload should not route a backend failure")
         expect(canceled.recoveryState.cleanedText == nil, "canceled upload should not preserve local recovery text")
+    }
+
+    private static func testLocalDurationLimitFailureMapsToStartNewWhisperWithoutRetry() {
+        var metadata = RubyWhisperBackendErrorMetadata.empty
+        metadata.durationLimitMs = 1_000
+        metadata.audioDurationMs = 1_001
+        let failure = RubyWhisperDesktopTranscriptionFailure(
+            error: RubyWhisperBackendError(
+                code: .durationLimitReached,
+                message: "Recordings are limited to 10 minutes. Start a new whisper.",
+                recovery: .startNewWhisper,
+                desktopState: .durationLimitReached,
+                retryable: false,
+                metadata: metadata
+            ),
+            sameAudioRetryAllowed: true
+        )
+
+        expect(failure.code == .durationLimitReached, "local duration failure should use canonical duration code")
+        expect(failure.state == .durationLimitReached, "local duration failure should map to duration-limit desktop state")
+        expect(failure.recovery == .startNewWhisper, "local duration failure should require a new whisper")
+        expect(failure.retryable == false, "local duration failure should not be retryable")
+        expect(failure.sameAudioRetryAllowed == false, "local duration failure should never allow same-audio retry")
+        expect(failure.durationLimitMs == 1_000, "local duration failure should expose numeric limit metadata")
+        expect(failure.audioDurationMs == 1_001, "local duration failure should expose numeric audio duration metadata")
     }
 
     private static func testTranscriptionBackendErrorMappingUsesStableRecovery() async throws {

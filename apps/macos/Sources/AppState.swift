@@ -1179,6 +1179,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
         _ artifact: TransientRecordingArtifact,
         context: AppContext? = nil
     ) async throws -> RubyWhisperDesktopTranscriptionSuccess {
+        if let rejection = RecordingDurationUploadGate.rejectIfDurationLimitReached(artifact) {
+            throw Self.durationLimitFailure(for: rejection)
+        }
+
         guard let desktopBackendClient else {
             throw RubyWhisperBackendClientError.invalidBaseURL("RubyWhisper backend client is unavailable.")
         }
@@ -1220,6 +1224,26 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 sameAudioRetryAllowed: false
             )
         }
+    }
+
+    private static func durationLimitFailure(
+        for rejection: RecordingDurationLimitRejection
+    ) -> RubyWhisperDesktopTranscriptionFailure {
+        var metadata = RubyWhisperBackendErrorMetadata.empty
+        metadata.durationLimitMs = rejection.durationLimitMs
+        metadata.audioDurationMs = rejection.audioDurationMs
+
+        return RubyWhisperDesktopTranscriptionFailure(
+            error: RubyWhisperBackendError(
+                code: .durationLimitReached,
+                message: "Recordings are limited to 10 minutes. Start a new whisper.",
+                recovery: .startNewWhisper,
+                desktopState: .durationLimitReached,
+                retryable: false,
+                metadata: metadata
+            ),
+            sameAudioRetryAllowed: false
+        )
     }
 
     private static func audioMimeType(for metadata: RecordingArtifactMetadata) -> String {
