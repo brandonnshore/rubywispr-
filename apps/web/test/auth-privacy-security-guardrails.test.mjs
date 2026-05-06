@@ -223,6 +223,11 @@ const privateAdminContentFieldPatterns = [
       /\b(?:cleanedText|cleaned_text|cleanedTranscript|cleaned_transcript)\b/,
   },
   {
+    label: "Recent Wisprs local history field",
+    pattern:
+      /\b(?:finalText|final_text|recentWispr|recentWisprs|recent_wispr|recent_wisprs|localHistory|local_history|serverHistoryId|server_history_id)\b/,
+  },
+  {
     label: "audio content field",
     pattern:
       /\b(?:rawAudio|raw_audio|audio(?:Blob|Body|Buffer|Bytes|Content|Data|File|Input|Payload|Url|URL)|audio_(?:blob|body|buffer|bytes|content|data|file|input|payload))\b/,
@@ -239,7 +244,7 @@ const privateAdminContentFieldPatterns = [
   {
     label: "private content select column",
     pattern:
-      /\bselect\s*\(\s*["'`][^"'`]*\b(?:audio|clipboard|raw_transcript|transcript)\b/i,
+      /\bselect\s*\(\s*["'`][^"'`]*\b(?:audio|clipboard|raw_transcript|recent_wisprs?|transcript)\b/i,
   },
   {
     label: "private provider or context field",

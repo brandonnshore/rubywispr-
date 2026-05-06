@@ -29,7 +29,7 @@ const requestMetadataPath = path.join(
 );
 
 const forbiddenPrivateFixturePattern =
-  /private transcript|private audio|private cleaned text|private context|private clipboard|private prompt|Bearer rw_synthetic_placeholder|rubywhisper\.env|\.env\.local/i;
+  /private transcript|private audio|private cleaned text|private context|private clipboard|private prompt|SYNTHETIC_RECENT_WISPR_TEXT|Bearer rw_synthetic_placeholder|rubywhisper\.env|\.env\.local/i;
 
 test("transcription request helper prepares metadata-only success rows", async () => {
   const helper = await loadRequestMetadataHelper();
@@ -46,6 +46,11 @@ test("transcription request helper prepares metadata-only success rows", async (
     provider: "mock_provider",
     requestId: " req_rw_synthetic_route_001 ",
     status: "success",
+    finalText: "SYNTHETIC_RECENT_WISPR_TEXT",
+    recentWisprs: [{ finalText: "SYNTHETIC_RECENT_WISPR_TEXT" }],
+    recent_wisprs: "SYNTHETIC_RECENT_WISPR_TEXT",
+    rawTranscript: "private transcript",
+    clipboard: "private clipboard",
   });
 
   assert.deepEqual(toPlainObject(request), {
@@ -75,6 +80,10 @@ test("transcription request helper prepares metadata-only success rows", async (
     "status",
   ]);
   assert.doesNotMatch(JSON.stringify(request), forbiddenPrivateFixturePattern);
+  assert.doesNotMatch(
+    JSON.stringify(request),
+    /finalText|recentWisprs|recent_wisprs|rawTranscript|clipboard/i,
+  );
 });
 
 test("transcription request helper omits invalid latency metadata", async () => {
@@ -213,6 +222,10 @@ test("transcription request helper remains server-only and content-free", async 
   for (const privateKey of [
     "rawTranscript",
     "cleanedText",
+    "finalText",
+    "recentWisprs",
+    "recent_wisprs",
+    "localHistory",
     "context",
     "clipboard",
     "dictionaryTerms",

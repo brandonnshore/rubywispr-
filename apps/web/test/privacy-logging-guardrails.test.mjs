@@ -91,7 +91,7 @@ const liveLookingFixturePatterns = [
   },
 ];
 const transientDictionaryPayloadPattern =
-  /\bdictionaryTerms\b|\bdictionary_terms\b|term_placeholder_(?:alpha|beta|disabled)\b/i;
+  /\bdictionaryTerms\b|\bdictionary_terms\b|term_placeholder_(?:alpha|beta|disabled)\b|\brecentWisprs?\b|\brecent_wisprs?\b|\bfinalText\b|SYNTHETIC_RECENT_WISPR_TEXT/i;
 
 test("sensitive web/backend source cannot add ad hoc logging or private stringification", async () => {
   const violations = [];
@@ -168,7 +168,7 @@ test("privacy logging fixtures stay synthetic and local", async () => {
   assert.deepEqual(violations, []);
 });
 
-test("durable backend fixtures never store transient dictionary payloads", async () => {
+test("durable backend fixtures never store transient dictionary or Recent Wisprs payloads", async () => {
   const source = await readFile(syntheticBackendFixturesPath, "utf8");
 
   assert.doesNotMatch(source, transientDictionaryPayloadPattern);

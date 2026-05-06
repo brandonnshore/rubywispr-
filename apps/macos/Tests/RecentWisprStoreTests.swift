@@ -67,6 +67,7 @@ private struct RecentWisprStoreTests {
         try testReloadAndCopiedMetadata()
         try testCorruptedStateDefaultsClosed()
         try testPersistedPrivacyShape()
+        try testPersistedForbiddenFieldsAreScrubbedOnLoad()
 
         print("RecentWisprStoreTests passed")
     }
@@ -214,6 +215,68 @@ private struct RecentWisprStoreTests {
             "provider",
         ] {
             expect(!persisted.localizedCaseInsensitiveContains(forbidden), "snapshot should not include \(forbidden)")
+        }
+    }
+
+    private static func testPersistedForbiddenFieldsAreScrubbedOnLoad() throws {
+        let defaults = makeDefaults("scrub-forbidden-fields")
+        let key = "recent_wisprs_test"
+
+        defaults.set(Data("""
+        {
+          "isHistoryEnabled": true,
+          "items": [
+            {
+              "audioFileName": "audio_placeholder_forbidden.wav",
+              "clipboard": "clipboard_placeholder_forbidden",
+              "context": "context_placeholder_forbidden",
+              "createdAt": "2027-01-15T00:00:00Z",
+              "destinationAppCategory": "notes",
+              "expiresAt": "2027-01-22T00:00:00Z",
+              "finalText": "SYNTHETIC_RECENT_WISPR_TEXT",
+              "id": "recent_wispr_id_forbidden_load",
+              "insertionStatus": "inserted",
+              "providerRequestBody": "provider_payload_placeholder_forbidden",
+              "rawTranscript": "raw_transcript_placeholder_forbidden",
+              "source": "dictation"
+            }
+          ],
+          "serverHistoryId": "server_history_placeholder_forbidden"
+        }
+        """.utf8), forKey: key)
+
+        let store = RecentWisprStore(
+            persistence: defaults,
+            storageKey: key,
+            dateProvider: { Date(timeIntervalSince1970: 1_800_000_000) }
+        )
+        let items = store.listItems()
+
+        expect(items.count == 1, "valid local-only item should survive forbidden-field scrubbing")
+        expect(items[0].finalText == "SYNTHETIC_RECENT_WISPR_TEXT", "allowed final text should remain local")
+        expect(items[0].destinationAppCategory == "notes", "allowed destination category should remain")
+
+        guard let scrubbedData = defaults.data(forKey: key),
+              let scrubbed = String(data: scrubbedData, encoding: .utf8) else {
+            expect(false, "loaded recent wisprs snapshot should be rewritten")
+            return
+        }
+
+        expect(scrubbed.contains("\"finalText\""), "scrubbed snapshot should keep the approved final text field")
+        for forbidden in [
+            "audioFileName",
+            "audio_placeholder_forbidden",
+            "clipboard",
+            "clipboard_placeholder_forbidden",
+            "context_placeholder_forbidden",
+            "providerRequestBody",
+            "provider_payload_placeholder_forbidden",
+            "rawTranscript",
+            "raw_transcript_placeholder_forbidden",
+            "serverHistoryId",
+            "server_history_placeholder_forbidden",
+        ] {
+            expect(!scrubbed.localizedCaseInsensitiveContains(forbidden), "loaded snapshot should scrub \(forbidden)")
         }
     }
 }
