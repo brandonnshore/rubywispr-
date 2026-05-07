@@ -18,8 +18,8 @@ const publicBundleExtensions = new Set([".css", ".html", ".js", ".map", ".mjs"])
 const clerkServerSecretNames = ["CLERK_SECRET_KEY", "CLERK_WEBHOOK_SECRET"];
 const supabaseServerEnvNames = [
   "SUPABASE_URL",
-  "SUPABASE_ANON_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_SECRET_KEY",
 ];
 const stripeServerSecretNames = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"];
 const adminBootstrapEnvNames = ["RUBYWHISPER_ADMIN_BOOTSTRAP_EMAILS"];

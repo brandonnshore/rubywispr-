@@ -13,6 +13,7 @@ const liveNetworkHostPatterns = [
 const guardedEnvNames = [
   "CLERK_SECRET_KEY",
   "CLERK_WEBHOOK_SECRET",
+  "SUPABASE_SECRET_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",

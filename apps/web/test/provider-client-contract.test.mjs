@@ -213,7 +213,7 @@ test("provider contract is server-only and config-free", async () => {
   assert.doesNotMatch(source, /\bfetch\s*\(/);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
   assert.doesNotMatch(source, /\bprocess\.env\b|\bserverEnv\b/);
-  assert.doesNotMatch(source, /GROQ_API_KEY|CLERK_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY/);
+  assert.doesNotMatch(source, /GROQ_API_KEY|CLERK_SECRET_KEY|SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY/);
   assert.doesNotMatch(source, /\bJSON\.stringify\s*\(/);
 });
 

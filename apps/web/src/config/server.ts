@@ -2,7 +2,7 @@ import { clientEnv } from "./client";
 
 export const serverRuntimeEnvVariableNames = [
   "SUPABASE_URL",
-  "SUPABASE_ANON_KEY",
+  "SUPABASE_PUBLISHABLE_KEY",
   "RUBYWHISPER_ADMIN_BOOTSTRAP_EMAILS",
   "STRIPE_MONTHLY_PRICE_ID",
   "STRIPE_ANNUAL_PRICE_ID",
@@ -12,7 +12,7 @@ export const serverRuntimeEnvVariableNames = [
 export const serverSecretEnvVariableNames = [
   "CLERK_SECRET_KEY",
   "CLERK_WEBHOOK_SECRET",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_SECRET_KEY",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
   "GROQ_API_KEY",
@@ -48,8 +48,8 @@ export const serverEnv = Object.freeze({
   },
   supabase: {
     url: readOptionalServerEnv("SUPABASE_URL"),
-    anonKey: readOptionalServerEnv("SUPABASE_ANON_KEY"),
-    serviceRoleKey: readOptionalServerEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    publishableKey: readOptionalServerEnv("SUPABASE_PUBLISHABLE_KEY"),
+    serviceRoleKey: readOptionalServerEnv("SUPABASE_SECRET_KEY"),
   },
   admin: {
     bootstrapAllowedEmails: readOptionalServerEnv(

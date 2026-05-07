@@ -435,7 +435,7 @@ test("desktop transcription parser is server-only and privacy neutral", async ()
   assert.match(source, /^import\s+["']server-only["'];/m);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
   assert.doesNotMatch(source, /\bprocess\.env\b|\bserverEnv\b/);
-  assert.doesNotMatch(source, /CLERK_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|GROQ_API_KEY/);
+  assert.doesNotMatch(source, /CLERK_SECRET_KEY|SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|GROQ_API_KEY/);
   assert.doesNotMatch(source, /\bJSON\.stringify\s*\(/);
   assert.doesNotMatch(source, /from\s+["']next\/server["']/);
 });

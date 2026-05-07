@@ -20,7 +20,7 @@ const adminBootstrapModulePath = path.join(
   "bootstrap.ts",
 );
 const adminBootstrapEnvName = "RUBYWHISPER_ADMIN_BOOTSTRAP_EMAILS";
-const serviceRoleEnvName = "SUPABASE_SERVICE_ROLE_KEY";
+const supabaseSecretEnvName = "SUPABASE_SECRET_KEY";
 const documentedInitialEmail = ["brandon", "rubyadvisory.com"].join("@");
 const documentedInitialEmailMixedCase = ["BRANDON", "RubyAdvisory.com"].join(
   "@",
@@ -359,9 +359,9 @@ test("client-facing code cannot import or read admin bootstrap config", async ()
       );
     }
 
-    if (new RegExp(`\\b${serviceRoleEnvName}\\b`).test(source)) {
+    if (new RegExp(`\\b${supabaseSecretEnvName}\\b`).test(source)) {
       violations.push(
-        `${path.relative(webRoot, filePath)} references ${serviceRoleEnvName}`,
+        `${path.relative(webRoot, filePath)} references ${supabaseSecretEnvName}`,
       );
     }
 

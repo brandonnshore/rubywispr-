@@ -24,8 +24,8 @@ const serverOnlyFriendOfRubyBatchModulePath = path.join(
 );
 const forbiddenClientEnvNames = [
   "SUPABASE_URL",
-  "SUPABASE_ANON_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_SECRET_KEY",
 ];
 const forbiddenClientModuleSpecifiers = [
   "@/lib/friend-of-ruby/batches",
@@ -51,7 +51,7 @@ test("Supabase service-role helper stays server-only and explicit", async () => 
   assert.match(helper, /import\s+["']server-only["'];/);
   assert.match(helper, /from\s+["']@\/config\/server["']/);
   assert.match(helper, /\bSUPABASE_URL\b/);
-  assert.match(helper, /\bSUPABASE_SERVICE_ROLE_KEY\b/);
+  assert.match(helper, /\bSUPABASE_SECRET_KEY\b/);
   assert.doesNotMatch(helper, /\bNEXT_PUBLIC_/);
   assert.doesNotMatch(helper, /@supabase\/supabase-js/);
 });

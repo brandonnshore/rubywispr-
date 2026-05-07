@@ -6,7 +6,7 @@ export const supabaseServerOnlyModuleId = "@/lib/supabase/server" as const;
 
 export const supabaseServiceRoleEnvVariableNames = [
   "SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "SUPABASE_SECRET_KEY",
 ] as const;
 
 export const supabaseMetadataTableNames = [
@@ -60,11 +60,11 @@ export const readSupabaseServiceRoleRuntimeConfig =
       }
 
       if (!serviceRoleKey) {
-        missingNames.push("SUPABASE_SERVICE_ROLE_KEY");
+        missingNames.push("SUPABASE_SECRET_KEY");
       }
 
       throw new Error(
-        `Supabase service-role access requires server-only env: ${missingNames.join(
+        `Supabase secret-key access requires server-only env: ${missingNames.join(
           ", ",
         )}.`,
       );
