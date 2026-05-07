@@ -38,6 +38,7 @@ all: $(APP_EXECUTABLE_TARGET)
 
 $(APP_EXECUTABLE_TARGET): $(SOURCES) Info.plist $(ICON_ICNS) $(THIRD_PARTY_NOTICES)
 	@mkdir -p "$(MACOS_DIR)" "$(RESOURCES)"
+	@touch "$(BUILD_DIR)/.metadata_never_index"
 ifeq ($(ARCH),universal)
 	swiftc \
 		-parse-as-library \
