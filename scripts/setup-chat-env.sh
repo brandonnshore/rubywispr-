@@ -73,6 +73,7 @@ if [[ -z "$source_path" ]]; then
 fi
 
 dest="$repo_root/.env.local"
+web_dest="$repo_root/apps/web/.env.local"
 example="$repo_root/.env.example"
 
 ensure_local_exclude() {
@@ -112,6 +113,36 @@ install_from_source() {
   fi
 }
 
+sync_web_env() {
+  if [[ ! -d "$repo_root/apps/web" ]]; then
+    return
+  fi
+
+  if [[ ! -e "$dest" && ! -L "$dest" ]]; then
+    return
+  fi
+
+  if [[ -e "$web_dest" || -L "$web_dest" ]]; then
+    if cmp -s "$dest" "$web_dest"; then
+      echo "apps/web/.env.local already matches .env.local"
+      return
+    fi
+
+    backup="$web_dest.backup.$(date +%Y%m%d%H%M%S)"
+    mv "$web_dest" "$backup"
+    echo "Backed up previous apps/web/.env.local to ${backup#$repo_root/}"
+  fi
+
+  if [[ "$link_mode" -eq 1 && -n "$source_path" && -f "$source_path" ]]; then
+    ln -s "$source_path" "$web_dest"
+    echo "Linked apps/web/.env.local -> $source_path"
+  else
+    cp "$dest" "$web_dest"
+    chmod 600 "$web_dest"
+    echo "Copied env source into apps/web/.env.local"
+  fi
+}
+
 create_placeholder() {
   if [[ -e "$dest" ]]; then
     echo ".env.local already exists; leaving it unchanged."
@@ -146,6 +177,8 @@ if [[ -n "$source_path" ]]; then
 else
   create_placeholder
 fi
+
+sync_web_env
 
 cat <<'EOF'
 
