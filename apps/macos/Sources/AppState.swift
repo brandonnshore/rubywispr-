@@ -877,6 +877,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     func refreshAccessibilityTrustStatus(recoveryWhenMissing: Bool = false) -> Bool {
+        let wasTrusted = hasAccessibility
         let trusted = AXIsProcessTrusted()
         let nextStatus: FirstRunOnboardingPermissionCategory
         if trusted {
@@ -892,13 +893,27 @@ final class AppState: ObservableObject, @unchecked Sendable {
         firstRunAccessibilityPermissionStatus = nextStatus
         hasAccessibility = trusted
         refreshFirstRunOnboardingState()
+        handleAccessibilityTrustTransition(wasTrusted: wasTrusted, isTrusted: trusted)
         return trusted
     }
 
     func requestAccessibilityTrust() {
         firstRunAccessibilityPermissionStatus = .requesting
         refreshFirstRunOnboardingState()
+        startAccessibilityPolling()
         openAccessibilitySettings()
+    }
+
+    private func handleAccessibilityTrustTransition(wasTrusted: Bool, isTrusted: Bool) {
+        guard isTrusted else { return }
+
+        if statusText == "No Accessibility" {
+            statusText = "Ready"
+            errorMessage = nil
+        }
+
+        guard !wasTrusted else { return }
+        retryHotkeyRegistration()
     }
 
     func markAccessibilityRecoveryIfStillMissing() {
@@ -1602,6 +1617,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
+    func openKeyboardMonitoringSettings() {
+        openPrivacySettingsPane("Privacy_ListenEvent")
+    }
+
     func openHotkeySettings() {
         selectedSettingsTab = .general
         NotificationCenter.default.post(name: .showSettings, object: nil)
@@ -2000,7 +2019,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     ) -> String {
         switch state.reason {
         case .eventTapUnavailable:
-            return "macOS did not allow the global keyboard monitor to start. Grant Accessibility or keyboard monitoring access, then retry."
+            return "macOS did not allow the global keyboard monitor to start. Grant Accessibility and Input Monitoring access, then retry."
         case .eventTapRunLoopSourceUnavailable:
             return "Global shortcuts could not start because macOS could not attach the keyboard monitor. Retry after restarting the app."
         case .eventTapDisabledByTimeout:
@@ -2291,7 +2310,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
             overlayManager.dismiss()
             return true
         case .openSystemSettingsAccessibility:
-            openAccessibilitySettings()
+            requestAccessibilityTrust()
             overlayManager.dismiss()
             return true
         case .openHotkeySettings:
@@ -2989,7 +3008,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
-            openAccessibilitySettings()
+            requestAccessibilityTrust()
         }
     }
 

@@ -58,6 +58,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.handleAppDeactivationForHotkeySafety()
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        _ = appState.refreshAccessibilityTrustStatus()
+    }
+
     @objc func handleShowSetup() {
         // Single wizard at a time — opening a second leaks the first's
         // willClose observer and breaks the bail-restore.

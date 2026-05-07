@@ -55,6 +55,21 @@ into the app bundle, and signs with the provided `CODESIGN_IDENTITY`. Passing
 `CODESIGN_IDENTITY=-` selects ad hoc signing, which is the repeatable local
 developer path.
 
+Ad hoc signatures can change after each rebuild, so macOS may keep a stale
+Accessibility or Input Monitoring grant for an older local app binary. If
+System Settings shows RubyWhisper enabled but the app still reports missing
+Accessibility/global shortcut access, reset the local entries and re-add the
+current app bundle:
+
+```bash
+tccutil reset Accessibility com.rubyadvisory.rubywhisper.dev
+tccutil reset ListenEvent com.rubyadvisory.rubywhisper.dev
+```
+
+Then open `apps/macos/build/RubyWhisper.app` and grant Accessibility/Input
+Monitoring again. For stable permission behavior across repeated builds, sign
+with an installed Apple Development or Developer ID identity instead of `-`.
+
 Build output:
 
 ```text

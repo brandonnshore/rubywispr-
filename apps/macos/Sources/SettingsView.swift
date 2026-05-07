@@ -75,7 +75,10 @@ private struct HotkeyAvailabilityStatusView: View {
                     }
                     if appState.hotkeyRegistrationState.reason == .eventTapUnavailable {
                         Button("Accessibility") {
-                            appState.openAccessibilitySettings()
+                            appState.requestAccessibilityTrust()
+                        }
+                        Button("Input Monitoring") {
+                            appState.openKeyboardMonitoringSettings()
                         }
                     }
                 }
@@ -784,6 +787,7 @@ struct GeneralSettingsView: View {
         }
         .onAppear {
             checkMicPermission()
+            _ = appState.refreshAccessibilityTrustStatus()
             appState.refreshLaunchAtLoginStatus()
         }
     }
@@ -1351,7 +1355,7 @@ struct GeneralSettingsView: View {
                 icon: "hand.raised.fill",
                 granted: appState.hasAccessibility,
                 action: {
-                    appState.openAccessibilitySettings()
+                    appState.requestAccessibilityTrust()
                 }
             )
 

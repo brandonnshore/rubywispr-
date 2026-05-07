@@ -1049,6 +1049,9 @@ struct SetupView: View {
                 Button("Keyboard Settings") {
                     appState.openKeyboardSettings()
                 }
+                Button("Input Monitoring") {
+                    appState.openKeyboardMonitoringSettings()
+                }
                 Button("Hotkey Settings") {
                     appState.openHotkeySettings()
                 }
