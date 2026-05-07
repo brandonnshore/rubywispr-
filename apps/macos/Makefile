@@ -1,10 +1,12 @@
 APP_NAME ?= RubyWhisper
-BUNDLE_ID ?= com.rubyadvisory.rubywhisper.dev
+BUNDLE_ID ?= com.rubyadvisory.rubywhisper
 BUILD_DIR = build
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
-CODESIGN_IDENTITY ?= -
+CODESIGN_IDENTITY ?= $(shell security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -n 1)
+CODESIGN_IDENTITY := $(if $(strip $(CODESIGN_IDENTITY)),$(CODESIGN_IDENTITY),-)
 UPDATE_CHANNEL_ENABLED ?= false
 UPDATE_RELEASES_URL ?=
+RUBYWHISPER_BACKEND_BASE_URL ?= http://localhost:3000
 CONTENTS = $(APP_BUNDLE)/Contents
 MACOS_DIR = $(CONTENTS)/MacOS
 empty :=
@@ -64,6 +66,7 @@ endif
 	@plutil -replace CFBundleDisplayName -string "$(APP_NAME)" "$(CONTENTS)/Info.plist"
 	@plutil -replace CFBundleExecutable -string "$(APP_NAME)" "$(CONTENTS)/Info.plist"
 	@plutil -replace CFBundleIdentifier -string "$(BUNDLE_ID)" "$(CONTENTS)/Info.plist"
+	@plutil -replace RubyWhisperBackendBaseURL -string "$(RUBYWHISPER_BACKEND_BASE_URL)" "$(CONTENTS)/Info.plist"
 	@plutil -replace RubyWhisperUpdateChannelEnabled -bool "$(UPDATE_CHANNEL_ENABLED)" "$(CONTENTS)/Info.plist"
 	@plutil -replace RubyWhisperUpdateReleasesURL -string "$(UPDATE_RELEASES_URL)" "$(CONTENTS)/Info.plist"
 	@cp $(ICON_ICNS) "$(RESOURCES)/AppIcon.icns"

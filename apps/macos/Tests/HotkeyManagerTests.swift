@@ -47,8 +47,8 @@ private struct HotkeyManagerTests {
         try pauseReleasesActiveShortcutState()
         try disabledConfigurationDoesNotStartBackend()
         holdSessionStartsAndStopsOnlyWhileHeld()
-        commandFnToggleStartsAndStopsWithoutHoldFallback()
-        plainFnStopsActiveToggleWithoutStartingHold()
+        commandRightOptionToggleStartsAndStopsWithoutHoldFallback()
+        plainRightOptionStopsActiveToggleWithoutStartingHold()
         resetActiveSessionClearsHeldState()
 
         print("HotkeyManagerTests passed")
@@ -115,7 +115,7 @@ private struct HotkeyManagerTests {
         manager.onShortcutEvent = { events.append($0) }
 
         try manager.register(configuration: ShortcutConfiguration(hold: .defaultHold, toggle: .defaultToggle))
-        backend.send(.modifierChanged(keyCode: 63, isDown: true))
+        backend.send(.modifierChanged(keyCode: 61, isDown: true))
         manager.pause(reason: .onboardingBlocked)
 
         expect(events == [.holdActivated, .holdDeactivated], "pause should emit a safe hold deactivation")
@@ -159,7 +159,7 @@ private struct HotkeyManagerTests {
         )
     }
 
-    private static func commandFnToggleStartsAndStopsWithoutHoldFallback() {
+    private static func commandRightOptionToggleStartsAndStopsWithoutHoldFallback() {
         let backend = MockHotkeyBackend()
         let manager = HotkeyManager(backend: backend)
         let controller = DictationShortcutSessionController()
@@ -173,23 +173,23 @@ private struct HotkeyManagerTests {
         try! manager.register(configuration: ShortcutConfiguration(hold: .defaultHold, toggle: .defaultToggle))
 
         backend.send(.modifierChanged(keyCode: 55, isDown: true))
-        backend.send(.modifierChanged(keyCode: 63, isDown: true))
-        expect(actions == [.start(.toggle)], "Command+Fn should start exactly one toggle session")
+        backend.send(.modifierChanged(keyCode: 61, isDown: true))
+        expect(actions == [.start(.toggle)], "Command+Right Option should start exactly one toggle session")
 
-        backend.send(.modifierChanged(keyCode: 63, isDown: false))
+        backend.send(.modifierChanged(keyCode: 61, isDown: false))
         backend.send(.modifierChanged(keyCode: 55, isDown: false))
-        expect(actions == [.start(.toggle)], "Command+Fn release should arm stop without stopping")
+        expect(actions == [.start(.toggle)], "Command+Right Option release should arm stop without stopping")
 
         backend.send(.modifierChanged(keyCode: 55, isDown: true))
-        backend.send(.modifierChanged(keyCode: 63, isDown: true))
-        expect(actions == [.start(.toggle), .stop], "second Command+Fn press should stop without starting hold")
+        backend.send(.modifierChanged(keyCode: 61, isDown: true))
+        expect(actions == [.start(.toggle), .stop], "second Command+Right Option press should stop without starting hold")
 
-        backend.send(.modifierChanged(keyCode: 63, isDown: false))
+        backend.send(.modifierChanged(keyCode: 61, isDown: false))
         backend.send(.modifierChanged(keyCode: 55, isDown: false))
         expect(actions == [.start(.toggle), .stop], "release after toggle stop should not emit another action")
     }
 
-    private static func plainFnStopsActiveToggleWithoutStartingHold() {
+    private static func plainRightOptionStopsActiveToggleWithoutStartingHold() {
         let backend = MockHotkeyBackend()
         let manager = HotkeyManager(backend: backend)
         let controller = DictationShortcutSessionController()
@@ -203,16 +203,16 @@ private struct HotkeyManagerTests {
         try! manager.register(configuration: ShortcutConfiguration(hold: .defaultHold, toggle: .defaultToggle))
 
         backend.send(.modifierChanged(keyCode: 55, isDown: true))
-        backend.send(.modifierChanged(keyCode: 63, isDown: true))
-        backend.send(.modifierChanged(keyCode: 63, isDown: false))
+        backend.send(.modifierChanged(keyCode: 61, isDown: true))
+        backend.send(.modifierChanged(keyCode: 61, isDown: false))
         backend.send(.modifierChanged(keyCode: 55, isDown: false))
-        expect(actions == [.start(.toggle)], "Command+Fn should leave an active toggle session")
+        expect(actions == [.start(.toggle)], "Command+Right Option should leave an active toggle session")
 
-        backend.send(.modifierChanged(keyCode: 63, isDown: true))
-        expect(actions == [.start(.toggle), .stop], "plain Fn should stop active toggle recording")
+        backend.send(.modifierChanged(keyCode: 61, isDown: true))
+        expect(actions == [.start(.toggle), .stop], "plain Right Option should stop active toggle recording")
 
-        backend.send(.modifierChanged(keyCode: 63, isDown: false))
-        expect(actions == [.start(.toggle), .stop], "plain Fn release after toggle stop should not start hold")
+        backend.send(.modifierChanged(keyCode: 61, isDown: false))
+        expect(actions == [.start(.toggle), .stop], "plain Right Option release after toggle stop should not start hold")
     }
 
     private static func resetActiveSessionClearsHeldState() {

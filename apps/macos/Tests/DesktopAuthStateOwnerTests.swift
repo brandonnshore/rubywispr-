@@ -76,6 +76,20 @@ private final class AccountSnapshotLoader {
     }
 }
 
+private final class SlowAccountSnapshotLoader {
+    private(set) var callCount = 0
+
+    func load() async -> RubyWhisperDesktopAccountSnapshot {
+        callCount += 1
+        do {
+            try await Task.sleep(nanoseconds: 10_000_000_000)
+        } catch {
+            return .accountRefreshUnavailable
+        }
+        return .accountRefreshUnavailable
+    }
+}
+
 @main
 private struct DesktopAuthStateOwnerTests {
     static func main() async {
@@ -88,6 +102,7 @@ private struct DesktopAuthStateOwnerTests {
         await testAccountSnapshotsMapToCoordinatorStates()
         await testDictationAccountGateKeepsRecoveryStatesDistinct()
         await testAccountRefreshFailureIsDistinctFromSignedOut()
+        await testAccountRefreshTimesOutToRecoverableError()
         await testTranscriptionUsageAndErrorsUpdateAccountState()
         await testDiagnosticsDoNotExposeAuthMaterial()
         print("DesktopAuthStateOwnerTests passed")
@@ -322,6 +337,27 @@ private struct DesktopAuthStateOwnerTests {
         expect(owner.coordinatorState == .error, "refresh failure should be distinct from signed_out coordinator state")
         expect(owner.lastClearResult == nil, "refresh failure should not be treated as logout/session clear")
         expect(store.read() != nil, "refresh failure should not delete local session material")
+    }
+
+    private static func testAccountRefreshTimesOutToRecoverableError() async {
+        let store = MemorySessionStore(session: sessionMaterial(token: "session_placeholder_redacted_refresh_timeout"))
+        let loader = SlowAccountSnapshotLoader()
+        let owner = DesktopAuthStateOwner(
+            sessionStore: store,
+            initialSnapshot: activeSnapshot,
+            accountRefreshTimeout: 0.01,
+            accountSnapshotLoader: { await loader.load() }
+        )
+
+        let snapshot = await owner.refreshAccountSnapshot()
+
+        expect(loader.callCount == 1, "account refresh timeout should still attempt one load")
+        expect(snapshot.state == .error, "account refresh timeout should map to recoverable account error")
+        expect(snapshot.failureCode == .serviceUnavailable, "account refresh timeout should use service unavailable failure code")
+        expect(owner.coordinatorState == .error, "account refresh timeout should leave account_refreshing")
+        expect(owner.isRefreshingAccount == false, "account refresh timeout should clear loading flag")
+        expect(owner.lastClearResult == nil, "account refresh timeout should not clear session")
+        expect(store.read() != nil, "account refresh timeout should preserve durable session for retry")
     }
 
     private static func testTranscriptionUsageAndErrorsUpdateAccountState() async {

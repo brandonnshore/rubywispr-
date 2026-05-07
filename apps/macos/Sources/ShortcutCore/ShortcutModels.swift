@@ -335,8 +335,8 @@ struct ShortcutBinding: Codable, Hashable, Identifiable, Equatable {
         kind: .disabled,
         preset: nil
     )
-    static let defaultHold = ShortcutPreset.fnKey.binding
-    static let defaultToggle = ShortcutPreset.fnKey.binding.withAddedModifiers(.command)
+    static let defaultHold = ShortcutPreset.rightOption.binding
+    static let defaultToggle = ShortcutPreset.rightOption.binding.withAddedModifiers(.command)
 
     static let modifierKeyCodes: Set<UInt16> = [54, 55, 56, 58, 59, 60, 61, 62, 63]
 

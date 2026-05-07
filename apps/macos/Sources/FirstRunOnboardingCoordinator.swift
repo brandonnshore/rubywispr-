@@ -415,11 +415,11 @@ final class FirstRunOnboardingCoordinator: ObservableObject {
         case .accountUnavailable:
             return FirstRunOnboardingAccountGatePresentation(
                 title: "Account Unavailable",
-                message: "Refresh account state or sign in again before continuing setup.",
+                message: "Sign in again, or refresh account state if the browser sign-in is already complete.",
                 statusLabel: authState.rawValue,
                 systemImageName: "exclamationmark.triangle.fill",
-                primaryActionTitle: "Retry",
-                primaryRecoveryAction: recovery ?? .retry,
+                primaryActionTitle: "Sign In",
+                primaryRecoveryAction: .openSignIn,
                 canContinue: false,
                 showsProgress: false
             )

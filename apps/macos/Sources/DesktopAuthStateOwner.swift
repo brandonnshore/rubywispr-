@@ -286,6 +286,8 @@ struct DesktopAuthSessionClearResult: Equatable, CustomStringConvertible {
 }
 
 final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
+    private static let defaultAccountRefreshTimeout: TimeInterval = 15
+
     @Published private(set) var accountSnapshot: RubyWhisperDesktopAccountSnapshot
     @Published private(set) var coordinatorState: DesktopAuthCoordinatorState
     @Published private(set) var isRefreshingAccount = false
@@ -294,6 +296,7 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
 
     private let sessionStore: DesktopSessionStoring
     private let accountSnapshotLoader: () async -> RubyWhisperDesktopAccountSnapshot
+    private let accountRefreshTimeoutNanoseconds: UInt64
     private var refreshTask: Task<Void, Never>?
     private var sessionGeneration = 0
 
@@ -304,9 +307,11 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
     init(
         sessionStore: DesktopSessionStoring = DesktopSessionKeychainStore(),
         initialSnapshot: RubyWhisperDesktopAccountSnapshot = .signedOut,
+        accountRefreshTimeout: TimeInterval = DesktopAuthStateOwner.defaultAccountRefreshTimeout,
         accountSnapshotLoader: @escaping () async -> RubyWhisperDesktopAccountSnapshot
     ) {
         self.sessionStore = sessionStore
+        self.accountRefreshTimeoutNanoseconds = Self.timeoutNanoseconds(for: accountRefreshTimeout)
         let hasSession = sessionStore.read() != nil
         self.accountSnapshot = hasSession ? initialSnapshot : .signedOut
         if hasSession {
@@ -332,7 +337,7 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
 
         isRefreshingAccount = true
         coordinatorState = .accountRefreshing
-        let snapshot = await accountSnapshotLoader()
+        let snapshot = await loadAccountSnapshotWithTimeout()
         guard !Task.isCancelled, generation == sessionGeneration else {
             isRefreshingAccount = false
             return accountSnapshot
@@ -347,6 +352,36 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
         coordinatorState = DesktopAuthCoordinatorState.accountState(for: snapshot)
         lastClearResult = nil
         return snapshot
+    }
+
+    private func loadAccountSnapshotWithTimeout() async -> RubyWhisperDesktopAccountSnapshot {
+        let loader = accountSnapshotLoader
+        let timeout = accountRefreshTimeoutNanoseconds
+
+        return await withTaskGroup(of: RubyWhisperDesktopAccountSnapshot.self) { group in
+            group.addTask {
+                await loader()
+            }
+            group.addTask {
+                do {
+                    try await Task.sleep(nanoseconds: timeout)
+                } catch {
+                    return .accountRefreshUnavailable
+                }
+                return .accountRefreshUnavailable
+            }
+
+            let snapshot = await group.next() ?? .accountRefreshUnavailable
+            group.cancelAll()
+            return snapshot
+        }
+    }
+
+    private static func timeoutNanoseconds(for timeout: TimeInterval) -> UInt64 {
+        let bounded = max(0.1, timeout)
+        let nanoseconds = bounded * 1_000_000_000
+        guard nanoseconds < Double(UInt64.max) else { return UInt64.max }
+        return UInt64(nanoseconds)
     }
 
     func beginSignIn() {

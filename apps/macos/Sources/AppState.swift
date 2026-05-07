@@ -152,6 +152,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private let toggleShortcutStorageKey = "toggle_shortcut"
     private let savedHoldCustomShortcutStorageKey = "saved_hold_custom_shortcut"
     private let savedToggleCustomShortcutStorageKey = "saved_toggle_custom_shortcut"
+    private static let fnShortcutMigrationStorageKey = "migrated_fn_default_shortcuts_v1"
     private let transcriptionLanguageStorageKey = "transcription_language"
     private let selectedMicrophoneStorageKey = "selected_microphone_id"
     private let customSystemPromptStorageKey = "custom_system_prompt"
@@ -967,17 +968,37 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     private static func loadShortcutConfiguration(holdKey: String, toggleKey: String) -> StoredShortcutConfiguration {
         let legacyPreset = ShortcutPreset(
-            rawValue: UserDefaults.standard.string(forKey: "hotkey_option") ?? ShortcutPreset.fnKey.rawValue
-        ) ?? .fnKey
-        let hold = legacyPreset.binding
-        let toggle = hold.withAddedModifiers(.command)
+            rawValue: UserDefaults.standard.string(forKey: "hotkey_option") ?? ShortcutPreset.rightOption.rawValue
+        ) ?? .rightOption
+        let defaultHold = legacyPreset == .fnKey ? ShortcutBinding.defaultHold : legacyPreset.binding
+        let defaultToggle = defaultHold.withAddedModifiers(.command)
         let storedHold = loadShortcut(forKey: holdKey)
         let storedToggle = loadShortcut(forKey: toggleKey)
+
+        var hold = storedHold.binding ?? defaultHold
+        var toggle = storedToggle.binding ?? defaultToggle
+        var didUpdateHold = storedHold.binding == nil || storedHold.didNormalize
+        var didUpdateToggle = storedToggle.binding == nil || storedToggle.didNormalize
+
+        if !UserDefaults.standard.bool(forKey: fnShortcutMigrationStorageKey) {
+            let legacyFnHold = ShortcutPreset.fnKey.binding
+            let legacyFnToggle = legacyFnHold.withAddedModifiers(.command)
+            if hold == legacyFnHold {
+                hold = .defaultHold
+                didUpdateHold = true
+            }
+            if toggle == legacyFnToggle {
+                toggle = .defaultToggle
+                didUpdateToggle = true
+            }
+            UserDefaults.standard.set(true, forKey: fnShortcutMigrationStorageKey)
+        }
+
         return StoredShortcutConfiguration(
-            hold: storedHold.binding ?? hold,
-            toggle: storedToggle.binding ?? toggle,
-            didUpdateHoldStoredValue: storedHold.binding == nil || storedHold.didNormalize,
-            didUpdateToggleStoredValue: storedToggle.binding == nil || storedToggle.didNormalize
+            hold: hold,
+            toggle: toggle,
+            didUpdateHoldStoredValue: didUpdateHold,
+            didUpdateToggleStoredValue: didUpdateToggle
         )
     }
 
@@ -1599,23 +1620,38 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     func requestScreenCapturePermission() {
         startAccessibilityPolling()
-        // ScreenCaptureKit triggers the "Screen & System Audio Recording"
-        // permission dialog on macOS Sequoia+, correctly identifying the
-        // running app (unlike the legacy CGWindowListCreateImage path).
+        guard !refreshScreenCapturePermissionStatus() else { return }
+
+        // Ask CoreGraphics to register the current signed app bundle with
+        // macOS TCC before sending the user to the settings list.
+        _ = CGRequestScreenCaptureAccess()
+
+        guard !refreshScreenCapturePermissionStatus() else { return }
+
         SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { [weak self] _, _ in
             DispatchQueue.main.async {
-                let granted = self?.refreshScreenCapturePermissionStatus() ?? false
+                guard let self else { return }
+                let granted = self.refreshScreenCapturePermissionStatus()
                 if !granted {
-                    self?.openScreenCaptureSettings()
+                    self.openScreenCaptureSettings()
                 }
             }
         }
 
-        refreshScreenCapturePermissionStatus()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self else { return }
+            if !self.refreshScreenCapturePermissionStatus() {
+                self.openScreenCaptureSettings()
+            }
+        }
     }
 
     func openScreenCaptureSettings() {
         openPrivacySettingsPane("Privacy_ScreenCapture")
+    }
+
+    func revealCurrentAppInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
     }
 
     func openKeyboardSettings() {

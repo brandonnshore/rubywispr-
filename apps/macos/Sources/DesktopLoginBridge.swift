@@ -22,7 +22,7 @@ struct DesktopLoginBridgeConfiguration: Equatable {
         appChannel: String? = nil,
         platform: String = "macos",
         callbackScheme: String = Self.callbackScheme,
-        attemptTTL: TimeInterval = 5 * 60
+        attemptTTL: TimeInterval = 90
     ) throws {
         guard attemptTTL > 0 else {
             throw RubyWhisperBackendClientError.invalidBaseURL("Desktop login attempt TTL must be positive.")

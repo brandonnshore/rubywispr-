@@ -51,9 +51,11 @@ make -C apps/macos clean all CODESIGN_IDENTITY=-
 
 The Makefile is the local development build entrypoint. It uses direct `swiftc`
 compilation, copies `Info.plist`, icons, and `Resources/ThirdPartyNotices.md`
-into the app bundle, and signs with the provided `CODESIGN_IDENTITY`. Passing
-`CODESIGN_IDENTITY=-` selects ad hoc signing, which is the repeatable local
-developer path.
+into the app bundle, and signs with the provided `CODESIGN_IDENTITY`. When an
+Apple Development identity is installed locally, the Makefile uses it by
+default so macOS permissions stay attached to the same app identity across
+rebuilds. Passing `CODESIGN_IDENTITY=-` selects ad hoc signing for throwaway
+local builds.
 
 Ad hoc signatures can change after each rebuild, so macOS may keep a stale
 Accessibility or Input Monitoring grant for an older local app binary. If
@@ -62,17 +64,26 @@ Accessibility/global shortcut access, reset the local entries and re-add the
 current app bundle:
 
 ```bash
-tccutil reset Accessibility com.rubyadvisory.rubywhisper.dev
-tccutil reset ListenEvent com.rubyadvisory.rubywhisper.dev
-tccutil reset ScreenCapture com.rubyadvisory.rubywhisper.dev
+tccutil reset Microphone com.rubyadvisory.rubywhisper
+tccutil reset Accessibility com.rubyadvisory.rubywhisper
+tccutil reset ListenEvent com.rubyadvisory.rubywhisper
+tccutil reset ScreenCapture com.rubyadvisory.rubywhisper
 ```
 
 Then open `apps/macos/build/RubyWhisper.app` and grant Accessibility/Input
 Monitoring/Screen Recording again. Remove older local `RubyWhisper.app` build
 artifacts from other worktrees before adding the app in System Settings, so the
-permission picker shows only the current build. For stable permission behavior
-across repeated builds, sign with an installed Apple Development or Developer ID
-identity instead of `-`.
+permission picker shows only the current build.
+
+If a stale `RubyWhisper Dev` row remains in Screen Recording from a Symphony or
+throwaway worktree, temporarily register that old bundle, reset it, then
+unregister it again:
+
+```bash
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/path/to/RubyWhisper Dev.app"
+tccutil reset ScreenCapture com.rubyadvisory.rubywhisper.dev
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "/path/to/RubyWhisper Dev.app"
+```
 
 Build output:
 
@@ -170,9 +181,9 @@ GitHub-hosted `macos-latest` for macOS source changes:
 make -C apps/macos clean all CODESIGN_IDENTITY=-
 ```
 
-The workflow verifies that `apps/macos/build/RubyWhisper.app` exists, keeps the
-development bundle identifier `com.rubyadvisory.rubywhisper.dev`, and is signed
-with an ad hoc signature. It is only a non-release build gate.
+The workflow verifies that `apps/macos/build/RubyWhisper.app` exists, uses the
+stable bundle identifier `com.rubyadvisory.rubywhisper`, and is signed with an
+ad hoc signature. It is only a non-release build gate.
 
 Release packaging, DMG creation, Apple Developer ID signing, notarization,
 provider keys, production secrets, and private env files are intentionally out

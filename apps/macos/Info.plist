@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key>
     <string>RubyWhisper</string>
     <key>CFBundleIdentifier</key>
-    <string>com.rubyadvisory.rubywhisper.dev</string>
+    <string>com.rubyadvisory.rubywhisper</string>
     <key>CFBundleVersion</key>
     <string>0.1.0</string>
     <key>CFBundleShortVersionString</key>

@@ -223,7 +223,7 @@ private struct FirstRunOnboardingCoordinatorTests {
             (.trialExhausted, .openCheckout, false, false),
             (.paymentFailed, .openBilling, false, false),
             (.blocked, .openAccount, false, false),
-            (.error, .retry, false, false),
+            (.error, .openSignIn, false, false),
         ]
 
         for testCase in cases {

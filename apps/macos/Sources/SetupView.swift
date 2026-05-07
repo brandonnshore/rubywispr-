@@ -30,6 +30,8 @@ struct SetupView: View {
     @State private var accessibilityStatus: FirstRunOnboardingPermissionCategory = .notDetermined
     @State private var accessibilityTimer: Timer?
     @State private var screenRecordingTimer: Timer?
+    @State private var hasRequestedScreenRecordingAccess = false
+    @State private var showsScreenRecordingRecovery = false
     @State private var customVocabularyInput: String = ""
 
     // Test transcription state
@@ -505,8 +507,8 @@ struct SetupView: View {
                     Text("Granted")
                         .foregroundStyle(.green)
                 } else {
-                    Button("Grant Access") {
-                        appState.requestScreenCapturePermission()
+                    Button(hasRequestedScreenRecordingAccess ? "Request Again" : "Request Access") {
+                        requestScreenRecordingAccess()
                     }
                 }
             }
@@ -514,9 +516,47 @@ struct SetupView: View {
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(8)
 
+            if !appState.hasScreenRecordingPermission {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label(
+                        "macOS should ask to add RubyWhisper to Screen & System Audio Recording. If it only opens Settings, use the controls below.",
+                        systemImage: "info.circle.fill"
+                    )
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    if showsScreenRecordingRecovery {
+                        Text("In System Settings, turn on RubyWhisper. If RubyWhisper is missing, click +, choose the app shown in Finder, then return here and refresh.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack(spacing: 10) {
+                            Button("Open Settings") {
+                                appState.openScreenCaptureSettings()
+                            }
+
+                            Button("Show App in Finder") {
+                                appState.revealCurrentAppInFinder()
+                            }
+
+                            Button("Refresh") {
+                                refreshScreenRecordingPermission()
+                            }
+                        }
+                    }
+                }
+                .font(.callout)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.blue.opacity(0.08))
+                .cornerRadius(10)
+            }
+
         }
         .onAppear {
             startScreenRecordingPolling()
+            showsScreenRecordingRecovery = !appState.refreshScreenCapturePermissionStatus()
         }
         .onDisappear {
             screenRecordingTimer?.invalidate()
@@ -1181,9 +1221,20 @@ struct SetupView: View {
         screenRecordingTimer?.invalidate()
         screenRecordingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             DispatchQueue.main.async {
-                appState.hasScreenRecordingPermission = CGPreflightScreenCaptureAccess()
+                _ = appState.refreshScreenCapturePermissionStatus()
             }
         }
+    }
+
+    func requestScreenRecordingAccess() {
+        hasRequestedScreenRecordingAccess = true
+        showsScreenRecordingRecovery = true
+        appState.requestScreenCapturePermission()
+    }
+
+    func refreshScreenRecordingPermission() {
+        let granted = appState.refreshScreenCapturePermissionStatus()
+        showsScreenRecordingRecovery = !granted
     }
 
     // MARK: - Test Transcription
