@@ -33,7 +33,7 @@ test("desktop login callback turns Clerk sessions into app callback handoffs", a
 
   assert.match(source, /^import\s+["']server-only["'];/m);
   assert.match(source, /auth\(\)/);
-  assert.match(source, /\.getToken\(\)/);
+  assert.match(source, /createRubyWhisperDesktopSessionToken/);
   assert.match(source, /createDesktopLoginExchangeCode/);
   assert.match(source, /callbackScheme.*:\/\/auth\/callback/s);
   assert.match(source, /nonce_challenge/);
@@ -49,6 +49,7 @@ test("desktop login exchange consumes one-time codes without logging session mat
   assert.match(source, /consumeDesktopLoginExchangeCode/);
   assert.match(source, /nonce_verifier/);
   assert.match(source, /accessToken/);
+  assert.match(source, /expiresAt/);
   assert.match(source, /Cache-Control/);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
   assert.doesNotMatch(source, /\bCLERK_SECRET_KEY\b|\bSUPABASE_SECRET_KEY\b/);
@@ -63,6 +64,7 @@ test("desktop login exchange store gates codes with state and PKCE", async () =>
   assert.match(source, /timingSafeEqual/);
   assert.match(source, /exchangeCodes\.delete\(code\)/);
   assert.match(source, /expiresAtMs/);
+  assert.match(source, /sessionExpiresAt/);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
   assert.doesNotMatch(source, /\bprocess\.env\b/);
 });

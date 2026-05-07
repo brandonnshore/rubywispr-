@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       ok: true,
       accessToken: result.sessionToken,
       accountID: result.accountId,
+      expiresAt: result.sessionExpiresAt,
     },
     {
       headers: {

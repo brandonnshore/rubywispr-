@@ -364,7 +364,7 @@ test("desktop account route and profile helper stay server-only and metadata-onl
   ]);
 
   assert.match(routeSource, /createDesktopAccountRouteHandler/);
-  assert.match(routeSource, /requireClerkUserId/);
+  assert.match(routeSource, /requireRubyWhisperDesktopUserId/);
   assert.match(routeSource, /rubyWhisperApiErrorResponse\(["']signed_out["']\)/);
   assert.match(routeSource, /rubyWhisperApiErrorResponse\(["']service_unavailable["']\)/);
   assert.match(routeSource, /rubyWhisperApiErrorResponse\(["']internal_error["']\)/);
@@ -418,8 +418,12 @@ async function loadDesktopAccountRouteModule() {
       "const rubyWhisperApiErrorResponse = createApiErrorResponse;\n",
     )
     .replace(
-      /import\s+\{\n\s+requireClerkUserId,\n\s+type ClerkRequiredAuthState,\n\}\s+from\s+["']@\/lib\/auth\/clerk["'];\n/,
-      "const requireClerkUserId = async () => ({ ok: false, error: { code: 'clerk_session_required', message: 'A Clerk user session is required.' } });\n",
+      /import\s+\{\s+type ClerkRequiredAuthState\s+\}\s+from\s+["']@\/lib\/auth\/clerk["'];\n/,
+      "",
+    )
+    .replace(
+      /import\s+\{\s+requireRubyWhisperDesktopUserId\s+\}\s+from\s+["']@\/lib\/auth\/desktop-session["'];\n/,
+      "const requireRubyWhisperDesktopUserId = async () => ({ ok: false, error: { code: 'clerk_session_required', message: 'A Clerk user session is required.' } });\n",
     )
     .replace(
       /import\s+\{\n\s+readRubyWhisperUsageCounters,\n\s+type RubyWhisperUsageCountersReadResult,\n\s+type SupabaseUsageCountersClient,\n\}\s+from\s+["']@\/lib\/usage\/supabase-usage-counters["'];\n/,

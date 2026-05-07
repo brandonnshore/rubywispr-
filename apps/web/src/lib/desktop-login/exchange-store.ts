@@ -7,6 +7,7 @@ type DesktopLoginExchangeRecord = Readonly<{
   code: string;
   expiresAtMs: number;
   nonceChallenge: string;
+  sessionExpiresAt: string;
   sessionToken: string;
   state: string;
 }>;
@@ -14,6 +15,7 @@ type DesktopLoginExchangeRecord = Readonly<{
 export type DesktopLoginExchangeCreateInput = Readonly<{
   accountId: string;
   nonceChallenge: string;
+  sessionExpiresAt: string;
   sessionToken: string;
   state: string;
 }>;
@@ -28,6 +30,7 @@ export type DesktopLoginExchangeConsumeResult =
   | Readonly<{
       ok: true;
       accountId: string;
+      sessionExpiresAt: string;
       sessionToken: string;
     }>
   | Readonly<{
@@ -59,10 +62,19 @@ export function createDesktopLoginExchangeCode(
 
   const accountId = normalizeDesktopLoginText(input.accountId);
   const nonceChallenge = normalizeDesktopLoginText(input.nonceChallenge);
+  const sessionExpiresAt = normalizeDesktopLoginTimestamp(
+    input.sessionExpiresAt,
+  );
   const sessionToken = normalizeSessionToken(input.sessionToken);
   const state = normalizeDesktopLoginText(input.state);
 
-  if (!accountId || !nonceChallenge || !sessionToken || !state) {
+  if (
+    !accountId ||
+    !nonceChallenge ||
+    !sessionExpiresAt ||
+    !sessionToken ||
+    !state
+  ) {
     return undefined;
   }
 
@@ -72,6 +84,7 @@ export function createDesktopLoginExchangeCode(
     code,
     expiresAtMs: Date.now() + desktopLoginExchangeCodeTTL,
     nonceChallenge,
+    sessionExpiresAt,
     sessionToken,
     state,
   });
@@ -110,6 +123,7 @@ export function consumeDesktopLoginExchangeCode(
   return {
     ok: true,
     accountId: record.accountId,
+    sessionExpiresAt: record.sessionExpiresAt,
     sessionToken: record.sessionToken,
   };
 }
@@ -136,6 +150,15 @@ function normalizeDesktopLoginText(value: string) {
 function normalizeSessionToken(value: string) {
   const text = value.trim();
   return text.length >= 16 && text.length <= 8192 ? text : undefined;
+}
+
+function normalizeDesktopLoginTimestamp(value: string) {
+  const text = value.trim();
+  const timestampMs = Date.parse(text);
+
+  return Number.isFinite(timestampMs)
+    ? new Date(timestampMs).toISOString()
+    : undefined;
 }
 
 function safeEqual(left: string, right: string) {

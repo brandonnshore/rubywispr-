@@ -16,10 +16,8 @@ import {
   type SupabaseSubscriptionCacheClient,
 } from "@/lib/account/subscription-cache";
 import { rubyWhisperApiErrorResponse } from "@/lib/api/errors";
-import {
-  requireClerkUserId,
-  type ClerkRequiredAuthState,
-} from "@/lib/auth/clerk";
+import { type ClerkRequiredAuthState } from "@/lib/auth/clerk";
+import { requireRubyWhisperDesktopUserId } from "@/lib/auth/desktop-session";
 import {
   readRubyWhisperUsageCounters,
   type RubyWhisperUsageCountersReadResult,
@@ -43,7 +41,7 @@ export type DesktopAccountRouteDependencies = Readonly<{
   readUsageCounters: (
     clerkUserId: string,
   ) => Promise<RubyWhisperUsageCountersReadResult>;
-  requireAuth: () => Promise<ClerkRequiredAuthState>;
+  requireAuth: (request: Request) => Promise<ClerkRequiredAuthState>;
 }>;
 
 type DesktopAccountSupabaseClient = SupabaseAccountProfileClient &
@@ -53,8 +51,8 @@ type DesktopAccountSupabaseClient = SupabaseAccountProfileClient &
 export function createDesktopAccountRouteHandler(
   dependencies: DesktopAccountRouteDependencies,
 ) {
-  return async function GET() {
-    const authState = await dependencies.requireAuth();
+  return async function GET(request: Request) {
+    const authState = await dependencies.requireAuth(request);
 
     if (!authState.ok) {
       return rubyWhisperApiErrorResponse("signed_out");
@@ -121,7 +119,7 @@ const defaultDesktopAccountRouteDependencies: DesktopAccountRouteDependencies = 
       { clerkUserId },
       createDesktopAccountSupabaseClient,
     ),
-  requireAuth: requireClerkUserId,
+  requireAuth: requireRubyWhisperDesktopUserId,
 };
 
 export const GET = createDesktopAccountRouteHandler(

@@ -12,6 +12,7 @@ export const serverRuntimeEnvVariableNames = [
 export const serverSecretEnvVariableNames = [
   "CLERK_SECRET_KEY",
   "CLERK_WEBHOOK_SECRET",
+  "RUBYWHISPER_DESKTOP_SESSION_SECRET",
   "SUPABASE_SECRET_KEY",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
@@ -45,6 +46,9 @@ export const serverEnv = Object.freeze({
   clerk: {
     secretKey: readOptionalServerEnv("CLERK_SECRET_KEY"),
     webhookSecret: readOptionalServerEnv("CLERK_WEBHOOK_SECRET"),
+  },
+  desktop: {
+    sessionSecret: readOptionalServerEnv("RUBYWHISPER_DESKTOP_SESSION_SECRET"),
   },
   supabase: {
     url: readOptionalServerEnv("SUPABASE_URL"),

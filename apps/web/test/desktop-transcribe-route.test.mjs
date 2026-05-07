@@ -949,7 +949,7 @@ test("desktop transcribe route stays server-only and provider-safe", async () =>
   assert.match(source, /export const runtime = ["']nodejs["'];/);
   assert.match(source, /export const dynamic = ["']force-dynamic["'];/);
   assert.match(source, /createDesktopTranscribeRouteHandler/);
-  assert.match(source, /requireClerkUserId/);
+  assert.match(source, /requireRubyWhisperDesktopUserId/);
   assert.match(source, /runRubyWhisperConservativeCleanup/);
   assert.match(source, /parseDesktopTranscribeRequest/);
   assert.match(source, /evaluateRubyWhisperQuotaEntitlement/);
@@ -1055,7 +1055,11 @@ function createRouteModuleRequire() {
         return { rubyWhisperApiErrorResponse: createApiErrorResponse };
       case "@/lib/auth/clerk":
         return {
-          requireClerkUserId: async () => ({
+          ClerkRequiredAuthState: undefined,
+        };
+      case "@/lib/auth/desktop-session":
+        return {
+          requireRubyWhisperDesktopUserId: async () => ({
             error: {
               code: "clerk_session_required",
               message: "A Clerk user session is required.",

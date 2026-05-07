@@ -484,8 +484,10 @@ async function loadDesktopAccountRouteModule() {
       case "@/lib/api/errors":
         return { rubyWhisperApiErrorResponse: createApiErrorResponse };
       case "@/lib/auth/clerk":
+        return { ClerkRequiredAuthState: undefined };
+      case "@/lib/auth/desktop-session":
         return {
-          requireClerkUserId: async () => ({
+          requireRubyWhisperDesktopUserId: async () => ({
             error: {
               code: "clerk_session_required",
               message: "A Clerk user session is required.",

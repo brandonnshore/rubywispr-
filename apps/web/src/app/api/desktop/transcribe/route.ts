@@ -17,10 +17,8 @@ import {
   type RubyWhisperApiErrorCode,
   type RubyWhisperApiErrorMetadata,
 } from "@/lib/api/errors";
-import {
-  requireClerkUserId,
-  type ClerkRequiredAuthState,
-} from "@/lib/auth/clerk";
+import { type ClerkRequiredAuthState } from "@/lib/auth/clerk";
+import { requireRubyWhisperDesktopUserId } from "@/lib/auth/desktop-session";
 import { runRubyWhisperConservativeCleanup } from "@/lib/cleanup/conservative-cleanup";
 import {
   parseDesktopTranscribeRequest,
@@ -138,7 +136,7 @@ export type DesktopTranscribeRouteDependencies = Readonly<{
   writeUsageCounterIncrement: (
     input: RubyWhisperQuotaUsageIncrementInput,
   ) => Promise<RubyWhisperUsageCountersIncrementUpsertedResult>;
-  requireAuth: () => Promise<ClerkRequiredAuthState>;
+  requireAuth: (request: Request) => Promise<ClerkRequiredAuthState>;
 }>;
 
 type DesktopTranscribeSupabaseClient = SupabaseAccountProfileClient &
@@ -152,7 +150,7 @@ export function createDesktopTranscribeRouteHandler(
 ) {
   return async function POST(request: Request) {
     const routeStartedAtMs = dependencies.nowMs();
-    const authState = await dependencies.requireAuth();
+    const authState = await dependencies.requireAuth(request);
 
     if (!authState.ok) {
       return rubyWhisperApiErrorResponse("signed_out");
@@ -442,7 +440,7 @@ const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependenc
       },
       createDesktopTranscribeSupabaseClient,
     ),
-  requireAuth: requireClerkUserId,
+  requireAuth: requireRubyWhisperDesktopUserId,
 };
 
 export const POST = createDesktopTranscribeRouteHandler(

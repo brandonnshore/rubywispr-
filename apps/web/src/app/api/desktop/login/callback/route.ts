@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 
 import { rubyWhisperApiErrorResponse } from "@/lib/api/errors";
+import { createRubyWhisperDesktopSessionToken } from "@/lib/auth/desktop-session";
 import { createDesktopLoginExchangeCode } from "@/lib/desktop-login/exchange-store";
 
 export const dynamic = "force-dynamic";
@@ -28,16 +29,19 @@ export async function GET(request: NextRequest) {
     return rubyWhisperApiErrorResponse("signed_out");
   }
 
-  const sessionToken = await authState.getToken();
+  const desktopSession = createRubyWhisperDesktopSessionToken({
+    accountId: authState.userId,
+  });
 
-  if (!sessionToken) {
+  if (!desktopSession.ok) {
     return rubyWhisperApiErrorResponse("signed_out");
   }
 
   const code = createDesktopLoginExchangeCode({
     accountId: authState.userId,
     nonceChallenge,
-    sessionToken,
+    sessionExpiresAt: desktopSession.expiresAt,
+    sessionToken: desktopSession.token,
     state,
   });
 
