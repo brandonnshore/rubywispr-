@@ -1,6 +1,7 @@
 "use client";
 
 import { ClerkProvider, SignIn, SignUp } from "@clerk/react";
+import { useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { clientEnv } from "@/config/client";
@@ -74,7 +75,10 @@ export function AuthClerkProvider({ children }: { children: ReactNode }) {
 
 export function AuthRouteShell({ mode }: { mode: AuthMode }) {
   const copy = authCopy[mode];
+  const searchParams = useSearchParams();
   const isClerkConfigured = Boolean(clientEnv.clerkPublishableKey);
+  const desktopLoginRedirectUrl = desktopLoginCallbackRedirectUrl(searchParams);
+  const alternateHref = authAlternateHref(copy.alternateHref, searchParams);
 
   return (
     <main className="surface-shell auth-shell">
@@ -85,7 +89,11 @@ export function AuthRouteShell({ mode }: { mode: AuthMode }) {
 
         <div className="auth-card" data-clerk-configured={isClerkConfigured}>
           {isClerkConfigured ? (
-            <ClerkAuthComponent mode={mode} />
+            <ClerkAuthComponent
+              alternateHref={alternateHref}
+              desktopLoginRedirectUrl={desktopLoginRedirectUrl}
+              mode={mode}
+            />
           ) : (
             <EmailLinkPlaceholder copy={copy} />
           )}
@@ -93,7 +101,7 @@ export function AuthRouteShell({ mode }: { mode: AuthMode }) {
 
         <p className="auth-switch">
           {copy.alternatePrompt}{" "}
-          <a href={copy.alternateHref}>{copy.alternateLabel}</a>
+          <a href={alternateHref}>{copy.alternateLabel}</a>
         </p>
         <p className="auth-switch">
           Review <a href="/terms">Terms</a> and <a href="/privacy">Privacy</a>{" "}
@@ -104,15 +112,27 @@ export function AuthRouteShell({ mode }: { mode: AuthMode }) {
   );
 }
 
-function ClerkAuthComponent({ mode }: { mode: AuthMode }) {
+function ClerkAuthComponent({
+  alternateHref,
+  desktopLoginRedirectUrl,
+  mode,
+}: {
+  alternateHref: string;
+  desktopLoginRedirectUrl?: string;
+  mode: AuthMode;
+}) {
+  const redirectUrl = desktopLoginRedirectUrl ?? "/account";
+
   if (mode === "sign-up") {
     return (
       <SignUp
         appearance={clerkAppearance}
-        fallbackRedirectUrl="/account"
+        fallbackRedirectUrl={redirectUrl}
+        forceRedirectUrl={desktopLoginRedirectUrl}
         path="/sign-up"
         routing="path"
-        signInUrl="/sign-in"
+        signInForceRedirectUrl={desktopLoginRedirectUrl}
+        signInUrl={alternateHref}
       />
     );
   }
@@ -120,14 +140,47 @@ function ClerkAuthComponent({ mode }: { mode: AuthMode }) {
   return (
     <SignIn
       appearance={clerkAppearance}
-      fallbackRedirectUrl="/account"
+      fallbackRedirectUrl={redirectUrl}
+      forceRedirectUrl={desktopLoginRedirectUrl}
       path="/sign-in"
       routing="path"
-      signUpFallbackRedirectUrl="/account"
-      signUpUrl="/sign-up"
+      signUpFallbackRedirectUrl={redirectUrl}
+      signUpForceRedirectUrl={desktopLoginRedirectUrl}
+      signUpUrl={alternateHref}
       withSignUp
     />
   );
+}
+
+function desktopLoginCallbackRedirectUrl(searchParams: URLSearchParams) {
+  if (
+    searchParams.get("desktop") !== "1" ||
+    searchParams.get("handoff") !== "callback"
+  ) {
+    return undefined;
+  }
+
+  const state = searchParams.get("state")?.trim();
+  const nonceChallenge = searchParams.get("nonce_challenge")?.trim();
+  const callbackScheme =
+    searchParams.get("callback_scheme")?.trim() || "rubywhisper";
+
+  if (!state || !nonceChallenge || callbackScheme !== "rubywhisper") {
+    return undefined;
+  }
+
+  const callbackParams = new URLSearchParams({
+    callback_scheme: callbackScheme,
+    nonce_challenge: nonceChallenge,
+    state,
+  });
+
+  return `/api/desktop/login/callback?${callbackParams.toString()}`;
+}
+
+function authAlternateHref(path: string, searchParams: URLSearchParams) {
+  const query = searchParams.toString();
+  return query ? `${path}?${query}` : path;
 }
 
 function EmailLinkPlaceholder({ copy }: { copy: AuthRouteCopy }) {

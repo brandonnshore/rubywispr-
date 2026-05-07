@@ -59,6 +59,10 @@ test("auth route shell gates Clerk components behind blank-env safe public confi
   assert.match(source, /<SignIn/);
   assert.match(source, /<SignUp/);
   assert.match(source, /data-clerk-configured/);
+  assert.match(source, /forceRedirectUrl/);
+  assert.match(source, /\/api\/desktop\/login\/callback/);
+  assert.match(source, /nonce_challenge/);
+  assert.match(source, /callback_scheme/);
 });
 
 test("auth source avoids logging or fixture storage of auth link and session material", async () => {

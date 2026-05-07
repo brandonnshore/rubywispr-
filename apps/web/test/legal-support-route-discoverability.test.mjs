@@ -248,6 +248,10 @@ function createAuthRequire() {
           SignIn: () => null,
           SignUp: () => null,
         };
+      case "next/navigation":
+        return {
+          useSearchParams: () => new URLSearchParams(),
+        };
       case "@/config/client":
         return {
           clientEnv: {
