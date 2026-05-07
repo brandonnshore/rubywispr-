@@ -4,6 +4,7 @@ BUILD_DIR = build
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 CODESIGN_IDENTITY ?= $(shell security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -n 1)
 CODESIGN_IDENTITY := $(if $(strip $(CODESIGN_IDENTITY)),$(CODESIGN_IDENTITY),-)
+CODESIGN_ENTITLEMENTS ?=
 UPDATE_CHANNEL_ENABLED ?= false
 UPDATE_RELEASES_URL ?=
 RUBYWHISPER_BACKEND_BASE_URL ?= http://localhost:3000
@@ -74,7 +75,11 @@ endif
 	@plutil -replace NSMicrophoneUsageDescription -string "$(APP_NAME) needs microphone access to transcribe your speech." "$(CONTENTS)/Info.plist"
 	@plutil -replace NSSpeechRecognitionUsageDescription -string "$(APP_NAME) needs speech recognition to convert your voice to text." "$(CONTENTS)/Info.plist"
 	@plutil -replace NSAccessibilityUsageDescription -string "$(APP_NAME) needs accessibility access to detect the text cursor position and paste transcribed text." "$(CONTENTS)/Info.plist"
-	@codesign --force --options runtime --sign "$(CODESIGN_IDENTITY)" --entitlements RubyWhisper.entitlements "$(APP_BUNDLE)"
+	@ENTITLEMENTS_ARG=""; \
+	if [ -n "$(strip $(CODESIGN_ENTITLEMENTS))" ]; then \
+		ENTITLEMENTS_ARG="--entitlements $(CODESIGN_ENTITLEMENTS)"; \
+	fi; \
+	codesign --force --options runtime --sign "$(CODESIGN_IDENTITY)" $$ENTITLEMENTS_ARG "$(APP_BUNDLE)"
 	@echo "Built $(APP_BUNDLE)"
 
 icon: $(ICON_ICNS)
