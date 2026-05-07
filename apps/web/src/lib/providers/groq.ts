@@ -128,7 +128,7 @@ function createGroqTranscriptionFormData(
   const formData = new FormData();
   const audioBlob = normalizeGroqAudioBlob(input.audio, input.audioMimeType);
 
-  formData.set("file", audioBlob, "rubywhisper-audio");
+  formData.set("file", audioBlob, groqAudioFilename(input.audioMimeType));
   formData.set("model", input.model ?? rubyWhisperGroqTranscriptionModel);
   formData.set("response_format", "json");
 
@@ -137,6 +137,38 @@ function createGroqTranscriptionFormData(
   }
 
   return formData;
+}
+
+function groqAudioFilename(audioMimeType: string) {
+  const extension = groqAudioExtensionForMimeType(audioMimeType);
+
+  return `rubywhisper-audio.${extension}`;
+}
+
+function groqAudioExtensionForMimeType(audioMimeType: string) {
+  const normalizedMimeType = audioMimeType.split(";")[0]?.trim().toLowerCase();
+
+  switch (normalizedMimeType) {
+    case "audio/flac":
+      return "flac";
+    case "audio/m4a":
+    case "audio/x-m4a":
+      return "m4a";
+    case "audio/mp4":
+      return "mp4";
+    case "audio/mpeg":
+    case "audio/mp3":
+      return "mp3";
+    case "audio/ogg":
+      return "ogg";
+    case "audio/webm":
+      return "webm";
+    case "audio/wav":
+    case "audio/x-wav":
+      return "wav";
+    default:
+      return "wav";
+  }
 }
 
 function normalizeGroqAudioBlob(

@@ -576,7 +576,7 @@ private struct RubyWhisperBackendAPIClientTests {
         let body = String(data: captured.body ?? Data(), encoding: .utf8) ?? ""
         expect(captured.request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true, "multipart transcription should set multipart content type")
         expect(body.contains("name=\"audio\""), "multipart body should include audio part")
-        expect(body.contains("filename=\"audio.bin\""), "multipart filename should be content-free")
+        expect(body.contains("filename=\"rubywhisper-audio.wav\""), "multipart filename should be content-free and provider-readable")
         expect(!body.contains("recording.wav"), "multipart body should not include caller or user-derived filenames")
         expect(body.contains("name=\"audioDurationMs\""), "multipart body should include duration metadata")
         expect(body.contains("2345"), "multipart body should include duration value")

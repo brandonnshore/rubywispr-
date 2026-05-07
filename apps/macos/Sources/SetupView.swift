@@ -874,9 +874,9 @@ struct SetupView: View {
 
                 case .done:
                     VStack(spacing: 16) {
-                        Image(systemName: "checkmark.circle.fill")
+                        Image(systemName: testDoneIconName)
                             .font(.system(size: 60))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(testDoneIconColor)
 
                         if let error = testError {
                             Text("Something went wrong")
@@ -1044,6 +1044,26 @@ struct SetupView: View {
 
     private var retryShortcutPrompt: String {
         "\(testShortcutPrompt) to try again"
+    }
+
+    private var testDoneIconName: String {
+        if testError != nil {
+            return "exclamationmark.triangle.fill"
+        }
+        if testTranscript.isEmpty {
+            return "waveform.badge.exclamationmark"
+        }
+        return "checkmark.circle.fill"
+    }
+
+    private var testDoneIconColor: Color {
+        if testError != nil {
+            return .orange
+        }
+        if testTranscript.isEmpty {
+            return .secondary
+        }
+        return .green
     }
 
     private var canFinishSetup: Bool {

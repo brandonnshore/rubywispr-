@@ -783,7 +783,7 @@ struct RubyWhisperDesktopTranscriptionRequest: Equatable {
         case multipart(audio: Data, context: String? = nil, dictionaryTerms: [String] = [])
     }
 
-    private static let safeMultipartAudioFilename = "audio.bin"
+    private static let safeMultipartAudioFilename = "rubywhisper-audio.wav"
 
     var body: Body
     var audioMimeType: String

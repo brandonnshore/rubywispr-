@@ -66,6 +66,7 @@ test("Groq transcription client shapes multipart requests without live credentia
   assert.equal(body.get("model"), "whisper-large-v3-turbo");
   assert.equal(body.get("response_format"), "json");
   assert.equal(body.get("language"), "en");
+  assert.equal(body.get("file").name, "rubywhisper-audio.wav");
   assert.equal(body.get("file").type, "audio/wav");
   assert.equal(body.get("file").size, 3);
   assert.deepEqual(result, {
@@ -77,6 +78,33 @@ test("Groq transcription client shapes multipart requests without live credentia
       text: "synthetic transcript",
     },
   });
+});
+
+test("Groq transcription client gives sanitized uploads a provider-readable extension", async () => {
+  const groqProvider = await loadGroqProviderModule();
+  const fetchCalls = [];
+  const client = groqProvider.createRubyWhisperGroqProviderClient({
+    apiKey: "rw_synthetic_groq_key",
+    endpoint: syntheticEndpoint,
+    fetch: async (url, init) => {
+      fetchCalls.push({ init, url });
+
+      return jsonResponse({ text: "synthetic transcript" }, 200);
+    },
+  });
+
+  await client.transcribe({
+    audio: new Uint8Array([1, 2, 3]),
+    audioDurationMs: 4200,
+    audioMimeType: "audio/webm; codecs=opus",
+    requestId: "req_rw_synthetic_groq_002",
+  });
+
+  const body = fetchCalls[0].init.body;
+
+  assert.equal(body.get("file").name, "rubywhisper-audio.webm");
+  assert.equal(body.get("file").type, "audio/webm; codecs=opus");
+  assert.doesNotMatch(body.get("file").name, /recording|user|session|token/i);
 });
 
 test("Groq transcription client returns missing_config without fetching", async () => {
