@@ -64,11 +64,15 @@ current app bundle:
 ```bash
 tccutil reset Accessibility com.rubyadvisory.rubywhisper.dev
 tccutil reset ListenEvent com.rubyadvisory.rubywhisper.dev
+tccutil reset ScreenCapture com.rubyadvisory.rubywhisper.dev
 ```
 
 Then open `apps/macos/build/RubyWhisper.app` and grant Accessibility/Input
-Monitoring again. For stable permission behavior across repeated builds, sign
-with an installed Apple Development or Developer ID identity instead of `-`.
+Monitoring/Screen Recording again. Remove older local `RubyWhisper.app` build
+artifacts from other worktrees before adding the app in System Settings, so the
+permission picker shows only the current build. For stable permission behavior
+across repeated builds, sign with an installed Apple Development or Developer ID
+identity instead of `-`.
 
 Build output:
 

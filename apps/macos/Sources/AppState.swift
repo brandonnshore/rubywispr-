@@ -1590,21 +1590,28 @@ final class AppState: ObservableObject, @unchecked Sendable {
         CGPreflightScreenCaptureAccess()
     }
 
+    @discardableResult
+    func refreshScreenCapturePermissionStatus() -> Bool {
+        let granted = hasScreenCapturePermission()
+        hasScreenRecordingPermission = granted
+        return granted
+    }
+
     func requestScreenCapturePermission() {
+        startAccessibilityPolling()
         // ScreenCaptureKit triggers the "Screen & System Audio Recording"
         // permission dialog on macOS Sequoia+, correctly identifying the
         // running app (unlike the legacy CGWindowListCreateImage path).
         SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { [weak self] _, _ in
             DispatchQueue.main.async {
-                let granted = CGPreflightScreenCaptureAccess()
-                self?.hasScreenRecordingPermission = granted
+                let granted = self?.refreshScreenCapturePermissionStatus() ?? false
                 if !granted {
                     self?.openScreenCaptureSettings()
                 }
             }
         }
 
-        hasScreenRecordingPermission = CGPreflightScreenCaptureAccess()
+        refreshScreenCapturePermissionStatus()
     }
 
     func openScreenCaptureSettings() {
@@ -3842,7 +3849,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
-            openScreenCaptureSettings()
+            requestScreenCapturePermission()
         }
     }
 

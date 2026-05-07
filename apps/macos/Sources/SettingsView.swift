@@ -788,6 +788,7 @@ struct GeneralSettingsView: View {
         .onAppear {
             checkMicPermission()
             _ = appState.refreshAccessibilityTrustStatus()
+            _ = appState.refreshScreenCapturePermissionStatus()
             appState.refreshLaunchAtLoginStatus()
         }
     }

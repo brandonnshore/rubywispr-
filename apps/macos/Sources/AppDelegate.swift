@@ -60,6 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         _ = appState.refreshAccessibilityTrustStatus()
+        _ = appState.refreshScreenCapturePermissionStatus()
     }
 
     @objc func handleShowSetup() {
