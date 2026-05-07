@@ -848,7 +848,7 @@ test("desktop transcribe route omits cleanup context and dictionary when disable
   });
 });
 
-test("desktop transcribe route maps cleanup failures to shared no-store errors", async () => {
+test("desktop transcribe route falls back to the transcript when cleanup fails", async () => {
   const routeModule = await loadDesktopTranscribeRouteModule();
   const providerCalls = [];
   const { calls, dependencies } = createRouteDependencies({
@@ -873,22 +873,26 @@ test("desktop transcribe route maps cleanup failures to shared no-store errors",
   const requestMetadataInput = calls.find(
     (call) => call.operation === "writeRequestMetadata",
   ).input;
+  const usageIncrementInput = calls.find(
+    (call) => call.operation === "writeUsageCounterIncrement",
+  ).input;
 
-  assert.equal(response.status, 503);
+  assert.equal(response.status, 200);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
-  assert.equal(body.error.code, "provider_error");
-  assert.equal(body.error.retryable, true);
-  assert.equal(body.requestId, "req_rw_synthetic_route_001");
-  assert.deepEqual(body.metadata, {
+  assert.deepEqual(body, {
     appVersion: "0.1.0-test",
     audioDurationMs: 4200,
+    cleanedText: "Synthetic provider output.",
+    cleanedWordCount: 3,
+    ok: true,
     osVersion: "macOS synthetic",
     planState: "trial_active",
     provider: "mock_provider",
-    providerLatencyMs: 18,
-    totalLatencyMs: 26,
+    providerLatencyMs: 24,
+    requestId: "req_rw_synthetic_route_001",
     trialWordsLimit: 5000,
-    trialWordsRemaining: 3900,
+    trialWordsRemaining: 3897,
+    trialWordsUsed: 1103,
   });
   assert.deepEqual(
     toPlainObject(providerCalls).map((call) => call.operation),
@@ -900,33 +904,28 @@ test("desktop transcribe route maps cleanup failures to shared no-store errors",
       appVersion: "0.1.0-test",
       audioDurationMs: 4200,
       clerkUserId: "user_rw_synthetic_member_001",
-      errorCode: "provider_error",
-      latencyMs: 18,
+      cleanedWordCount: 3,
+      latencyMs: 24,
       now: "2026-05-04T07:30:00.000Z",
       osVersion: "macOS synthetic",
       planState: "trial_active",
       provider: "mock_provider",
       requestId: "req_rw_synthetic_route_001",
-      status: "failure",
+      status: "success",
       totalBackendLatencyMs: 128,
     },
   );
-  assert.equal(
-    calls.some((call) => call.operation === "prepareUsageIncrement"),
-    false,
-  );
-  assert.equal(
-    calls.some((call) => call.operation === "writeUsageCounterIncrement"),
-    false,
-  );
+  assert.equal(usageIncrementInput.billableWordCount, 3);
   assertTranscriptionRequestMetadataOnly(requestMetadataInput);
   assertNoPrivateCleanupPayload(requestMetadataInput);
+  assertNoPrivateCleanupPayload(usageIncrementInput);
   assert.doesNotMatch(
     JSON.stringify(body),
-    /Synthetic provider output|Synthetic route context|cleanedText|transcriptText|term_placeholder_alpha/i,
+    /Synthetic route context|transcriptText|term_placeholder_alpha/i,
   );
   assertNoDictionaryTermContent(body);
   assertNoDictionaryTermContent(requestMetadataInput);
+  assertNoDictionaryTermContent(usageIncrementInput);
 });
 
 test("desktop transcribe provider continuation can be invoked directly", async () => {
