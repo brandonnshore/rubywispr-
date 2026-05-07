@@ -4,6 +4,7 @@ BUILD_DIR = build
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 CODESIGN_IDENTITY ?= $(shell security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -n 1)
 CODESIGN_IDENTITY := $(if $(strip $(CODESIGN_IDENTITY)),$(CODESIGN_IDENTITY),-)
+CODESIGN_OPTIONS ?=
 CODESIGN_ENTITLEMENTS ?=
 UPDATE_CHANNEL_ENABLED ?= false
 UPDATE_RELEASES_URL ?=
@@ -79,7 +80,7 @@ endif
 	if [ -n "$(strip $(CODESIGN_ENTITLEMENTS))" ]; then \
 		ENTITLEMENTS_ARG="--entitlements $(CODESIGN_ENTITLEMENTS)"; \
 	fi; \
-	codesign --force --options runtime --sign "$(CODESIGN_IDENTITY)" $$ENTITLEMENTS_ARG "$(APP_BUNDLE)"
+	codesign --force $(CODESIGN_OPTIONS) --sign "$(CODESIGN_IDENTITY)" $$ENTITLEMENTS_ARG "$(APP_BUNDLE)"
 	@echo "Built $(APP_BUNDLE)"
 
 icon: $(ICON_ICNS)
