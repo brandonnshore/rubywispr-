@@ -37,6 +37,8 @@ test("Clerk env config keeps secrets server-only and publishable key public", as
 
   assert.match(clientConfig, new RegExp(`\\b${clerkPublicName}\\b`));
   assert.match(clientConfig, /\bclerkPublishableKey\b/);
+  assert.match(clientConfig, /process\.env\.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY/);
+  assert.doesNotMatch(clientConfig, /process\.env\[[^\]]+\]/);
 
   const clientClerkNames = extractEnvNames(clientConfig).filter((name) =>
     name.includes("CLERK"),

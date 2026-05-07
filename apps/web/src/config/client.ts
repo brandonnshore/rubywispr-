@@ -1,6 +1,6 @@
-const readOptionalPublicEnv = (name: ClientEnvVariableName) => {
-  const value = process.env[name]?.trim();
-  return value === "" ? undefined : value;
+const readOptionalPublicEnv = (value: string | undefined) => {
+  const trimmedValue = value?.trim();
+  return trimmedValue === "" ? undefined : trimmedValue;
 };
 
 export const resolveSafePublicHttpsUrl = (value: string | undefined) => {
@@ -31,13 +31,15 @@ export const clientEnvVariableNames = [
 export type ClientEnvVariableName = (typeof clientEnvVariableNames)[number];
 
 export const clientEnv = Object.freeze({
-  appEnv: readOptionalPublicEnv("NEXT_PUBLIC_RUBYWHISPER_APP_ENV"),
-  appUrl: readOptionalPublicEnv("NEXT_PUBLIC_RUBYWHISPER_APP_URL"),
+  appEnv: readOptionalPublicEnv(process.env.NEXT_PUBLIC_RUBYWHISPER_APP_ENV),
+  appUrl: readOptionalPublicEnv(process.env.NEXT_PUBLIC_RUBYWHISPER_APP_URL),
   latestAppDownloadUrl: resolveSafePublicHttpsUrl(
-    readOptionalPublicEnv("NEXT_PUBLIC_RUBYWHISPER_LATEST_APP_DOWNLOAD_URL"),
+    readOptionalPublicEnv(
+      process.env.NEXT_PUBLIC_RUBYWHISPER_LATEST_APP_DOWNLOAD_URL,
+    ),
   ),
   clerkPublishableKey: readOptionalPublicEnv(
-    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   ),
 });
 
