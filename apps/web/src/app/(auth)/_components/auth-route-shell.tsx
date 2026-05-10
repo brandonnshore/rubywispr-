@@ -72,7 +72,13 @@ export function AuthClerkProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function AuthRouteShell({ mode }: { mode: AuthMode }) {
+export function AuthRouteShell({
+  mode,
+  forceRedirectUrl,
+}: {
+  mode: AuthMode;
+  forceRedirectUrl?: string;
+}) {
   const copy = authCopy[mode];
   const isClerkConfigured = Boolean(clientEnv.clerkPublishableKey);
 
@@ -85,7 +91,7 @@ export function AuthRouteShell({ mode }: { mode: AuthMode }) {
 
         <div className="auth-card" data-clerk-configured={isClerkConfigured}>
           {isClerkConfigured ? (
-            <ClerkAuthComponent mode={mode} />
+            <ClerkAuthComponent mode={mode} forceRedirectUrl={forceRedirectUrl} />
           ) : (
             <EmailLinkPlaceholder copy={copy} />
           )}
@@ -104,12 +110,21 @@ export function AuthRouteShell({ mode }: { mode: AuthMode }) {
   );
 }
 
-function ClerkAuthComponent({ mode }: { mode: AuthMode }) {
+function ClerkAuthComponent({
+  mode,
+  forceRedirectUrl,
+}: {
+  mode: AuthMode;
+  forceRedirectUrl?: string;
+}) {
+  const fallbackRedirectUrl = forceRedirectUrl ?? "/account";
+
   if (mode === "sign-up") {
     return (
       <SignUp
         appearance={clerkAppearance}
-        fallbackRedirectUrl="/account"
+        fallbackRedirectUrl={fallbackRedirectUrl}
+        forceRedirectUrl={forceRedirectUrl}
         path="/sign-up"
         routing="path"
         signInUrl="/sign-in"
@@ -120,10 +135,12 @@ function ClerkAuthComponent({ mode }: { mode: AuthMode }) {
   return (
     <SignIn
       appearance={clerkAppearance}
-      fallbackRedirectUrl="/account"
+      fallbackRedirectUrl={fallbackRedirectUrl}
+      forceRedirectUrl={forceRedirectUrl}
       path="/sign-in"
       routing="path"
-      signUpFallbackRedirectUrl="/account"
+      signUpFallbackRedirectUrl={fallbackRedirectUrl}
+      signUpForceRedirectUrl={forceRedirectUrl}
       signUpUrl="/sign-up"
       withSignUp
     />

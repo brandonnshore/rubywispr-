@@ -18,9 +18,9 @@ import {
   type RubyWhisperApiErrorMetadata,
 } from "@/lib/api/errors";
 import {
-  requireClerkUserId,
-  type ClerkRequiredAuthState,
-} from "@/lib/auth/clerk";
+  requireDesktopUserId,
+  type DesktopAuthState,
+} from "@/lib/desktop/auth";
 import { runRubyWhisperConservativeCleanup } from "@/lib/cleanup/conservative-cleanup";
 import {
   parseDesktopTranscribeRequest,
@@ -138,7 +138,7 @@ export type DesktopTranscribeRouteDependencies = Readonly<{
   writeUsageCounterIncrement: (
     input: RubyWhisperQuotaUsageIncrementInput,
   ) => Promise<RubyWhisperUsageCountersIncrementUpsertedResult>;
-  requireAuth: () => Promise<ClerkRequiredAuthState>;
+  requireAuth: (request: Pick<Request, "headers">) => DesktopAuthState;
 }>;
 
 type DesktopTranscribeSupabaseClient = SupabaseAccountProfileClient &
@@ -152,14 +152,14 @@ export function createDesktopTranscribeRouteHandler(
 ) {
   return async function POST(request: Request) {
     const routeStartedAtMs = dependencies.nowMs();
-    const authState = await dependencies.requireAuth();
+    const authState = dependencies.requireAuth(request);
 
     if (!authState.ok) {
       return rubyWhisperApiErrorResponse("signed_out");
     }
 
     try {
-      const profileResult = await dependencies.readProfile(authState.userId);
+      const profileResult = await dependencies.readProfile(authState.clerkUserId);
 
       if (!profileResult.ok) {
         return rubyWhisperApiErrorResponse("service_unavailable");
@@ -170,8 +170,8 @@ export function createDesktopTranscribeRouteHandler(
       }
 
       const [subscriptionResult, usageCountersResult] = await Promise.all([
-        dependencies.readSubscription(authState.userId),
-        dependencies.readUsageCounters(authState.userId),
+        dependencies.readSubscription(authState.clerkUserId),
+        dependencies.readUsageCounters(authState.clerkUserId),
       ]);
 
       if (!subscriptionResult.ok || !usageCountersResult.ok) {
@@ -196,7 +196,7 @@ export function createDesktopTranscribeRouteHandler(
       }
 
       const rateLimitResult = await dependencies.evaluateRateLimit({
-        clerkUserId: authState.userId,
+        clerkUserId: authState.clerkUserId,
         now: dependencies.now(),
         planState: entitlement.planState,
       });
@@ -230,7 +230,7 @@ export function createDesktopTranscribeRouteHandler(
 
       return executeDesktopTranscribeProviderContinuation(
         {
-          clerkUserId: authState.userId,
+          clerkUserId: authState.clerkUserId,
           entitlement,
           profile: profileResult.profile,
           requestInput: parseResult.input,
@@ -469,7 +469,7 @@ const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependenc
       },
       createDesktopTranscribeSupabaseClient,
     ),
-  requireAuth: requireClerkUserId,
+  requireAuth: requireDesktopUserId,
 };
 
 export const POST = createDesktopTranscribeRouteHandler(

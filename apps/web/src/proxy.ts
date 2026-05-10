@@ -6,6 +6,8 @@ const isProtectedPageRoute = createRouteMatcher([
   "/admin(.*)",
 ]);
 
+const isDesktopApiRoute = createRouteMatcher(["/api/desktop(.*)"]);
+
 const isClerkConfigured = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim(),
 );
@@ -18,6 +20,10 @@ const clerkProtectedProxy = clerkMiddleware(async (auth, request) => {
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (!isClerkConfigured) {
+    return NextResponse.next();
+  }
+
+  if (isDesktopApiRoute(request)) {
     return NextResponse.next();
   }
 

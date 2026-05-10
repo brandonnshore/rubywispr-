@@ -17,9 +17,9 @@ import {
 } from "@/lib/account/subscription-cache";
 import { rubyWhisperApiErrorResponse } from "@/lib/api/errors";
 import {
-  requireClerkUserId,
-  type ClerkRequiredAuthState,
-} from "@/lib/auth/clerk";
+  requireDesktopUserId,
+  type DesktopAuthState,
+} from "@/lib/desktop/auth";
 import {
   readRubyWhisperUsageCounters,
   type RubyWhisperUsageCountersReadResult,
@@ -43,7 +43,7 @@ export type DesktopAccountRouteDependencies = Readonly<{
   readUsageCounters: (
     clerkUserId: string,
   ) => Promise<RubyWhisperUsageCountersReadResult>;
-  requireAuth: () => Promise<ClerkRequiredAuthState>;
+  requireAuth: (request: Pick<Request, "headers">) => DesktopAuthState;
 }>;
 
 type DesktopAccountSupabaseClient = SupabaseAccountProfileClient &
@@ -53,8 +53,8 @@ type DesktopAccountSupabaseClient = SupabaseAccountProfileClient &
 export function createDesktopAccountRouteHandler(
   dependencies: DesktopAccountRouteDependencies,
 ) {
-  return async function GET() {
-    const authState = await dependencies.requireAuth();
+  return async function GET(request: Request) {
+    const authState = dependencies.requireAuth(request);
 
     if (!authState.ok) {
       return rubyWhisperApiErrorResponse("signed_out");
@@ -63,9 +63,9 @@ export function createDesktopAccountRouteHandler(
     try {
       const [profileResult, subscriptionResult, usageCountersResult] =
         await Promise.all([
-          dependencies.readProfile(authState.userId),
-          dependencies.readSubscription(authState.userId),
-          dependencies.readUsageCounters(authState.userId),
+          dependencies.readProfile(authState.clerkUserId),
+          dependencies.readSubscription(authState.clerkUserId),
+          dependencies.readUsageCounters(authState.clerkUserId),
         ]);
 
       if (
@@ -121,7 +121,7 @@ const defaultDesktopAccountRouteDependencies: DesktopAccountRouteDependencies = 
       { clerkUserId },
       createDesktopAccountSupabaseClient,
     ),
-  requireAuth: requireClerkUserId,
+  requireAuth: requireDesktopUserId,
 };
 
 export const GET = createDesktopAccountRouteHandler(
