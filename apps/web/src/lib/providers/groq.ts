@@ -73,6 +73,15 @@ async function transcribeWithGroq(
     const latencyMs = elapsedMs(nowMs, startedAtMs);
 
     if (!response.ok) {
+      const errorBody = await response.text().catch(() => "(unreadable)");
+      console.error("groq_transcription_failed", {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorBody.slice(0, 500),
+        audioMimeType: input.audioMimeType,
+        audioDurationMs: input.audioDurationMs,
+        model: input.model,
+      });
       return createGroqTranscriptionFailure(
         providerErrorCodeForGroqStatus(response.status),
         input,
