@@ -41,7 +41,7 @@ private func makeOverlayPanel(width: CGFloat, height: CGFloat) -> NSPanel {
     panel.hasShadow = true
     panel.level = .screenSaver
     panel.ignoresMouseEvents = false
-    panel.isMovableByWindowBackground = true
+    panel.isMovableByWindowBackground = false
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     panel.isReleasedWhenClosed = false
     panel.hidesOnDeactivate = false
@@ -311,7 +311,7 @@ final class RecordingOverlayManager {
     }
 
     private func showOverlayPanel(animatedResize: Bool) {
-        preserveCurrentAnchor()
+        overlayTopCenterAnchor = nil
         let frame = overlayFrame
 
         if let panel = overlayWindow {
@@ -352,7 +352,7 @@ final class RecordingOverlayManager {
 
     private func updateOverlayLayout(animated: Bool) {
         guard let panel = overlayWindow else { return }
-        preserveCurrentAnchor()
+        overlayTopCenterAnchor = nil
         let frame = overlayFrame
         panel.ignoresMouseEvents = false
         panel.contentView = makeOverlayContent(frame: frame)
@@ -454,7 +454,7 @@ final class RecordingOverlayManager {
     }
 
     private func dismissAll() {
-        preserveCurrentAnchor()
+        overlayTopCenterAnchor = nil
         overlayState.isCommandMode = false
         overlayState.updateVersion = ""
         overlayState.islandPresentation = RecordingIslandStateMachine.hiddenIdle()
