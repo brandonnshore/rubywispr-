@@ -105,13 +105,18 @@ async function parseMultipartDesktopTranscribeRequest(
 
   try {
     formData = await request.formData();
-  } catch {
+  } catch (error) {
+    console.error("desktop_transcribe_invalid_audio formdata_parse_failed", error);
     return invalidAudioFailure();
   }
 
   const audio = formData.get("audio");
 
   if (!(audio instanceof Blob) || audio.size <= 0) {
+    console.error("desktop_transcribe_invalid_audio missing_audio_blob", {
+      isBlob: audio instanceof Blob,
+      size: audio instanceof Blob ? audio.size : null,
+    });
     return invalidAudioFailure();
   }
 
@@ -129,14 +134,25 @@ async function parseMultipartDesktopTranscribeRequest(
   const audioMimeType = normalizeMimeTypeEntry(fields.audioMimeType) ?? normalizeMimeType(audio.type);
 
   if (!audioMimeType || !isSupportedAudioMimeType(audioMimeType)) {
+    console.error("desktop_transcribe_invalid_audio bad_mime_type", {
+      audioMimeType,
+      blobType: audio.type,
+      formMimeField: fields.audioMimeType,
+    });
     return invalidAudioFailure();
   }
 
-  return createDesktopTranscribeRequestInput({
+  const result = createDesktopTranscribeRequestInput({
     audio,
     audioMimeType,
     fields,
   });
+  if (!result.ok && result.code === "invalid_audio") {
+    console.error("desktop_transcribe_invalid_audio create_input_failed", {
+      audioDurationMs: fields.audioDurationMs,
+    });
+  }
+  return result;
 }
 
 async function parseBinaryDesktopTranscribeRequest(
