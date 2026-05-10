@@ -256,6 +256,72 @@ Cost controls:
 - Usage metadata without transcript content.
 - Annual plan emphasis.
 
+## RW-015 Groq Latency And Cost Benchmark
+
+Date: 2026-05-10
+
+Validation command:
+
+```bash
+set -a
+source .env.local
+set +a
+scripts/benchmarks/groq-latency-cost.mjs
+```
+
+Privacy posture:
+
+- Used temporary synthetic speech generated locally with macOS `say`.
+- No real user content was used.
+- The benchmark deleted temporary audio files after each request.
+- The benchmark printed only bucket, audio duration, estimated billed duration, latency, normalized status, model, and estimated cost.
+- No private env values, raw provider payloads, audio files, transcripts, cleaned text, prompts, or customer data were printed or committed.
+
+Provider facts checked on 2026-05-10 and rechecked against official Groq
+pricing/docs on 2026-05-20:
+
+- Groq pricing page lists Automatic Speech Recognition billing at a minimum of 10 seconds per request and lists `Whisper Large v3 Turbo` at `$0.04` per hour transcribed, with a current pricing-page speed factor of 228x: https://groq.com/pricing
+- Groq speech-to-text docs list `whisper-large-v3-turbo` at `$0.04` per hour, with 10-second minimum billed length, `wav` upload support, and 25 MB free-tier / 100 MB dev-tier file limits: https://console.groq.com/docs/speech-to-text
+- Groq model docs describe `whisper-large-v3-turbo` as optimized for real-time transcription and list a 216x model-doc speed factor: https://console.groq.com/docs/model/whisper-large-v3-turbo
+
+Single-run live results with `whisper-large-v3-turbo`:
+
+| Bucket | Synthetic audio duration | Estimated billed duration | Provider latency | Status | Estimated transcription cost |
+| --- | ---: | ---: | ---: | --- | ---: |
+| Short | 4.91s | 10.00s | 228ms | ok | `$0.000111` |
+| Medium | 20.23s | 20.23s | 636ms | ok | `$0.000225` |
+| Longer | 61.10s | 61.10s | 1,935ms | ok | `$0.000679` |
+
+Latency notes:
+
+- The short sample cleared RubyWhisper's under-1-second short-whisper target before app upload, backend, cleanup, and insertion overhead.
+- The medium sample also cleared the 1-second target in provider-only timing.
+- The longer sample took about 1.9 seconds for 61 seconds of synthetic speech; longer whispers are not held to the sub-second budget, but the result is consistent with a fast beta experience.
+- These are rough dev-key timings from one machine and one run on 2026-05-10. Re-run before beta launch and whenever provider tier, region, request format, or cleanup model changes.
+
+Cost scenarios at `$0.04/hour` transcription and 10-second minimum billing:
+
+| Scenario | Assumption | Estimated monthly transcription cost | Risk |
+| --- | --- | ---: | --- |
+| Normal | 1,000 personal whispers/month at 15s average billed audio | `$0.17` | Plausible inside a `$7/month` plan before cleanup, hosting, auth, billing, and support costs. |
+| Heavy | 10,000 personal whispers/month at 30s average billed audio | `$3.33` | Still possible to cover on monthly plans, but leaves less margin after non-provider costs and annual discounts. |
+| Short-request spam | 100,000 sub-10s requests/month billed at the 10s minimum | `$11.11` | Loss-making for one paid account; needs request-level rate limits and fair-use enforcement. |
+| Continuous automation abuse | 24 hours/day for 30 days | `$28.80` | Clearly loss-making; 10-minute cap helps only per request, not against automated repetition. |
+
+Cleanup options if Groq handles cleanup:
+
+- Keep transcription on `whisper-large-v3-turbo` and add a separate backend Groq chat-completion cleanup pass with the existing conservative cleanup contract. This preserves the provider abstraction but adds another latency and token-cost component that still needs a cleanup-specific benchmark.
+- Use cleanup only when enabled by user settings and Terms/Privacy gates; omit context and dictionary terms whenever those toggles are disabled.
+- Keep a cleanup-disabled/raw-transcript path for latency-sensitive or privacy-sensitive users.
+- Treat cleanup model choice and prompt as a separate human-owned launch decision; do not block the transcription default on it.
+
+Recommendation:
+
+- Keep Groq as the v0.1 default provider for transcription.
+- Keep the provider abstraction flexible and keep backend-only provider access.
+- Do not market unlimited personal dictation without fair-use terms, per-account request/audio limits, metadata-only usage tracking, and an abuse cutoff path.
+- Run a separate cleanup benchmark before committing to Groq as the cleanup model default.
+
 ## Auth Provider Notes
 
 Decision: Clerk for launch auth.
