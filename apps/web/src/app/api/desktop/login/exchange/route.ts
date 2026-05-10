@@ -75,7 +75,8 @@ export async function POST(request: Request) {
       exchangeCode: code,
       nonceVerifier,
     });
-  } catch {
+  } catch (error) {
+    console.error("desktop_login_exchange_failed", error);
     return errorResponse(503, "service_unavailable", "Sign-in service is unavailable.");
   }
 
