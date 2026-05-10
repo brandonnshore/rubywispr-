@@ -131,13 +131,24 @@ async function transcribeWithGroq(
   }
 }
 
+const audioExtensionForMimeType: Record<string, string> = {
+  "audio/flac": "flac",
+  "audio/m4a": "m4a",
+  "audio/mp4": "m4a",
+  "audio/mpeg": "mp3",
+  "audio/ogg": "ogg",
+  "audio/wav": "wav",
+  "audio/webm": "webm",
+};
+
 function createGroqTranscriptionFormData(
   input: RubyWhisperProviderTranscriptionInput,
 ) {
   const formData = new FormData();
   const audioBlob = normalizeGroqAudioBlob(input.audio, input.audioMimeType);
+  const extension = audioExtensionForMimeType[input.audioMimeType.toLowerCase()] ?? "wav";
 
-  formData.set("file", audioBlob, "rubywhisper-audio");
+  formData.set("file", audioBlob, `rubywhisper-audio.${extension}`);
   formData.set("model", input.model ?? rubyWhisperGroqTranscriptionModel);
   formData.set("response_format", "json");
 
