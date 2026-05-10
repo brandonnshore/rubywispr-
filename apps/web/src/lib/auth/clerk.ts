@@ -35,7 +35,16 @@ export async function requireClerkUserId(): Promise<ClerkRequiredAuthState> {
     };
   }
 
-  const { userId } = await auth();
+  let userId: string | null;
+
+  try {
+    ({ userId } = await auth());
+  } catch {
+    return {
+      ok: false,
+      error: clerkUnauthenticatedError,
+    };
+  }
 
   if (!userId) {
     return {
