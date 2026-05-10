@@ -419,9 +419,10 @@ Mac app:
   make -C apps/macos clean all CODESIGN_IDENTITY=-
   ```
 
-- Pull request checks: `.github/workflows/macos-ci.yml` runs on GitHub-hosted
-  `macos-latest` for macOS app changes and executes the repo-local Debug/ad hoc
-  build command.
+- Manual hosted check: `.github/workflows/macos-ci.yml` can be run with
+  `workflow_dispatch` on GitHub-hosted `macos-latest` for release-risk or
+  macOS-heavy changes. It is intentionally not a routine pull request trigger
+  because hosted macOS runner minutes are limited and costly.
 
   The workflow verifies `apps/macos/build/RubyWhisper.app`, the development
   bundle identifier `com.rubyadvisory.rubywhisper.dev`, and an ad hoc code

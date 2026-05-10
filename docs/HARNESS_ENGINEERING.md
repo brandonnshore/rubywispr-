@@ -74,7 +74,7 @@ Use the lowest validation level that genuinely proves the change:
 - Repo setup: run bootstrap scripts and verify expected files/directories are present without printing secrets.
 - Web app: run root npm workspace commands `npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`; use `npm run dev` for local browser validation of affected routes.
 - macOS app: run `make -C apps/macos clean all CODESIGN_IDENTITY=-` for the imported Debug/ad hoc build gate, then validate the affected user path manually when the change is UI- or runtime-facing.
-- PR CI: GitHub should enforce `Web CI / npm validation` for root web/backend changes and `macOS CI / Debug ad hoc build` for macOS app changes.
+- PR CI: GitHub should enforce `Web CI / npm validation` for root web/backend changes. `macOS CI / Debug ad hoc build` is a manual GitHub Actions workflow for release-risk or macOS-heavy PRs so routine work does not consume hosted macOS runner minutes.
 - CI secret boundary: workflows must not expose provider, production, Apple signing/notarization, billing, database, release packaging, or private env secrets.
 - UI polish: include screenshot or video proof when possible.
 - Release/package work: verify signing/notarization assumptions separately from app behavior.

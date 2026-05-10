@@ -1,18 +1,7 @@
 name: macOS CI
 
 on:
-  pull_request:
-    paths:
-      - "apps/macos/**"
-      - ".github/workflows/macos-ci.yml"
-      - "TECHNICAL_INFRASTRUCTURE.md"
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/macos/**"
-      - ".github/workflows/macos-ci.yml"
-      - "TECHNICAL_INFRASTRUCTURE.md"
+  workflow_dispatch:
 
 permissions:
   contents: read
