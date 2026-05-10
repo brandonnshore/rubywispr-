@@ -5,6 +5,8 @@ APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 CODESIGN_IDENTITY ?= -
 UPDATE_CHANNEL_ENABLED ?= false
 UPDATE_RELEASES_URL ?=
+RUBYWHISPER_BACKEND_BASE_URL ?= https://rubywhisper-web.vercel.app
+RUBYWHISPER_BACKEND_BASE_URL := $(if $(strip $(RUBYWHISPER_BACKEND_BASE_URL)),$(RUBYWHISPER_BACKEND_BASE_URL),https://rubywhisper-web.vercel.app)
 CONTENTS = $(APP_BUNDLE)/Contents
 MACOS_DIR = $(CONTENTS)/MacOS
 empty :=
@@ -66,6 +68,7 @@ endif
 	@plutil -replace CFBundleIdentifier -string "$(BUNDLE_ID)" "$(CONTENTS)/Info.plist"
 	@plutil -replace RubyWhisperUpdateChannelEnabled -bool "$(UPDATE_CHANNEL_ENABLED)" "$(CONTENTS)/Info.plist"
 	@plutil -replace RubyWhisperUpdateReleasesURL -string "$(UPDATE_RELEASES_URL)" "$(CONTENTS)/Info.plist"
+	@plutil -replace RubyWhisperBackendBaseURL -string "$(RUBYWHISPER_BACKEND_BASE_URL)" "$(CONTENTS)/Info.plist"
 	@cp $(ICON_ICNS) "$(RESOURCES)/AppIcon.icns"
 	@cp "$(THIRD_PARTY_NOTICES)" "$(RESOURCES)/ThirdPartyNotices.md"
 	@plutil -replace NSMicrophoneUsageDescription -string "$(APP_NAME) needs microphone access to transcribe your speech." "$(CONTENTS)/Info.plist"
