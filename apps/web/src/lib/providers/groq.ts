@@ -51,6 +51,12 @@ async function transcribeWithGroq(
   config: RubyWhisperGroqProviderConfig,
 ) {
   const apiKey = normalizeGroqApiKey(config.apiKey ?? serverEnv.groq.apiKey);
+  console.error("groq_transcribe_entry", {
+    apiKeyLength: apiKey ? apiKey.length : 0,
+    apiKeyPrefix: apiKey ? apiKey.slice(0, 4) : "(empty)",
+    audioMimeType: input.audioMimeType,
+    audioDurationMs: input.audioDurationMs,
+  });
 
   if (!apiKey) {
     return createGroqTranscriptionFailure("missing_config", input);
