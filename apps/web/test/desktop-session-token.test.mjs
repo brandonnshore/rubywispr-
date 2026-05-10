@@ -15,10 +15,10 @@ const desktopSessionPath = path.join(
 );
 
 test("desktop session tokens verify RubyWhisper-issued desktop auth", async () => {
-  const module = await loadDesktopSessionModule({
+  const sessionModule = await loadDesktopSessionModule({
     secret: "desktop_session_secret_placeholder",
   });
-  const issued = module.createRubyWhisperDesktopSessionToken({
+  const issued = sessionModule.createRubyWhisperDesktopSessionToken({
     accountId: "user_3DNKd6QGk0h51KCmkgUHKcRElGy",
     nowMs: () => 1_800_000_000_000,
     secret: "desktop_session_secret_placeholder",
@@ -30,7 +30,7 @@ test("desktop session tokens verify RubyWhisper-issued desktop auth", async () =
   assert.equal(issued.expiresAt, "2027-01-15T08:01:00.000Z");
   assert.match(issued.token, /^rwds1\./);
 
-  const verified = module.verifyRubyWhisperDesktopSessionToken(issued.token, {
+  const verified = sessionModule.verifyRubyWhisperDesktopSessionToken(issued.token, {
     nowMs: () => 1_800_000_030_000,
     secret: "desktop_session_secret_placeholder",
   });
@@ -41,10 +41,10 @@ test("desktop session tokens verify RubyWhisper-issued desktop auth", async () =
 });
 
 test("desktop session auth accepts bearer tokens and rejects expired tokens", async () => {
-  const module = await loadDesktopSessionModule({
+  const sessionModule = await loadDesktopSessionModule({
     secret: "desktop_session_secret_placeholder",
   });
-  const issued = module.createRubyWhisperDesktopSessionToken({
+  const issued = sessionModule.createRubyWhisperDesktopSessionToken({
     accountId: "user_rw_desktop_member_001",
     nowMs: () => 1_800_000_000_000,
     secret: "desktop_session_secret_placeholder",
@@ -53,7 +53,7 @@ test("desktop session auth accepts bearer tokens and rejects expired tokens", as
 
   assert.equal(issued.ok, true);
 
-  const accepted = await module.requireRubyWhisperDesktopUserId(
+  const accepted = await sessionModule.requireRubyWhisperDesktopUserId(
     new Request("https://rubywhisper.test/api/desktop/account", {
       headers: {
         Authorization: `Bearer ${issued.token}`,
@@ -64,7 +64,7 @@ test("desktop session auth accepts bearer tokens and rejects expired tokens", as
   assert.equal(accepted.ok, true);
   assert.equal(accepted.userId, "user_rw_desktop_member_001");
 
-  const expired = module.verifyRubyWhisperDesktopSessionToken(issued.token, {
+  const expired = sessionModule.verifyRubyWhisperDesktopSessionToken(issued.token, {
     nowMs: () => 1_800_000_031_000,
     secret: "desktop_session_secret_placeholder",
   });
@@ -74,11 +74,11 @@ test("desktop session auth accepts bearer tokens and rejects expired tokens", as
 });
 
 test("desktop session auth falls back to Clerk cookie auth when no bearer is present", async () => {
-  const module = await loadDesktopSessionModule({
+  const sessionModule = await loadDesktopSessionModule({
     clerkAuth: async () => ({ ok: true, userId: "user_cookie_member_001" }),
     secret: "desktop_session_secret_placeholder",
   });
-  const result = await module.requireRubyWhisperDesktopUserId(
+  const result = await sessionModule.requireRubyWhisperDesktopUserId(
     new Request("https://rubywhisper.test/api/desktop/account"),
   );
 
