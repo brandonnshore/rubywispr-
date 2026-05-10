@@ -81,9 +81,16 @@ const credentialLikeMetadataValuePatterns = [
 export async function parseDesktopTranscribeRequest(
   request: Request,
 ): Promise<DesktopTranscribeRequestParseResult> {
-  const contentType = normalizeMimeType(request.headers.get("content-type"));
+  const rawContentType = request.headers.get("content-type");
+  const contentType = normalizeMimeType(rawContentType);
+  console.error("desktop_transcribe_entry", {
+    rawContentType,
+    contentType,
+    contentLength: request.headers.get("content-length"),
+  });
 
   if (!contentType) {
+    console.error("desktop_transcribe_invalid_audio missing_content_type");
     return invalidAudioFailure();
   }
 
@@ -95,6 +102,9 @@ export async function parseDesktopTranscribeRequest(
     return parseBinaryDesktopTranscribeRequest(request, contentType);
   }
 
+  console.error("desktop_transcribe_invalid_audio unsupported_top_content_type", {
+    contentType,
+  });
   return invalidAudioFailure();
 }
 
