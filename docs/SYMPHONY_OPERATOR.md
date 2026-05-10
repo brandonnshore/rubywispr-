@@ -51,6 +51,18 @@ Use `QA hunt` when the problem space is unclear. In that mode, do not fix while 
 
 Use `Implementation wave` only after issues are warm, small, and dispatchable. A cold-start implementation run on a broad ticket is expected to waste tokens or drift.
 
+## Autonomous Build Addendum
+
+Use the useful parts of broad autonomous-build doctrine without turning the project into an unbounded rewrite.
+
+- Restate the current dispatch target in three concrete bullets before acting: the task, the user-visible problem it solves, and the evidence that will prove it worked.
+- Keep the dream state visible, but implement it through dependency-safe leaf tickets. "Boil the ocean" is not a queueing strategy; best-in-class means each accepted leaf is complete, validated, secure, and demoable.
+- Use Linear as the append-only status log. Workpads, PR bodies, review comments, and completion comments should include concrete evidence such as commit hashes, validation commands, links, screenshots, or sanitized manual-test notes.
+- Run a self-review after each meaningful chunk. Do not merge on vibes; compare the artifact against the issue acceptance criteria, privacy boundaries, dependency graph, and launch gate it supports.
+- Escalate only when the decision is genuinely Brandon-owned: production credentials, live billing, DNS, Apple signing/notarization, legal/privacy acceptance, scope expansion, or an ambiguity that changes product behavior.
+- Continue parallel non-blocked work when one lane is blocked, but do not exceed `WORKFLOW.md` concurrency or dispatch dependent tickets early to create the illusion of speed.
+- Never claim a parent, wave, or launch gate is done without prompt-to-artifact evidence: Linear state, merged PR or documented blocker, validation output, and any required manual proof.
+
 ## Daily Operating Loop
 
 ### 1. Start
@@ -198,6 +210,8 @@ Use the RubyWhisper Symphony operator pattern to continue driving the RubyWhispe
 First calibrate before dispatch. Read docs/SYMPHONY_OPERATOR.md, WORKFLOW.md, the current Linear board, open PRs, recent workpads, and the smallest relevant product docs. Summarize what RubyWhisper is, which surfaces matter in this run, what bad user outcomes to prevent, what has already been tried or ruled out, and what information is missing. Ask Brandon for clarification only if the missing context changes dispatch safety.
 
 Treat `/goal` as a constraint workflow, not a "do my ticket" button. Pick an explicit mode for each wave: QA hunt, Review/merge, Breakdown, Implementation wave, or Final verification. State the mode and measurable stop condition before taking action.
+
+Apply the autonomous-build addendum in docs/SYMPHONY_OPERATOR.md: restate the current dispatch target in three concrete bullets, keep the dream state visible through dependency-safe leaf tickets, use Linear workpads and PRs as append-only evidence logs, self-review every meaningful chunk, escalate only Brandon-owned decisions, respect WORKFLOW.md concurrency, and never mark a parent or launch gate Done without prompt-to-artifact evidence.
 
 Act as the long-running Symphony orchestrator/operator for the RubyWhisper Paid Beta Launch Linear project. Keep checking project state, select the next safe implementation, audit, breakdown, or verification wave, shape issues before dispatch, dispatch only intentionally prepared Symphony-ready issues, monitor active workers, review workpads and PRs, recover failed or stalled runs, and merge only when the work is validated and safe.
 
