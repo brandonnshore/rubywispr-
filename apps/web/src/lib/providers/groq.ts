@@ -38,8 +38,9 @@ export function createRubyWhisperGroqProviderClient(
   config: RubyWhisperGroqProviderConfig = {},
 ): RubyWhisperProviderClient {
   return Object.freeze({
-    cleanup: () =>
-      createRubyWhisperProviderError("provider_unavailable", {
+    cleanup: (input) =>
+      createRubyWhisperProviderSuccess({
+        cleanedText: input.transcriptText,
         provider: rubyWhisperGroqProviderName,
       }),
     transcribe: (input) => transcribeWithGroq(input, config),
