@@ -90,8 +90,7 @@ export async function parseDesktopTranscribeRequest(
   });
 
   if (!contentType) {
-    console.error("desktop_transcribe_invalid_audio missing_content_type");
-    return invalidAudioFailure();
+    return invalidAudioFailure(undefined, "missing_content_type");
   }
 
   if (contentType === "multipart/form-data") {
@@ -102,10 +101,7 @@ export async function parseDesktopTranscribeRequest(
     return parseBinaryDesktopTranscribeRequest(request, contentType);
   }
 
-  console.error("desktop_transcribe_invalid_audio unsupported_top_content_type", {
-    contentType,
-  });
-  return invalidAudioFailure();
+  return invalidAudioFailure(undefined, `unsupported_top_ct_${contentType}`);
 }
 
 async function parseMultipartDesktopTranscribeRequest(
@@ -116,18 +112,17 @@ async function parseMultipartDesktopTranscribeRequest(
   try {
     formData = await request.formData();
   } catch (error) {
-    console.error("desktop_transcribe_invalid_audio formdata_parse_failed", error);
-    return invalidAudioFailure();
+    const message = error instanceof Error ? error.message.slice(0, 80) : "unknown";
+    return invalidAudioFailure(undefined, `formdata_parse_${message}`);
   }
 
   const audio = formData.get("audio");
 
-  if (!(audio instanceof Blob) || audio.size <= 0) {
-    console.error("desktop_transcribe_invalid_audio missing_audio_blob", {
-      isBlob: audio instanceof Blob,
-      size: audio instanceof Blob ? audio.size : null,
-    });
-    return invalidAudioFailure();
+  if (!(audio instanceof Blob)) {
+    return invalidAudioFailure(undefined, "audio_not_blob");
+  }
+  if (audio.size <= 0) {
+    return invalidAudioFailure(undefined, "audio_empty");
   }
 
   const fields: RawDesktopTranscribeFields = {
@@ -143,13 +138,17 @@ async function parseMultipartDesktopTranscribeRequest(
   };
   const audioMimeType = normalizeMimeTypeEntry(fields.audioMimeType) ?? normalizeMimeType(audio.type);
 
-  if (!audioMimeType || !isSupportedAudioMimeType(audioMimeType)) {
-    console.error("desktop_transcribe_invalid_audio bad_mime_type", {
-      audioMimeType,
-      blobType: audio.type,
-      formMimeField: fields.audioMimeType,
-    });
-    return invalidAudioFailure();
+  if (!audioMimeType) {
+    return invalidAudioFailure(
+      undefined,
+      `mime_missing_blob_${audio.type || "unset"}_form_${String(fields.audioMimeType ?? "unset").slice(0, 40)}`,
+    );
+  }
+  if (!isSupportedAudioMimeType(audioMimeType)) {
+    return invalidAudioFailure(
+      undefined,
+      `mime_unsupported_${audioMimeType.slice(0, 40)}`,
+    );
   }
 
   const result = createDesktopTranscribeRequestInput({
@@ -158,9 +157,10 @@ async function parseMultipartDesktopTranscribeRequest(
     fields,
   });
   if (!result.ok && result.code === "invalid_audio") {
-    console.error("desktop_transcribe_invalid_audio create_input_failed", {
-      audioDurationMs: fields.audioDurationMs,
-    });
+    return invalidAudioFailure(
+      undefined,
+      `create_input_dur_${String(fields.audioDurationMs ?? "null").slice(0, 40)}`,
+    );
   }
   return result;
 }
@@ -258,10 +258,20 @@ function createDesktopTranscribeRequestInput(options: {
   };
 }
 
-function invalidAudioFailure(metadata?: { audioDurationMs?: number }): DesktopTranscribeRequestFailure {
+function invalidAudioFailure(
+  metadata?: { audioDurationMs?: number },
+  reason?: string,
+): DesktopTranscribeRequestFailure {
+  const stack = new Error("invalidAudioFailure").stack ?? "";
+  const callsite = stack.split("\n").slice(1, 4).join(" | ");
+  console.error("INVALID_AUDIO_TRACE", { reason, callsite });
   return {
     code: "invalid_audio",
-    ...(metadata ? { metadata } : {}),
+    ...(metadata
+      ? { metadata: { ...metadata, ...(reason ? { traceReason: reason } : {}) } }
+      : reason
+        ? { metadata: { traceReason: reason } }
+        : {}),
     ok: false,
   };
 }

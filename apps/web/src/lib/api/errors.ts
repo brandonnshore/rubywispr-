@@ -36,6 +36,7 @@ export const rubyWhisperApiErrorMetadataKeys = [
   "provider",
   "providerLatencyMs",
   "totalLatencyMs",
+  "traceReason",
 ] as const;
 
 export type RubyWhisperApiErrorMetadataKey =
