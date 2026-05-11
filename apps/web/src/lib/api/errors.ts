@@ -246,6 +246,11 @@ export function rubyWhisperApiErrorResponse(
   options: RubyWhisperApiErrorOptions = {},
 ): Response {
   const descriptor = rubyWhisperApiErrorDescriptors[code];
+  console.error("API_ERROR_TRACE", {
+    code,
+    httpStatus: descriptor.httpStatus,
+    stack: new Error().stack?.split("\n").slice(1, 6).join(" | "),
+  });
   const payload = createRubyWhisperApiErrorPayload(code, options);
   const headers = new Headers({
     "Cache-Control": "no-store",
