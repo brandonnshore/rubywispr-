@@ -23,10 +23,14 @@ enum OverlayPhase {
 // MARK: - Panel Helpers
 
 private enum RecordingOverlayGeometry {
-    static let compactWidth: CGFloat = 180
-    static let recoveryWidth: CGFloat = 228
-    static let baseHeight: CGFloat = 38
+    /// Active expanded pill — matches Wispr Flow's 200×40 dimensions.
+    static let compactWidth: CGFloat = 200
+    /// Recovery layout still needs more room for affordance copy + actions.
+    static let recoveryWidth: CGFloat = 280
+    static let baseHeight: CGFloat = 40
     static let screenMargin: CGFloat = 8
+    /// Distance above the Dock chrome (or screen edge when Dock auto-hides).
+    static let dockOffset: CGFloat = 12
 }
 
 private func makeOverlayPanel(width: CGFloat, height: CGFloat) -> NSPanel {
@@ -48,16 +52,31 @@ private func makeOverlayPanel(width: CGFloat, height: CGFloat) -> NSPanel {
     return panel
 }
 
-private func makeNotchContent<V: View>(
+private func makePillContent<V: View>(
     width: CGFloat,
     height: CGFloat,
-    cornerRadius: CGFloat,
     rootView: V
 ) -> NSView {
+    let cornerRadius = height / 2
+    let pillShape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
     let shaped = rootView
         .frame(width: width, height: height)
-        .background(Color.black)
-        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: cornerRadius, bottomTrailingRadius: cornerRadius))
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Theme.Color.islandActiveFillTop,
+                    Theme.Color.islandActiveFill,
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .overlay(
+            pillShape
+                .strokeBorder(Theme.Color.islandStrokeInner, lineWidth: 0.5)
+        )
+        .clipShape(pillShape)
+        .shadow(color: Theme.Color.islandShadow, radius: 12, x: 0, y: 4)
 
     let hosting = NSHostingView(rootView: shaped)
     hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
@@ -70,31 +89,23 @@ private func makeNotchContent<V: View>(
 final class RecordingOverlayManager {
     private var overlayWindow: NSPanel?
     private let overlayState = RecordingOverlayState()
-    private var overlayTopCenterAnchor: NSPoint?
+    private var overlayBottomCenterAnchor: NSPoint?
 
     var onStopButtonPressed: (() -> Void)?
     var onUpdateOverlayPressed: (() -> Void)?
     var onRecoveryActionPressed: ((RecordingIslandAction) -> Void)?
 
-    private var screenHasNotch: Bool {
-        guard let screen = NSScreen.main else { return false }
-        return screen.safeAreaInsets.top > 0
-    }
-
-    private var notchWidth: CGFloat {
-        guard let screen = NSScreen.main, screenHasNotch else { return 0 }
-        guard let leftArea = screen.auxiliaryTopLeftArea,
-              let rightArea = screen.auxiliaryTopRightArea else { return 0 }
-        return screen.frame.width - leftArea.width - rightArea.width
-    }
-
-    private var notchOverlap: CGFloat {
-        guard let screen = NSScreen.main else { return 0 }
-        return screen.frame.maxY - screen.visibleFrame.maxY
-    }
-
     private var shouldReduceMotion: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    /// Anchor display for the recording island — prefers the screen containing the
+    /// currently-active key window so the pill follows the user across monitors.
+    private var anchorScreen: NSScreen? {
+        if let keyWindow = NSApp.keyWindow, let screen = keyWindow.screen {
+            return screen
+        }
+        return NSScreen.main
     }
 
     func showInitializing(mode: RecordingTriggerMode = .hold, isCommandMode: Bool = false) {
@@ -311,7 +322,7 @@ final class RecordingOverlayManager {
     }
 
     private func showOverlayPanel(animatedResize: Bool) {
-        overlayTopCenterAnchor = nil
+        overlayBottomCenterAnchor = nil
         let frame = overlayFrame
 
         if let panel = overlayWindow {
@@ -328,9 +339,15 @@ final class RecordingOverlayManager {
         panel.ignoresMouseEvents = false
         panel.contentView = makeOverlayContent(frame: frame)
 
-        guard let screen = NSScreen.main else { return }
+        guard let screen = anchorScreen else { return }
 
-        let hiddenFrame = NSRect(x: frame.origin.x, y: screen.frame.maxY, width: frame.width, height: frame.height)
+        // Slide up from just below the screen edge so the pill appears to rise from the Dock.
+        let hiddenFrame = NSRect(
+            x: frame.origin.x,
+            y: screen.frame.minY - frame.height,
+            width: frame.width,
+            height: frame.height
+        )
         panel.setFrame(hiddenFrame, display: true)
         panel.alphaValue = 1
         panel.orderFrontRegardless()
@@ -352,7 +369,7 @@ final class RecordingOverlayManager {
 
     private func updateOverlayLayout(animated: Bool) {
         guard let panel = overlayWindow else { return }
-        overlayTopCenterAnchor = nil
+        overlayBottomCenterAnchor = nil
         let frame = overlayFrame
         panel.ignoresMouseEvents = false
         panel.contentView = makeOverlayContent(frame: frame)
@@ -360,10 +377,9 @@ final class RecordingOverlayManager {
     }
 
     private func makeOverlayContent(frame: NSRect) -> NSView {
-        makeNotchContent(
+        makePillContent(
             width: frame.width,
             height: frame.height,
-            cornerRadius: screenHasNotch ? 18 : 12,
             rootView: RecordingOverlayView(
                 state: overlayState,
                 onStopButtonPressed: { [weak self] in
@@ -376,7 +392,6 @@ final class RecordingOverlayManager {
                     self?.onRecoveryActionPressed?(action)
                 }
             )
-            .padding(.top, screenHasNotch ? notchOverlap : 0)
         )
     }
 
@@ -394,13 +409,13 @@ final class RecordingOverlayManager {
     }
 
     private var overlayFrame: NSRect {
-        guard let screen = NSScreen.main else { return .zero }
+        guard let screen = anchorScreen else { return .zero }
         let width = overlayWidth
-        let overlap = screenHasNotch ? notchOverlap : 0
-        let height: CGFloat = RecordingOverlayGeometry.baseHeight + overlap
-        let anchor = overlayTopCenterAnchor ?? defaultTopCenterAnchor(on: screen)
+        let height = RecordingOverlayGeometry.baseHeight
+        let anchor = overlayBottomCenterAnchor ?? defaultBottomCenterAnchor(on: screen)
         let proposedX = anchor.x - width / 2
-        let proposedY = anchor.y - height
+        // Anchor at the bottom of the panel: panel.minY = anchor.y so the pill sits above the Dock.
+        let proposedY = anchor.y
         let x = clamp(
             proposedX,
             minimum: screen.visibleFrame.minX + RecordingOverlayGeometry.screenMargin,
@@ -408,18 +423,16 @@ final class RecordingOverlayManager {
         )
         let y = clamp(
             proposedY,
-            minimum: screen.visibleFrame.minY + RecordingOverlayGeometry.screenMargin,
-            maximum: screen.frame.maxY - height
+            minimum: screen.visibleFrame.minY + RecordingOverlayGeometry.dockOffset,
+            maximum: screen.visibleFrame.maxY - height - RecordingOverlayGeometry.screenMargin
         )
         return NSRect(x: x, y: y, width: width, height: height)
     }
 
     private var overlayWidth: CGFloat {
-        let baseWidth = overlayState.phase == .updateAvailable || overlayState.islandPresentation.usesRecoveryLayout
+        overlayState.phase == .updateAvailable || overlayState.islandPresentation.usesRecoveryLayout
             ? RecordingOverlayGeometry.recoveryWidth
             : RecordingOverlayGeometry.compactWidth
-        guard screenHasNotch else { return baseWidth }
-        return max(notchWidth, baseWidth)
     }
 
     private func showIslandPresentation(
@@ -454,7 +467,7 @@ final class RecordingOverlayManager {
     }
 
     private func dismissAll() {
-        overlayTopCenterAnchor = nil
+        overlayBottomCenterAnchor = nil
         overlayState.isCommandMode = false
         overlayState.updateVersion = ""
         overlayState.islandPresentation = RecordingIslandStateMachine.hiddenIdle()
@@ -466,11 +479,16 @@ final class RecordingOverlayManager {
 
     private func preserveCurrentAnchor() {
         guard let panel = overlayWindow else { return }
-        overlayTopCenterAnchor = NSPoint(x: panel.frame.midX, y: panel.frame.maxY)
+        // Track the panel's bottom edge so the pill stays anchored above the Dock
+        // when it resizes between compact and recovery widths.
+        overlayBottomCenterAnchor = NSPoint(x: panel.frame.midX, y: panel.frame.minY)
     }
 
-    private func defaultTopCenterAnchor(on screen: NSScreen) -> NSPoint {
-        NSPoint(x: screen.frame.midX, y: screen.frame.maxY)
+    private func defaultBottomCenterAnchor(on screen: NSScreen) -> NSPoint {
+        NSPoint(
+            x: screen.visibleFrame.midX,
+            y: screen.visibleFrame.minY + RecordingOverlayGeometry.dockOffset
+        )
     }
 
     private func clamp(_ value: CGFloat, minimum: CGFloat, maximum: CGFloat) -> CGFloat {

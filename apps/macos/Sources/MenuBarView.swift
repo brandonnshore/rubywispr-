@@ -70,12 +70,18 @@ struct MenuBarView: View {
                     Label("Screen Recording Permission Needed", systemImage: "camera.viewfinder")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.Color.accent)
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
-                .background(Color.orange)
+                .background(Theme.Color.accentSoft)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundStyle(Theme.Color.accent.opacity(0.2)),
+                    alignment: .bottom
+                )
 
                 Divider()
             }
@@ -88,12 +94,18 @@ struct MenuBarView: View {
                     Label("Accessibility Required", systemImage: "exclamationmark.triangle.fill")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.Color.accent)
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
-                .background(Color.red)
+                .background(Theme.Color.accentSoft)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundStyle(Theme.Color.accent.opacity(0.2)),
+                    alignment: .bottom
+                )
 
                 Divider()
             }
