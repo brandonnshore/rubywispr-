@@ -680,16 +680,27 @@ final class AudioRecorder: NSObject, ObservableObject, AVCaptureAudioDataOutputS
         sessionQueue.async {
             self.cancelWatchdog()
             self.teardownSessionLocked()
+            let capturedFrameCount = self.recordedFrameCount
+            let sampleRate = self.recordingTargetFormat.sampleRate
             let outputURL = self.finishAudioFileLocked(discard: false)
             self._recording.withLock { $0 = false }
             self.liveLevelNormalizerLock.withLock { $0.reset() }
             let artifact = outputURL.map { url -> TransientRecordingArtifact in
                 let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
                 let byteCount = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+                // Frame-derived duration is the source of truth: it reflects what was actually written to the WAV file,
+                // avoiding the wall-clock race where elapsed ms can drift from real audio content on short presses
+                // or when buffer writes are delayed past `_recording = false` (see agent diagnostic 0.A).
+                let durationMs: Int
+                if capturedFrameCount > 0 && sampleRate > 0 {
+                    durationMs = Int((Double(capturedFrameCount) / sampleRate * 1000.0).rounded())
+                } else {
+                    durationMs = max(0, Int(elapsed.rounded()))
+                }
                 return TransientRecordingArtifact(
                     fileURL: url,
                     metadata: RecordingArtifactMetadata(
-                        durationMs: max(0, Int(elapsed.rounded())),
+                        durationMs: durationMs,
                         format: RecordingArtifactMetadata.wavPCM16Mono16k,
                         byteCount: byteCount
                     )

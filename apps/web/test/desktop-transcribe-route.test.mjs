@@ -950,7 +950,7 @@ test("desktop transcribe route stays server-only and provider-safe", async () =>
   assert.match(source, /export const runtime = ["']nodejs["'];/);
   assert.match(source, /export const dynamic = ["']force-dynamic["'];/);
   assert.match(source, /createDesktopTranscribeRouteHandler/);
-  assert.match(source, /requireClerkUserId/);
+  assert.match(source, /requireDesktopUserId/);
   assert.match(source, /runRubyWhisperConservativeCleanup/);
   assert.match(source, /parseDesktopTranscribeRequest/);
   assert.match(source, /evaluateRubyWhisperQuotaEntitlement/);
@@ -1040,6 +1040,14 @@ function createRouteModuleRequire() {
             throw new Error("Live Supabase clients are outside this route test.");
           },
         };
+      case "next/server":
+        return {
+          after: () => {
+            throw new Error(
+              "next/server.after must not be called from tests; inject a synthetic after via createRouteDependencies.",
+            );
+          },
+        };
       case "@/lib/account/profile-metadata":
         return {
           readRubyWhisperAccountProfileMetadata: async () => {
@@ -1066,6 +1074,12 @@ function createRouteModuleRequire() {
         };
       case "@/lib/cleanup/conservative-cleanup":
         return loadConservativeCleanupModuleSync();
+      case "@/lib/desktop/auth":
+        return {
+          requireDesktopUserId: () => {
+            throw new Error("Default desktop auth dependency is outside this route test.");
+          },
+        };
       case "@/lib/desktop-transcribe/request":
         return {
           parseDesktopTranscribeRequest: async () => {
@@ -1126,6 +1140,9 @@ function createRouteModuleRequire() {
 function createRouteDependencies(overrides = {}) {
   const calls = [];
   const dependencies = {
+    after(callback) {
+      void Promise.resolve(callback()).catch(() => {});
+    },
     createRequestId() {
       calls.push({ operation: "createRequestId" });
 
@@ -1216,12 +1233,12 @@ function createRouteDependencies(overrides = {}) {
         usageCounter: increment.usageCounter,
       };
     },
-    async requireAuth() {
+    requireAuth() {
       calls.push({ operation: "requireAuth" });
 
       return {
         ok: true,
-        userId: "user_rw_synthetic_member_001",
+        clerkUserId: "user_rw_synthetic_member_001",
       };
     },
   };
@@ -1470,6 +1487,9 @@ function preparedUsageIncrement(input) {
 
 function directContinuationDependencies() {
   return {
+    after(callback) {
+      void Promise.resolve(callback()).catch(() => {});
+    },
     createRequestId: () => "req_rw_synthetic_route_001",
     now: () => syntheticNow,
     nowMs: createClock([1_000, 1_128, 1_164]),

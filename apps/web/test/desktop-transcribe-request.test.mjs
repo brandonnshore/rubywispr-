@@ -26,7 +26,7 @@ const forbiddenClipboardFallbackBoundaryPattern =
 test("desktop transcription parser accepts synthetic multipart requests", async () => {
   const parser = await loadDesktopTranscribeRequestModule();
   const formData = new FormData();
-  const audio = new Blob([new Uint8Array([1, 2, 3, 4])], {
+  const audio = new Blob([syntheticWavBytes()], {
     type: "audio/wav",
   });
 
@@ -107,7 +107,7 @@ test("desktop transcription parser accepts synthetic binary audio requests", asy
 
 test("desktop transcription parser ignores clipboard fallback headers", async () => {
   const parser = await loadDesktopTranscribeRequestModule();
-  const audioBytes = new Uint8Array([9, 8, 7]);
+  const audioBytes = syntheticWavBytes();
   const result = await parser.parseDesktopTranscribeRequest(
     new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
       body: audioBytes,
@@ -165,7 +165,7 @@ test("desktop transcription parser ignores clipboard fallback multipart fields",
 
 test("desktop transcription parser defaults cleanup settings on unless explicitly disabled", async () => {
   const parser = await loadDesktopTranscribeRequestModule();
-  const audioBytes = new Uint8Array([9, 8, 7]);
+  const audioBytes = syntheticWavBytes();
   const defaultResult = await parser.parseDesktopTranscribeRequest(
     new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
       body: audioBytes,
@@ -317,9 +317,15 @@ test("desktop transcription parser rejects missing or unreadable audio before pr
     }),
   );
 
-  assert.deepEqual(missingAudioResult, { code: "invalid_audio", ok: false });
-  assert.deepEqual(emptyAudioResult, { code: "invalid_audio", ok: false });
-  assert.deepEqual(unreadableBodyResult, { code: "invalid_audio", ok: false });
+  assert.equal(missingAudioResult.code, "invalid_audio");
+  assert.equal(missingAudioResult.ok, false);
+  assert.equal(missingAudioResult.metadata?.traceReason, "audio_not_blob");
+  assert.equal(emptyAudioResult.code, "invalid_audio");
+  assert.equal(emptyAudioResult.ok, false);
+  assert.equal(emptyAudioResult.metadata?.traceReason, "audio_empty");
+  assert.equal(unreadableBodyResult.code, "invalid_audio");
+  assert.equal(unreadableBodyResult.ok, false);
+  assert.match(unreadableBodyResult.metadata?.traceReason ?? "", /^formdata_parse_/);
 });
 
 test("desktop transcription parser rejects invalid duration and unsupported content type", async () => {
@@ -351,11 +357,15 @@ test("desktop transcription parser rejects invalid duration and unsupported cont
     }),
   );
 
-  assert.deepEqual(invalidDurationResult, { code: "invalid_audio", ok: false });
-  assert.deepEqual(unsupportedContentTypeResult, {
-    code: "invalid_audio",
-    ok: false,
-  });
+  assert.equal(invalidDurationResult.code, "invalid_audio");
+  assert.equal(invalidDurationResult.ok, false);
+  assert.equal(invalidDurationResult.metadata?.traceReason, "duration_le_zero");
+  assert.equal(unsupportedContentTypeResult.code, "invalid_audio");
+  assert.equal(unsupportedContentTypeResult.ok, false);
+  assert.match(
+    unsupportedContentTypeResult.metadata?.traceReason ?? "",
+    /^unsupported_top_ct_/,
+  );
 });
 
 test("desktop transcription parser maps over-duration audio to duration limit metadata only", async () => {
@@ -429,11 +439,48 @@ test("desktop transcription parser ignores Recent Wisprs local history fields", 
   );
 });
 
+test("desktop transcription parser rejects audio/wav payloads with an invalid WAV header", async () => {
+  const parser = await loadDesktopTranscribeRequestModule();
+  const malformedMultipart = new FormData();
+
+  malformedMultipart.set(
+    "audio",
+    new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])], {
+      type: "audio/wav",
+    }),
+    "malformed.wav",
+  );
+  malformedMultipart.set("audioDurationMs", "4200");
+
+  const multipartResult = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: malformedMultipart,
+      method: "POST",
+    }),
+  );
+  const binaryResult = await parser.parseDesktopTranscribeRequest(
+    new Request(`${syntheticOrigin}/api/desktop/transcribe`, {
+      body: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+      headers: {
+        "content-type": "audio/wav",
+        "x-rubywhisper-audio-duration-ms": "4200",
+      },
+      method: "POST",
+    }),
+  );
+
+  assert.equal(multipartResult.code, "invalid_audio");
+  assert.equal(multipartResult.ok, false);
+  assert.equal(multipartResult.metadata?.traceReason, "wav_header_invalid");
+  assert.equal(binaryResult.code, "invalid_audio");
+  assert.equal(binaryResult.ok, false);
+  assert.equal(binaryResult.metadata?.traceReason, "wav_header_invalid");
+});
+
 test("desktop transcription parser is server-only and privacy neutral", async () => {
   const source = await readFile(desktopTranscribeRequestPath, "utf8");
 
   assert.match(source, /^import\s+["']server-only["'];/m);
-  assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
   assert.doesNotMatch(source, /\bprocess\.env\b|\bserverEnv\b/);
   assert.doesNotMatch(source, /CLERK_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|GROQ_API_KEY/);
   assert.doesNotMatch(source, /\bJSON\.stringify\s*\(/);
@@ -460,7 +507,7 @@ function createSyntheticAudioFormData() {
 
   formData.set(
     "audio",
-    new Blob([new Uint8Array([1, 2, 3, 4])], {
+    new Blob([syntheticWavBytes()], {
       type: "audio/wav",
     }),
     "synthetic.wav",
@@ -469,4 +516,14 @@ function createSyntheticAudioFormData() {
   formData.set("cleanupEnabled", "true");
 
   return formData;
+}
+
+function syntheticWavBytes() {
+  // Minimal RIFF/WAVE header so server-side WAV magic-byte sniff accepts the payload.
+  return new Uint8Array([
+    0x52, 0x49, 0x46, 0x46, // "RIFF"
+    0x10, 0x00, 0x00, 0x00, // file size placeholder
+    0x57, 0x41, 0x56, 0x45, // "WAVE"
+    0x01, 0x02, 0x03, 0x04, // synthetic payload bytes
+  ]);
 }

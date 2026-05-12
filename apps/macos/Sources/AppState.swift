@@ -1055,6 +1055,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         let uploadGeneration = authStateOwner.authenticatedRequestGeneration
         let audio = try Data(contentsOf: artifact.fileURL)
+        guard Self.validateWavHeader(audio) else {
+            throw Self.invalidWavFailure()
+        }
         try Task.checkCancellation()
         guard authStateOwner.authenticatedRequestGeneration == uploadGeneration else {
             throw CancellationError()
@@ -1112,17 +1115,31 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private static func audioMimeType(for metadata: RecordingArtifactMetadata) -> String {
-        let format = metadata.format.lowercased()
-        if format.contains("wav") {
-            return "audio/wav"
-        }
-        if format.contains("mpeg") || format.contains("mp3") {
-            return "audio/mpeg"
-        }
-        if format.contains("mp4") || format.contains("m4a") {
-            return "audio/mp4"
-        }
-        return "application/octet-stream"
+        // The recorder always produces 16 kHz mono PCM16 WAV (see AudioRecorder.recordingTargetFormat).
+        // If the format ever diverges, the server's WAV magic-byte sniff will reject the upload with
+        // an explicit wav_header_invalid trace reason rather than silently sending an octet-stream blob.
+        return "audio/wav"
+    }
+
+    private static func validateWavHeader(_ audio: Data) -> Bool {
+        guard audio.count >= 12 else { return false }
+        // "RIFF" magic at bytes 0-3 + "WAVE" identifier at bytes 8-11.
+        return audio[0] == 0x52 && audio[1] == 0x49 && audio[2] == 0x46 && audio[3] == 0x46
+            && audio[8] == 0x57 && audio[9] == 0x41 && audio[10] == 0x56 && audio[11] == 0x45
+    }
+
+    private static func invalidWavFailure() -> RubyWhisperDesktopTranscriptionFailure {
+        return RubyWhisperDesktopTranscriptionFailure(
+            error: RubyWhisperBackendError(
+                code: .invalidAudio,
+                message: "The recording was incomplete. Try again.",
+                recovery: .retry,
+                desktopState: .error,
+                retryable: true,
+                metadata: RubyWhisperBackendErrorMetadata.empty
+            ),
+            sameAudioRetryAllowed: false
+        )
     }
 
     private static func statusText(for failure: RubyWhisperDesktopTranscriptionFailure) -> String {

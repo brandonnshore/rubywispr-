@@ -226,6 +226,98 @@ test("Groq transcription client normalizes network and cleanup shell failures", 
   });
 });
 
+test("Groq transcription client retries once on transient 5xx and succeeds", async () => {
+  const groqProvider = await loadGroqProviderModule();
+  const fetchCalls = [];
+  const responses = [
+    jsonResponse({ error: "upstream blip" }, 503),
+    jsonResponse({ text: "recovered transcript" }, 200),
+  ];
+  const sleepCalls = [];
+  const client = groqProvider.createRubyWhisperGroqProviderClient({
+    apiKey: "rw_synthetic_groq_key",
+    endpoint: syntheticEndpoint,
+    fetch: async (url, init) => {
+      fetchCalls.push({ init, url });
+      return responses.shift();
+    },
+    nowMs: createClock([100, 250, 400, 550]),
+    sleepMs: async (ms) => {
+      sleepCalls.push(ms);
+    },
+  });
+
+  const result = await client.transcribe({
+    audio: new Uint8Array([1, 2, 3]),
+    audioDurationMs: 4200,
+    audioMimeType: "audio/wav",
+  });
+
+  assert.equal(fetchCalls.length, 2);
+  assert.equal(sleepCalls.length, 1);
+  assert.ok(sleepCalls[0] > 0);
+  assert.equal(result.ok, true);
+  assert.equal(result.result.text, "recovered transcript");
+});
+
+test("Groq transcription client retries once on transient 5xx and surfaces failure when retry also fails", async () => {
+  const groqProvider = await loadGroqProviderModule();
+  let fetchCalls = 0;
+  const sleepCalls = [];
+  const client = groqProvider.createRubyWhisperGroqProviderClient({
+    apiKey: "rw_synthetic_groq_key",
+    endpoint: syntheticEndpoint,
+    fetch: async () => {
+      fetchCalls += 1;
+      return jsonResponse({ error: "still down" }, 503);
+    },
+    nowMs: createClock([100, 250, 400, 550]),
+    sleepMs: async (ms) => {
+      sleepCalls.push(ms);
+    },
+  });
+
+  const result = await client.transcribe({
+    audio: new Uint8Array([1]),
+    audioDurationMs: 1000,
+    audioMimeType: "audio/wav",
+  });
+
+  assert.equal(fetchCalls, 2);
+  assert.equal(sleepCalls.length, 1);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "provider_unavailable");
+});
+
+test("Groq transcription client does not retry on 4xx client errors", async () => {
+  const groqProvider = await loadGroqProviderModule();
+  let fetchCalls = 0;
+  const sleepCalls = [];
+  const client = groqProvider.createRubyWhisperGroqProviderClient({
+    apiKey: "rw_synthetic_groq_key",
+    endpoint: syntheticEndpoint,
+    fetch: async () => {
+      fetchCalls += 1;
+      return jsonResponse({ error: "bad request" }, 400);
+    },
+    nowMs: createClock([100, 250]),
+    sleepMs: async (ms) => {
+      sleepCalls.push(ms);
+    },
+  });
+
+  const result = await client.transcribe({
+    audio: new Uint8Array([1]),
+    audioDurationMs: 1000,
+    audioMimeType: "audio/wav",
+  });
+
+  assert.equal(fetchCalls, 1);
+  assert.equal(sleepCalls.length, 0);
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "invalid_request");
+});
+
 test("Groq provider shell remains server-only and avoids private serialization", async () => {
   const source = await readFile(groqProviderPath, "utf8");
 

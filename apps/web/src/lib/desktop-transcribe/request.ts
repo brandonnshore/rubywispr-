@@ -151,18 +151,11 @@ async function parseMultipartDesktopTranscribeRequest(
     );
   }
 
-  const result = createDesktopTranscribeRequestInput({
+  return createDesktopTranscribeRequestInput({
     audio,
     audioMimeType,
     fields,
   });
-  if (!result.ok && result.code === "invalid_audio") {
-    return invalidAudioFailure(
-      undefined,
-      `create_input_dur_${String(fields.audioDurationMs ?? "null").slice(0, 40)}`,
-    );
-  }
-  return result;
 }
 
 async function parseBinaryDesktopTranscribeRequest(
@@ -196,15 +189,15 @@ async function parseBinaryDesktopTranscribeRequest(
   });
 }
 
-function createDesktopTranscribeRequestInput(options: {
+async function createDesktopTranscribeRequestInput(options: {
   audio: Blob | ArrayBuffer;
   audioMimeType: string;
   fields: RawDesktopTranscribeFields;
-}): DesktopTranscribeRequestParseResult {
+}): Promise<DesktopTranscribeRequestParseResult> {
   const audioDurationMs = normalizeDurationMs(options.fields.audioDurationMs);
 
   if (audioDurationMs === undefined) {
-    return invalidAudioFailure();
+    return invalidAudioFailure(undefined, "duration_le_zero");
   }
 
   if (audioDurationMs > desktopTranscribeDurationLimitMs) {
@@ -216,6 +209,13 @@ function createDesktopTranscribeRequestInput(options: {
       },
       ok: false,
     };
+  }
+
+  if (isWavMimeType(options.audioMimeType)) {
+    const hasValidWavHeader = await sniffWavHeader(options.audio);
+    if (!hasValidWavHeader) {
+      return invalidAudioFailure(undefined, "wav_header_invalid");
+    }
   }
 
   const cleanupEnabled = normalizeBooleanEntry(
@@ -339,6 +339,35 @@ function normalizeMimeType(value: string | null | undefined) {
 
 function isSupportedAudioMimeType(mimeType: string) {
   return mimeType.startsWith("audio/") || supportedBinaryContentTypes.has(mimeType);
+}
+
+function isWavMimeType(mimeType: string) {
+  return mimeType === "audio/wav" || mimeType === "audio/x-wav";
+}
+
+async function sniffWavHeader(audio: Blob | ArrayBuffer): Promise<boolean> {
+  const byteLength = audio instanceof Blob ? audio.size : audio.byteLength;
+  if (byteLength < 12) {
+    return false;
+  }
+
+  const headerBuffer =
+    audio instanceof Blob
+      ? await audio.slice(0, 12).arrayBuffer()
+      : audio.slice(0, 12);
+  const bytes = new Uint8Array(headerBuffer);
+
+  // "RIFF" magic + "WAVE" format identifier at bytes 8-11.
+  return (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x41 &&
+    bytes[10] === 0x56 &&
+    bytes[11] === 0x45
+  );
 }
 
 function normalizeSafeMetadataString(value: FormDataEntryValue | null | undefined) {

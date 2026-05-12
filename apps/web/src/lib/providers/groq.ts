@@ -28,6 +28,7 @@ export type RubyWhisperGroqProviderConfig = Readonly<{
   endpoint?: string;
   fetch?: RubyWhisperGroqFetch;
   nowMs?: () => number;
+  sleepMs?: (ms: number) => Promise<void>;
 }>;
 
 type GroqTranscriptionResponse = Readonly<{
@@ -46,6 +47,10 @@ export function createRubyWhisperGroqProviderClient(
     transcribe: (input) => transcribeWithGroq(input, config),
   });
 }
+
+const GROQ_MAX_ATTEMPTS = 2;
+const GROQ_ATTEMPT_TIMEOUT_MS = 12_000;
+const GROQ_RETRY_BACKOFF_MS = 1_500;
 
 async function transcribeWithGroq(
   input: RubyWhisperProviderTranscriptionInput,
@@ -66,76 +71,130 @@ async function transcribeWithGroq(
   const fetchImplementation = config.fetch ?? fetch;
   const endpoint = config.endpoint ?? rubyWhisperGroqTranscriptionEndpoint;
   const nowMs = config.nowMs ?? Date.now;
+  const sleep = config.sleepMs ?? sleepMs;
   const startedAtMs = nowMs();
+  const formData = createGroqTranscriptionFormData(input);
 
-  try {
-    const response = await fetchImplementation(endpoint, {
-      body: createGroqTranscriptionFormData(input),
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      method: "POST",
-    });
-    const latencyMs = elapsedMs(nowMs, startedAtMs);
+  for (let attempt = 1; attempt <= GROQ_MAX_ATTEMPTS; attempt++) {
+    const abortController = new AbortController();
+    const timeoutHandle = setTimeout(
+      () => abortController.abort(),
+      GROQ_ATTEMPT_TIMEOUT_MS,
+    );
 
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => "(unreadable)");
-      console.error("groq_transcription_failed", {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorBody.slice(0, 500),
-        audioMimeType: input.audioMimeType,
-        audioDurationMs: input.audioDurationMs,
-        model: input.model,
+    try {
+      const response = await fetchImplementation(endpoint, {
+        body: formData,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        method: "POST",
+        signal: abortController.signal,
       });
-      return createGroqTranscriptionFailure(
-        providerErrorCodeForGroqStatus(response.status),
-        input,
-        {
-          providerLatencyMs: latencyMs,
-          retryAfterSeconds: retryAfterSecondsFromHeaders(response.headers),
-          totalLatencyMs: latencyMs,
-        },
-      );
-    }
+      const latencyMs = elapsedMs(nowMs, startedAtMs);
 
-    const payload = (await response.json()) as GroqTranscriptionResponse;
-    const text = normalizeGroqTranscriptionText(payload.text);
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => "(unreadable)");
+        console.error("groq_transcription_failed", {
+          attempt,
+          status: response.status,
+          statusText: response.statusText,
+          body: errorBody.slice(0, 500),
+          audioMimeType: input.audioMimeType,
+          audioDurationMs: input.audioDurationMs,
+          model: input.model,
+        });
+        const failure = createGroqTranscriptionFailure(
+          providerErrorCodeForGroqStatus(response.status),
+          input,
+          {
+            providerLatencyMs: latencyMs,
+            retryAfterSeconds: retryAfterSecondsFromHeaders(response.headers),
+            totalLatencyMs: latencyMs,
+          },
+        );
 
-    if (!text) {
-      return createGroqTranscriptionFailure(
-        "provider_invalid_response",
-        input,
-        {
-          providerLatencyMs: latencyMs,
-          totalLatencyMs: latencyMs,
-        },
-      );
-    }
+        if (
+          attempt < GROQ_MAX_ATTEMPTS &&
+          isRetryableGroqStatus(response.status)
+        ) {
+          console.error("groq_retry_scheduled", {
+            attempt,
+            reason: `status_${response.status}`,
+          });
+          await sleep(GROQ_RETRY_BACKOFF_MS);
+          continue;
+        }
 
-    const result: RubyWhisperProviderTranscriptionResult = {
-      ...(input.audioDurationMs ? { audioDurationMs: input.audioDurationMs } : {}),
-      provider: rubyWhisperGroqProviderName,
-      providerLatencyMs: latencyMs,
-      text,
-    };
+        return failure;
+      }
 
-    return createRubyWhisperProviderSuccess(result);
-  } catch (error) {
-    const latencyMs = elapsedMs(nowMs, startedAtMs);
+      const payload = (await response.json()) as GroqTranscriptionResponse;
+      const text = normalizeGroqTranscriptionText(payload.text);
 
-    return createGroqTranscriptionFailure(
-      error instanceof DOMException && error.name === "AbortError"
-        ? "provider_timeout"
-        : "network_error",
-      input,
-      {
+      if (!text) {
+        return createGroqTranscriptionFailure(
+          "provider_invalid_response",
+          input,
+          {
+            providerLatencyMs: latencyMs,
+            totalLatencyMs: latencyMs,
+          },
+        );
+      }
+
+      if (attempt > 1) {
+        console.error("groq_retry_succeeded", { attempt });
+      }
+
+      const result: RubyWhisperProviderTranscriptionResult = {
+        ...(input.audioDurationMs ? { audioDurationMs: input.audioDurationMs } : {}),
+        provider: rubyWhisperGroqProviderName,
+        providerLatencyMs: latencyMs,
+        text,
+      };
+
+      return createRubyWhisperProviderSuccess(result);
+    } catch (error) {
+      const latencyMs = elapsedMs(nowMs, startedAtMs);
+      const isAbort = error instanceof DOMException && error.name === "AbortError";
+      const errorCode = isAbort ? "provider_timeout" : "network_error";
+      console.error("groq_transcription_threw", {
+        attempt,
+        name: error instanceof Error ? error.name : "unknown",
+        message:
+          error instanceof Error ? error.message.slice(0, 200) : "unknown",
+        isAbort,
+      });
+      const failure = createGroqTranscriptionFailure(errorCode, input, {
         providerLatencyMs: latencyMs,
         totalLatencyMs: latencyMs,
-      },
-    );
+      });
+
+      if (attempt < GROQ_MAX_ATTEMPTS) {
+        console.error("groq_retry_scheduled", { attempt, reason: errorCode });
+        await sleepMs(GROQ_RETRY_BACKOFF_MS);
+        continue;
+      }
+
+      return failure;
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
   }
+
+  throw new Error("transcribeWithGroq: exhausted retries without returning");
+}
+
+function isRetryableGroqStatus(status: number): boolean {
+  if (status === 408) return true;
+  if (status >= 500 && status < 600) return true;
+  return false;
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const audioExtensionForMimeType: Record<string, string> = {

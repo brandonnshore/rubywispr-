@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { after as nextServerAfter } from "next/server";
 
 import {
   readRubyWhisperAccountProfileMetadata,
@@ -73,6 +74,8 @@ import {
 } from "@/lib/usage/supabase-usage-counters";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+export const preferredRegion = ["iad1"];
 export const runtime = "nodejs";
 
 export type DesktopTranscribePreflightContinuationInput = Readonly<{
@@ -106,6 +109,7 @@ export type DesktopTranscribeRateLimitResult =
   | RubyWhisperAtomicTranscriptionRateLimitResult;
 
 export type DesktopTranscribeRouteDependencies = Readonly<{
+  after: (callback: () => Promise<unknown> | unknown) => void;
   evaluateEntitlement: (
     input: RubyWhisperQuotaEntitlementInput,
   ) => RubyWhisperQuotaEntitlementResult;
@@ -252,6 +256,7 @@ export async function executeDesktopTranscribeProviderContinuation(
   providerClient: RubyWhisperProviderClient,
   dependencies: Pick<
     DesktopTranscribeRouteDependencies,
+    | "after"
     | "createRequestId"
     | "now"
     | "nowMs"
@@ -273,19 +278,18 @@ export async function executeDesktopTranscribeProviderContinuation(
   );
 
   if (!transcriptionResult.ok) {
-    await dependencies.writeRequestMetadata({
-      ...createRequestMetadataInput(input, requestId, {
-        errorCode: transcriptionResult.error.apiErrorCode,
-        provider:
-          typeof transcriptionResult.metadata?.provider === "string"
-            ? transcriptionResult.metadata.provider
-            : "groq",
-        providerLatencyMs: transcriptionResult.metadata?.providerLatencyMs,
-        status: "failure",
-        timestamp: dependencies.now(),
-        totalBackendLatencyMs: elapsedLatencyMs(dependencies.nowMs, startedAtMs),
-      }),
+    const failureMetadataInput = createRequestMetadataInput(input, requestId, {
+      errorCode: transcriptionResult.error.apiErrorCode,
+      provider:
+        typeof transcriptionResult.metadata?.provider === "string"
+          ? transcriptionResult.metadata.provider
+          : "groq",
+      providerLatencyMs: transcriptionResult.metadata?.providerLatencyMs,
+      status: "failure",
+      timestamp: dependencies.now(),
+      totalBackendLatencyMs: elapsedLatencyMs(dependencies.nowMs, startedAtMs),
     });
+    dependencies.after(() => dependencies.writeRequestMetadata(failureMetadataInput));
 
     return rubyWhisperApiErrorResponse(transcriptionResult.error.apiErrorCode, {
       metadata: {
@@ -314,16 +318,17 @@ export async function executeDesktopTranscribeProviderContinuation(
         ? cleanupResult.metadata.provider
         : transcriptionResult.result.provider;
 
-    await dependencies.writeRequestMetadata({
-      ...createRequestMetadataInput(input, requestId, {
-        errorCode,
-        provider,
-        providerLatencyMs: cleanupResult.metadata?.providerLatencyMs,
-        status: "failure",
-        timestamp: dependencies.now(),
-        totalBackendLatencyMs: elapsedLatencyMs(dependencies.nowMs, startedAtMs),
-      }),
+    const cleanupFailureMetadataInput = createRequestMetadataInput(input, requestId, {
+      errorCode,
+      provider,
+      providerLatencyMs: cleanupResult.metadata?.providerLatencyMs,
+      status: "failure",
+      timestamp: dependencies.now(),
+      totalBackendLatencyMs: elapsedLatencyMs(dependencies.nowMs, startedAtMs),
     });
+    dependencies.after(() =>
+      dependencies.writeRequestMetadata(cleanupFailureMetadataInput),
+    );
 
     return rubyWhisperApiErrorResponse(errorCode, {
       metadata: {
@@ -355,35 +360,32 @@ export async function executeDesktopTranscribeProviderContinuation(
     return rubyWhisperApiErrorResponse("service_unavailable", { requestId });
   }
 
-  const requestMetadataResult = await dependencies.writeRequestMetadata(
-    createRequestMetadataInput(input, requestId, {
-      cleanedWordCount,
-      provider: transcriptionResult.result.provider,
-      providerLatencyMs: transcriptionResult.result.providerLatencyMs,
-      status: "success",
-      timestamp: dependencies.now(),
-      totalBackendLatencyMs: elapsedLatencyMs(dependencies.nowMs, startedAtMs),
+  const [requestMetadataResult, usageWriteResult] = await Promise.all([
+    dependencies.writeRequestMetadata(
+      createRequestMetadataInput(input, requestId, {
+        cleanedWordCount,
+        provider: transcriptionResult.result.provider,
+        providerLatencyMs: transcriptionResult.result.providerLatencyMs,
+        status: "success",
+        timestamp: dependencies.now(),
+        totalBackendLatencyMs: elapsedLatencyMs(dependencies.nowMs, startedAtMs),
+      }),
+    ),
+    dependencies.writeUsageCounterIncrement({
+      billableWordCount: cleanedWordCount,
+      entitlement: input.entitlement,
+      friendOfRubyUntil: input.subscription.friendOfRubyUntil,
+      isBlocked: input.profile.isBlocked,
+      now: dependencies.now(),
+      paymentFailed: input.subscription.paymentFailed,
+      planState: input.subscription.planState,
+      requiresSubscription: input.subscription.requiresSubscription,
+      subscriptionStatus: input.subscription.subscriptionStatus,
+      usageCounters: input.usageCounters,
     }),
-  );
+  ]);
 
-  if (!requestMetadataResult.ok) {
-    return rubyWhisperApiErrorResponse("service_unavailable", { requestId });
-  }
-
-  const usageWriteResult = await dependencies.writeUsageCounterIncrement({
-    billableWordCount: cleanedWordCount,
-    entitlement: input.entitlement,
-    friendOfRubyUntil: input.subscription.friendOfRubyUntil,
-    isBlocked: input.profile.isBlocked,
-    now: dependencies.now(),
-    paymentFailed: input.subscription.paymentFailed,
-    planState: input.subscription.planState,
-    requiresSubscription: input.subscription.requiresSubscription,
-    subscriptionStatus: input.subscription.subscriptionStatus,
-    usageCounters: input.usageCounters,
-  });
-
-  if (!usageWriteResult.ok) {
+  if (!requestMetadataResult.ok || !usageWriteResult.ok) {
     return rubyWhisperApiErrorResponse("service_unavailable", { requestId });
   }
 
@@ -393,10 +395,12 @@ export async function executeDesktopTranscribeProviderContinuation(
   );
 
   if (isFiniteLatencyMs(finalTotalBackendLatencyMs)) {
-    await dependencies.updateRequestTotalBackendLatencyMetadata({
-      requestId,
-      totalBackendLatencyMs: finalTotalBackendLatencyMs,
-    });
+    dependencies.after(() =>
+      dependencies.updateRequestTotalBackendLatencyMetadata({
+        requestId,
+        totalBackendLatencyMs: finalTotalBackendLatencyMs,
+      }),
+    );
   }
 
   return Response.json(
@@ -416,6 +420,9 @@ export async function executeDesktopTranscribeProviderContinuation(
 }
 
 const defaultDesktopTranscribeRouteDependencies: DesktopTranscribeRouteDependencies = {
+  after: (callback) => {
+    nextServerAfter(callback);
+  },
   createRequestId: () => globalThis.crypto.randomUUID(),
   evaluateEntitlement: evaluateRubyWhisperQuotaEntitlement,
   evaluateRateLimit: (input) =>
