@@ -21,13 +21,15 @@ private struct SettingsCard<Content: View>: View {
                 .font(.headline)
             content
         }
-        .padding(16)
+        .padding(Theme.Space.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-        .cornerRadius(10)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.72))
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .stroke(Theme.Color.islandStrokeInner, lineWidth: 1)
         )
     }
 }
@@ -36,28 +38,70 @@ private struct HotkeyAvailabilityStatusView: View {
     @EnvironmentObject var appState: AppState
 
     private var iconName: String {
-        appState.isHotkeyReadyForDictation ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+        appState.isHotkeyReadyForDictation ? "checkmark.circle.fill" : "keyboard.badge.exclamationmark"
     }
 
     private var iconColor: Color {
-        appState.isHotkeyReadyForDictation ? .green : .orange
+        appState.isHotkeyReadyForDictation ? .green : Theme.Color.accent
     }
 
     private var showsRecoveryActions: Bool {
         appState.hasRecoverableHotkeyFailure
     }
 
+    private var statusLabel: String {
+        appState.isHotkeyReadyForDictation ? "Ready" : "Needs permission"
+    }
+
+    private var statusTint: Color {
+        appState.isHotkeyReadyForDictation ? .green : Theme.Color.accent
+    }
+
+    private var recoveryGuidance: String? {
+        switch appState.hotkeyRegistrationState.reason {
+        case .eventTapUnavailable:
+            return "If more than one RubyWhisper entry appears in System Settings, enable the one for the app you just launched. Removing stale entries and reopening RubyWhisper can clear macOS permission confusion."
+        case .eventTapRunLoopSourceUnavailable:
+            return "macOS could not attach the keyboard monitor. Quit and reopen RubyWhisper if Retry does not recover."
+        case .eventTapDisabledByTimeout, .eventTapDisabledByUserInput:
+            return "Another keyboard utility or a system keyboard change may have interrupted monitoring. Retry after changing the conflicting setting."
+        case .noBindingEnabled:
+            return "Turn on Hold to Talk, Tap to Dictate, or both."
+        case .holdBindingDisabled, .toggleBindingDisabled:
+            return "One workflow is off; the remaining enabled shortcut can still start dictation."
+        case .paused, .none, .unknown:
+            return nil
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: iconName)
-                    .foregroundStyle(iconColor)
-                Text(appState.hotkeyRecoveryTitle)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(iconColor.opacity(0.12))
+                    Image(systemName: iconName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(iconColor)
+                }
+                .frame(width: 32, height: 32)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(appState.hotkeyRecoveryTitle)
+                        .font(.headline)
+                    Text(appState.shortcutStatusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 12)
+
+                Text(statusLabel)
                     .font(.caption.weight(.semibold))
-                Spacer()
-                Text(appState.hotkeyDiagnosticCategory)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(statusTint)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(statusTint.opacity(0.12)))
             }
 
             Text(appState.hotkeyRecoveryMessage)
@@ -65,18 +109,40 @@ private struct HotkeyAvailabilityStatusView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            if let recoveryGuidance {
+                Text(recoveryGuidance)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                            .fill(Theme.Color.accentSoft.opacity(0.55))
+                    )
+            }
+
             if showsRecoveryActions {
                 HStack(spacing: 8) {
-                    Button("Retry") {
+                    Button {
                         appState.retryHotkeyRegistration()
+                    } label: {
+                        Label("Retry", systemImage: "arrow.clockwise")
                     }
-                    Button("Keyboard Settings") {
-                        appState.openKeyboardSettings()
-                    }
+
                     if appState.hotkeyRegistrationState.reason == .eventTapUnavailable {
-                        Button("Accessibility") {
-                            appState.openAccessibilitySettings()
+                        Button {
+                            appState.requestAccessibilityTrust()
+                        } label: {
+                            Label("Accessibility", systemImage: "hand.raised.fill")
                         }
+
+                    }
+
+                    Button {
+                        appState.openKeyboardSettings()
+                    } label: {
+                        Label("Keyboard", systemImage: "keyboard")
                     }
                 }
                 .buttonStyle(.bordered)
@@ -104,13 +170,11 @@ struct SettingsView: View {
                     Button {
                         appState.selectedSettingsTab = tab
                     } label: {
-                        SettingsSidebarRow(title: tab.title, icon: tab.icon)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(appState.selectedSettingsTab == tab
-                                          ? Color.accentColor.opacity(0.15)
-                                          : Color.clear)
-                            )
+                        SettingsSidebarRow(
+                            title: tab.title,
+                            icon: tab.icon,
+                            isSelected: appState.selectedSettingsTab == tab
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -582,22 +646,31 @@ struct AdvancedSettingsView: View {
 private struct SettingsSidebarRow: View {
     let title: String
     let icon: String
+    let isSelected: Bool
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .regular))
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                 .frame(width: 16, height: 16, alignment: .center)
-                .foregroundStyle(.primary)
+                .foregroundStyle(isSelected ? Theme.Color.accent : .primary)
 
             Text(title)
-                .font(.body)
+                .font(.body.weight(isSelected ? .semibold : .regular))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(height: 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .fill(isSelected ? Theme.Color.accentSoft : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous)
+                .stroke(isSelected ? Theme.Color.accent.opacity(0.22) : Color.clear, lineWidth: 1)
+        )
     }
 }
 
@@ -784,6 +857,8 @@ struct GeneralSettingsView: View {
         }
         .onAppear {
             checkMicPermission()
+            _ = appState.refreshAccessibilityTrustStatus()
+            appState.hasScreenRecordingPermission = appState.hasScreenCapturePermission()
             appState.refreshLaunchAtLoginStatus()
         }
     }
@@ -1351,7 +1426,7 @@ struct GeneralSettingsView: View {
                 icon: "hand.raised.fill",
                 granted: appState.hasAccessibility,
                 action: {
-                    appState.openAccessibilitySettings()
+                    appState.requestAccessibilityTrust()
                 }
             )
 

@@ -78,6 +78,36 @@ enum RecordingIslandStateName: String, CaseIterable, Equatable, Codable {
     }
 }
 
+enum RecordingIslandVisualState: String, CaseIterable, Equatable, Codable {
+    case idle
+    case listening
+    case processing
+    case confirm
+    case error
+}
+
+extension RecordingIslandStateName {
+    var visualState: RecordingIslandVisualState {
+        switch self {
+        case .hiddenIdle:
+            return .idle
+        case .recordingHold, .recordingToggle, .nearingDurationLimit:
+            return .listening
+        case .accountRefreshing, .processingUploading, .inserting:
+            return .processing
+        case .success:
+            return .confirm
+        case .onboardingBlocked, .signedOut, .termsRequired, .trialExhausted,
+             .paymentFailed, .accountBlocked, .microphoneRecovery,
+             .accessibilityRecovery, .hotkeyUnavailable, .hotkeyConflict,
+             .recorderBusy, .durationLimitReached, .insertionUnavailable,
+             .fallbackCopied, .insertionFailed, .rateLimited, .networkError,
+             .providerError, .invalidAudio, .serviceError, .unsafeRetryRequired:
+            return .error
+        }
+    }
+}
+
 enum RecordingIslandAction: String, Equatable, Codable {
     case stopRecording = "stop_recording"
     case cancelIfSafe = "cancel_if_safe"
@@ -154,9 +184,14 @@ struct RecordingIslandPresentation: Equatable {
         state.isRecoveryState
     }
 
+    var visualState: RecordingIslandVisualState {
+        state.visualState
+    }
+
     var safeLogSummary: String {
         [
             "island_state=\(state.rawValue)",
+            "visual_state=\(visualState.rawValue)",
             "primary_action=\(primaryAction?.rawValue ?? "none")",
             "secondary_action=\(secondaryAction?.rawValue ?? "none")",
             "same_audio_retry=\(allowsSameAudioRetry)"

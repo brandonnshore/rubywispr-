@@ -64,7 +64,7 @@ const credentialLikeValuePatterns = [
   /\bwhsec_[A-Za-z0-9_-]{16,}\b/,
   /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{12,}\b/i,
   /[?&](?:jwt|session|ticket|token)=/i,
-  /\b(?:CLERK_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|GROQ_API_KEY)\b/,
+  /\b(?:CLERK_SECRET_KEY|SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|DESKTOP_TOKEN_SECRET|STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|GROQ_API_KEY)\b/,
   /(?:^|[/\\])(?:\.env\.local|rubywhisper\.env)\b/i,
 ];
 

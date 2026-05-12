@@ -57,10 +57,10 @@ enum Theme {
         static let idleWidth: CGFloat = 64
         static let idleHeight: CGFloat = 20
         /// Active expanded pill containing controls + waveform.
-        static let activeWidth: CGFloat = 200
-        static let activeHeight: CGFloat = 40
+        static let activeWidth: CGFloat = 160
+        static let activeHeight: CGFloat = 32
         /// Distance above the Dock chrome.
-        static let dockOffset: CGFloat = 8
+        static let dockOffset: CGFloat = 6
     }
 
     enum Motion {

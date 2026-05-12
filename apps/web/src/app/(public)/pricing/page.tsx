@@ -40,7 +40,7 @@ export default function PricingPage() {
   return (
     <main className="surface-shell public-shell pricing-shell">
       <section
-        className="surface-panel public-panel pricing-panel"
+        className="surface-panel public-panel pricing-panel rw-reveal"
         aria-labelledby="pricing-heading"
       >
         <header className="route-header">
@@ -56,7 +56,7 @@ export default function PricingPage() {
           </nav>
         </header>
 
-        <div className="pricing-hero">
+        <div className="pricing-hero rw-reveal">
           <div>
             <p className="surface-kicker">Pricing</p>
             <h1 id="pricing-heading">One plan for Mac dictation.</h1>
@@ -70,7 +70,10 @@ export default function PricingPage() {
 
         <section className="pricing-grid" aria-label="RubyWhisper plans">
           {planCards.map((plan) => (
-            <article className="pricing-card rw-panel" key={plan.title}>
+            <article
+              className="pricing-card rw-panel rw-scroll-reveal"
+              key={plan.title}
+            >
               <div>
                 <p className="pricing-plan-label">{plan.title}</p>
                 <div className="pricing-price-row">
@@ -100,7 +103,10 @@ export default function PricingPage() {
           ))}
         </section>
 
-        <section className="pricing-included" aria-labelledby="included-heading">
+        <section
+          className="pricing-included rw-scroll-reveal"
+          aria-labelledby="included-heading"
+        >
           <div>
             <p className="surface-kicker">Included</p>
             <h2 id="included-heading">Launch terms, plainly stated.</h2>

@@ -12,6 +12,7 @@ const migrationsDir = path.join(repoRoot, "supabase", "migrations");
 
 const expectedMetadataTables = [
   "admin_roles",
+  "desktop_login_attempts",
   "friend_of_ruby_batches",
   "profiles",
   "stripe_webhook_events",

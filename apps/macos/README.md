@@ -43,17 +43,20 @@ Excluded upstream surfaces and local/runtime content:
 RUB-221 / RW-060B established the repo-local macOS build command contract after
 the RUB-220 import.
 
-Authoritative local Debug/ad hoc build command from the repository root:
+Authoritative local Debug build command from the repository root:
 
 ```bash
-make -C apps/macos clean all CODESIGN_IDENTITY=-
+make -C apps/macos clean all
 ```
 
 The Makefile is the local development build entrypoint. It uses direct `swiftc`
 compilation, copies `Info.plist`, icons, and `Resources/ThirdPartyNotices.md`
-into the app bundle, and signs with the provided `CODESIGN_IDENTITY`. Passing
-`CODESIGN_IDENTITY=-` selects ad hoc signing, which is the repeatable local
-developer path.
+into the app bundle, and signs with the provided `CODESIGN_IDENTITY`. When a
+local `Apple Development` signing identity is installed, the Makefile uses it
+by default so macOS TCC permissions stay attached across rebuilds. Passing
+`CODESIGN_IDENTITY=-` still forces ad hoc signing for CI or isolated smoke
+checks, but ad hoc rebuilds can invalidate Accessibility grants because the
+binary's code hash changes.
 
 Build output:
 
@@ -71,15 +74,30 @@ The output name, bundle identifier, entitlements filename, and resources use
 RubyWhisper development placeholders until later release-packaging tickets set
 approved production values.
 
-## Local DMG Packaging
-
-The `dmg` target is a local/ad hoc packaging helper for developer testing only:
+For a distinct local app name while testing TCC permissions:
 
 ```bash
-make -C apps/macos dmg CODESIGN_IDENTITY=-
+make -C apps/macos run-dev
 ```
 
-It builds the same ad hoc app bundle, stages `RubyWhisper.app` with an
+If System Settings shows RubyWhisper as enabled but the app still reports
+global shortcuts blocked after switching from ad hoc to Apple Development
+signing, quit the app, reset only the development bundle's TCC rows, reopen,
+and re-grant:
+
+```bash
+tccutil reset Accessibility com.rubyadvisory.rubywhisper.dev
+```
+
+## Local DMG Packaging
+
+The `dmg` target is a local packaging helper for developer testing only:
+
+```bash
+make -C apps/macos dmg
+```
+
+It builds the same local app bundle, stages `RubyWhisper.app` with an
 `Applications` alias, and writes:
 
 ```text
@@ -128,7 +146,6 @@ builds:
 
 ```bash
 make -C apps/macos clean all \
-  CODESIGN_IDENTITY=- \
   UPDATE_CHANNEL_ENABLED=true \
   UPDATE_RELEASES_URL=https://updates.example.test/releases.json
 ```
@@ -144,7 +161,7 @@ exits 66 in this directory.
 
 ## CI Validation
 
-`.github/workflows/macos-ci.yml` runs the same Debug/ad hoc command on
+`.github/workflows/macos-ci.yml` runs an explicit Debug/ad hoc command on
 GitHub-hosted `macos-latest` for macOS source changes:
 
 ```bash

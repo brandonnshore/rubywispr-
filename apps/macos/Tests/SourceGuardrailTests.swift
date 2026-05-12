@@ -35,6 +35,7 @@ private struct SourceGuardrailTests {
             failures.append(contentsOf: providerSettingsPersistenceMatches(in: text, path: relativePath))
             failures.append(contentsOf: plaintextAuthPersistenceMatches(in: text, path: relativePath))
             failures.append(contentsOf: localLogPrivacyMatches(in: text, path: relativePath))
+            failures.append(contentsOf: userFacingHotkeyDiagnosticMatches(in: text, path: relativePath))
         }
 
         if !failures.isEmpty {
@@ -202,6 +203,25 @@ private struct SourceGuardrailTests {
                 return reason
             }
             return nil
+        }
+    }
+
+    private static func userFacingHotkeyDiagnosticMatches(in text: String, path: String) -> [SourceMatch] {
+        guard path == "Sources/SettingsView.swift" || path == "Sources/SetupView.swift" else {
+            return []
+        }
+
+        let forbiddenFragments = [
+            "hotkeyDiagnosticCategory",
+            "phase=\\(",
+            "reason=\\(",
+            "binding=\\(",
+        ]
+
+        return lineMatches(in: text, path: path) { line in
+            forbiddenFragments.contains { line.contains($0) }
+                ? "user-facing hotkey recovery must not expose raw diagnostic state"
+                : nil
         }
     }
 

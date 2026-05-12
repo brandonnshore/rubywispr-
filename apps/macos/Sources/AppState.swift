@@ -1593,9 +1593,17 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     func requestScreenCapturePermission() {
-        // ScreenCaptureKit triggers the "Screen & System Audio Recording"
-        // permission dialog on macOS Sequoia+, correctly identifying the
-        // running app (unlike the legacy CGWindowListCreateImage path).
+        guard !CGPreflightScreenCaptureAccess() else {
+            hasScreenRecordingPermission = true
+            return
+        }
+
+        let coreGraphicsGranted = CGRequestScreenCaptureAccess()
+        hasScreenRecordingPermission = coreGraphicsGranted || CGPreflightScreenCaptureAccess()
+        guard !hasScreenRecordingPermission else { return }
+
+        // ScreenCaptureKit gives modern macOS another chance to create the
+        // Screen & System Audio Recording row for the running app.
         SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { [weak self] _, _ in
             DispatchQueue.main.async {
                 let granted = CGPreflightScreenCaptureAccess()
@@ -1606,7 +1614,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
             }
         }
 
-        hasScreenRecordingPermission = CGPreflightScreenCaptureAccess()
+        openScreenCaptureSettings()
     }
 
     func openScreenCaptureSettings() {
@@ -1987,6 +1995,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     func retryHotkeyRegistration() {
+        _ = refreshAccessibilityTrustStatus(recoveryWhenMissing: true)
+
         guard shouldMonitorHotkeys, !isCapturingShortcut, !isAwaitingMicrophonePermission else {
             restartHotkeyMonitoring()
             return
@@ -2017,7 +2027,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     ) -> String {
         switch state.reason {
         case .eventTapUnavailable:
-            return "macOS did not allow the global keyboard monitor to start. Grant Accessibility or keyboard monitoring access, then retry."
+            return "macOS is blocking RubyWhisper's global shortcut monitor. Enable the currently running RubyWhisper entry in Accessibility, then press Retry."
         case .eventTapRunLoopSourceUnavailable:
             return "Global shortcuts could not start because macOS could not attach the keyboard monitor. Retry after restarting the app."
         case .eventTapDisabledByTimeout:
@@ -2263,7 +2273,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func handleOverlayStopButtonPressed() {
-        guard isRecording, activeRecordingTriggerMode == .toggle else { return }
+        guard isRecording else { return }
         stopAndTranscribe()
     }
 
@@ -2276,7 +2286,17 @@ final class AppState: ObservableObject, @unchecked Sendable {
         case .stopRecording:
             handleOverlayStopButtonPressed()
             return true
-        case .cancelIfSafe, .waitOrCancel:
+        case .cancelIfSafe:
+            if isTranscribing {
+                cancelTranscription()
+                return true
+            }
+            if pendingShortcutStartMode != nil || activeRecordingTriggerMode != nil || isRecording {
+                cancelActiveShortcutRecordingForLifecycleChange()
+                return true
+            }
+            return true
+        case .waitOrCancel:
             if isTranscribing {
                 cancelTranscription()
                 return true

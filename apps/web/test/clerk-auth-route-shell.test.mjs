@@ -25,8 +25,14 @@ test("Clerk email auth route shell uses App Router catch-all pages", async () =>
     readFile(path.join("src", "app", "(public)", "page.tsx"), "utf8"),
   ]);
 
-  assert.match(signInPage, /<AuthRouteShell mode="sign-in" \/>/);
-  assert.match(signUpPage, /<AuthRouteShell mode="sign-up" \/>/);
+  assert.match(
+    signInPage,
+    /<AuthRouteShell mode="sign-in" forceRedirectUrl=\{forceRedirectUrl\} \/>/,
+  );
+  assert.match(
+    signUpPage,
+    /<AuthRouteShell mode="sign-up" forceRedirectUrl=\{forceRedirectUrl\} \/>/,
+  );
   assert.match(publicPage, /href: "\/sign-in"/);
   assert.match(publicPage, /href: "\/sign-up"/);
   assert.match(publicPage, /href: "\/pricing"/);
@@ -54,6 +60,7 @@ test("launch auth copy stays email-only", async () => {
 test("auth route shell gates Clerk components behind blank-env safe public config", async () => {
   const source = await readFile(authShellRoute, "utf8");
 
+  assert.match(source, /from\s+["']@clerk\/react["']/);
   assert.match(source, /clientEnv\.clerkPublishableKey/);
   assert.match(source, /<ClerkProvider/);
   assert.match(source, /<SignIn/);

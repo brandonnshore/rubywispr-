@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
+import { serverEnv } from "@/config/server";
+
 const TOKEN_HEADER = { alg: "HS256", typ: "JWT" } as const;
 const DEFAULT_EXPIRES_IN_SECONDS = 30 * 24 * 60 * 60;
 
@@ -40,8 +42,7 @@ const base64urlDecode = (input: string): Buffer =>
   Buffer.from(input.replaceAll("-", "+").replaceAll("_", "/"), "base64");
 
 const readSecret = (): string | null => {
-  const value = process.env.DESKTOP_TOKEN_SECRET?.trim();
-  return value ? value : null;
+  return serverEnv.desktop.tokenSecret ?? null;
 };
 
 export function signDesktopToken({

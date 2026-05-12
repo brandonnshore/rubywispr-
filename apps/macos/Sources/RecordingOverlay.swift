@@ -23,14 +23,14 @@ enum OverlayPhase {
 // MARK: - Panel Helpers
 
 private enum RecordingOverlayGeometry {
-    /// Active expanded pill — matches Wispr Flow's 200×40 dimensions.
-    static let compactWidth: CGFloat = 200
+    /// Active expanded pill; compact enough to feel like a tool, not a Dock banner.
+    static let compactWidth: CGFloat = 160
     /// Recovery layout still needs more room for affordance copy + actions.
-    static let recoveryWidth: CGFloat = 280
-    static let baseHeight: CGFloat = 40
+    static let recoveryWidth: CGFloat = 252
+    static let baseHeight: CGFloat = 32
     static let screenMargin: CGFloat = 8
     /// Distance above the Dock chrome (or screen edge when Dock auto-hides).
-    static let dockOffset: CGFloat = 12
+    static let dockOffset: CGFloat = 6
 }
 
 private func makeOverlayPanel(width: CGFloat, height: CGFloat) -> NSPanel {
@@ -76,7 +76,7 @@ private func makePillContent<V: View>(
                 .strokeBorder(Theme.Color.islandStrokeInner, lineWidth: 0.5)
         )
         .clipShape(pillShape)
-        .shadow(color: Theme.Color.islandShadow, radius: 12, x: 0, y: 4)
+        .shadow(color: Theme.Color.islandShadow, radius: 8, x: 0, y: 2)
 
     let hosting = NSHostingView(rootView: shaped)
     hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
@@ -503,12 +503,12 @@ struct WaveformBar: View {
     let amplitude: CGFloat
 
     private let minHeight: CGFloat = 2
-    private let maxHeight: CGFloat = 20
+    private let maxHeight: CGFloat = 16
 
     var body: some View {
         Capsule()
             .fill(.white)
-            .frame(width: 3, height: minHeight + (maxHeight - minHeight) * amplitude)
+            .frame(width: 2.5, height: minHeight + (maxHeight - minHeight) * amplitude)
     }
 }
 
@@ -533,14 +533,14 @@ struct WaveformView: View {
                 waveformBars(pulseTime: nil)
             }
         }
-        .frame(height: 20)
+        .frame(height: 17)
     }
 
     private func reducedMotionBars() -> some View {
         let level = CGFloat(max(min(audioLevel, 1), 0))
         let tickLevel = (level * 4).rounded(.down) / 4
 
-        return HStack(spacing: 3) {
+        return HStack(spacing: 2.5) {
             ForEach(0..<Self.barCount, id: \.self) { index in
                 WaveformBar(amplitude: min(tickLevel * Self.multipliers[index], 1.0))
             }
@@ -548,7 +548,7 @@ struct WaveformView: View {
     }
 
     private func waveformBars(pulseTime: TimeInterval?) -> some View {
-        HStack(spacing: 2.5) {
+        HStack(spacing: 2) {
             ForEach(0..<Self.barCount, id: \.self) { index in
                 WaveformBar(amplitude: barAmplitude(for: index, pulseTime: pulseTime))
                     .animation(
@@ -606,7 +606,7 @@ struct ProcessingWaveformView: View {
                     )
                 }
             }
-            .frame(height: 20)
+            .frame(height: 17)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -639,12 +639,12 @@ private struct ProcessingPill: View {
     let opacity: CGFloat
 
     private let minHeight: CGFloat = 4
-    private let maxHeight: CGFloat = 18
+    private let maxHeight: CGFloat = 15
 
     var body: some View {
         Capsule()
             .fill(.white)
-            .frame(width: 4, height: minHeight + (maxHeight - minHeight) * amplitude)
+            .frame(width: 3.5, height: minHeight + (maxHeight - minHeight) * amplitude)
             .opacity(opacity)
     }
 }
@@ -658,17 +658,17 @@ struct ProcessingIndicatorView: View {
         ZStack {
             if reduceMotion {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.88))
-                    .frame(height: 20)
+                    .frame(height: 17)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if showsExtendedSpinner {
                 Circle()
-                    .trim(from: 0.1, to: 0.9)
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .frame(width: 16, height: 16)
+                    .trim(from: 0.14, to: 0.88)
+                    .stroke(Color.white, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                    .frame(width: 14, height: 14)
                     .rotationEffect(.degrees(rotation))
-                    .frame(height: 20)
+                    .frame(height: 17)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .transition(.opacity.combined(with: .scale(scale: 0.92)))
                     .onAppear {
@@ -736,20 +736,33 @@ struct RecordingOverlayView: View {
     let onUpdateOverlayPressed: () -> Void
     let onRecoveryActionPressed: (RecordingIslandAction) -> Void
 
-    private let leadingAccessoryWidth: CGFloat = 24
-    private let trailingAccessoryWidth: CGFloat = 32
+    @State private var controlsVisible = true
 
-    private var showsLiveRecordingContent: Bool {
-        state.islandPresentation.showsVisualizer
+    private let accessoryWidth: CGFloat = 26
+
+    private var visualState: RecordingIslandVisualState {
+        state.islandPresentation.visualState
     }
 
-    private var showsStopButton: Bool {
-        showsLiveRecordingContent && state.recordingTriggerMode == .toggle
+    private var showsLiveRecordingContent: Bool {
+        visualState == .listening && state.islandPresentation.showsVisualizer
+    }
+
+    private var showsRecoveryFeedback: Bool {
+        state.phase == .feedback && visualState == .error
+    }
+
+    private var showsCancelControl: Bool {
+        visualState == .listening || visualState == .processing
+    }
+
+    private var showsRightControl: Bool {
+        visualState == .listening || visualState == .processing || visualState == .confirm
     }
 
     var body: some View {
         Group {
-            if state.phase == .feedback {
+            if showsRecoveryFeedback {
                 IslandFeedbackView(
                     presentation: state.islandPresentation,
                     onRecoveryActionPressed: onRecoveryActionPressed
@@ -777,51 +790,129 @@ struct RecordingOverlayView: View {
 
                     HStack {
                         Group {
-                            if state.isCommandMode {
+                            if showsCancelControl {
+                                IslandControlButton(
+                                    accessibilityLabel: "Cancel whisper",
+                                    fill: Theme.Color.cancelButtonFill,
+                                    action: { onRecoveryActionPressed(.cancelIfSafe) }
+                                ) {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(Theme.Color.cancelButtonGlyph)
+                                }
+                                .transition(controlTransition)
+                            } else if state.isCommandMode {
                                 CommandModeIndicator()
                                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
                             }
                         }
-                        .frame(width: leadingAccessoryWidth, alignment: .center)
+                        .frame(width: accessoryWidth, alignment: .center)
                         .frame(maxHeight: .infinity, alignment: .center)
+                        .opacity(controlsVisible || !showsCancelControl ? 1 : 0)
 
                         Spacer(minLength: 0)
 
                         Group {
-                            if showsStopButton {
-                                Button(action: onStopButtonPressed) {
-                                    Image(systemName: "stop.fill")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .frame(width: 20, height: 20)
-                                        .background(Circle().fill(Color.red.opacity(0.92)))
-                                }
-                                .buttonStyle(.plain)
-                                .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
+                            if showsRightControl {
+                                islandRightControl
+                                    .transition(controlTransition)
                             }
                         }
-                        .frame(width: trailingAccessoryWidth, alignment: .trailing)
+                        .frame(width: accessoryWidth, alignment: .trailing)
+                        .opacity(controlsVisible || !showsRightControl ? 1 : 0)
                     }
                 }
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 9)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.phase)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.recordingTriggerMode)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.isCommandMode)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.islandPresentation.state)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: controlsVisible)
+        .onAppear {
+            controlsVisible = true
+        }
+        .onChange(of: state.islandPresentation.state) { _ in
+            controlsVisible = true
+        }
+    }
+
+    @ViewBuilder
+    private var islandRightControl: some View {
+        switch visualState {
+        case .listening:
+            IslandControlButton(
+                accessibilityLabel: "Stop recording",
+                fill: Theme.Color.stopButtonFill,
+                action: onStopButtonPressed
+            ) {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Theme.Color.stopButtonGlyph)
+            }
+        case .processing:
+            IslandControlCircle(fill: Theme.Color.cancelButtonFill) {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.48)
+                    .tint(.white)
+            }
+            .accessibilityLabel("Processing")
+        case .confirm:
+            IslandControlCircle(fill: Theme.Color.confirmButtonFill) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Theme.Color.confirmButtonGlyph)
+            }
+            .accessibilityLabel("Done")
+        case .idle, .error:
+            EmptyView()
+        }
+    }
+
+    private var controlTransition: AnyTransition {
+        reduceMotion
+            ? .opacity
+            : .scale(scale: 0.86).combined(with: .opacity)
     }
 }
 
 // MARK: - Transcribing Indicator
 
+private struct IslandControlButton<Content: View>: View {
+    let accessibilityLabel: String
+    let fill: Color
+    let action: () -> Void
+    let content: () -> Content
+
+    var body: some View {
+        Button(action: action) {
+            IslandControlCircle(fill: fill, content: content)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct IslandControlCircle<Content: View>: View {
+    let fill: Color
+    let content: () -> Content
+
+    var body: some View {
+        content()
+            .frame(width: 23, height: 23)
+            .background(Circle().fill(fill))
+    }
+}
+
 struct CommandModeIndicator: View {
     var body: some View {
         Image(systemName: "pencil")
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.white.opacity(0.92))
-            .frame(width: 16, height: 16, alignment: .center)
+            .frame(width: 14, height: 14, alignment: .center)
     }
 }
 
@@ -834,18 +925,18 @@ struct IslandProgressView: View {
 
             HStack {
                 Image(systemName: presentation.systemImageName)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.9))
-                    .frame(width: 22)
+                    .frame(width: 18)
 
                 Spacer(minLength: 0)
 
                 Text(presentation.title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                    .frame(maxWidth: 92, alignment: .trailing)
+                    .frame(maxWidth: 72, alignment: .trailing)
             }
         }
     }
@@ -856,15 +947,15 @@ struct IslandFeedbackView: View {
     let onRecoveryActionPressed: (RecordingIslandAction) -> Void
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             Image(systemName: presentation.systemImageName)
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 20, height: 20)
+                .frame(width: 18, height: 18)
                 .background(Circle().fill(iconBackground))
 
             Text(presentation.title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
@@ -884,12 +975,12 @@ struct IslandFeedbackView: View {
     private func recoveryButton(for action: RecordingIslandAction, isPrimary: Bool) -> some View {
         Button(action: { onRecoveryActionPressed(action) }) {
             Text(action.compactTitle)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 9.5, weight: .bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .foregroundStyle(isPrimary ? Color.black : Color.white)
-                .padding(.horizontal, 7)
-                .frame(height: 21)
+                .padding(.horizontal, 6)
+                .frame(height: 19)
                 .background(
                     Capsule().fill(isPrimary ? Color.white : Color.white.opacity(0.18))
                 )

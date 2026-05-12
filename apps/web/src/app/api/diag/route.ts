@@ -12,19 +12,29 @@ export async function GET(request: Request) {
     "GROQ_API_KEY",
     "DESKTOP_TOKEN_SECRET",
     "CLERK_SECRET_KEY",
+    "SUPABASE_URL",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_SECRET_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
     "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
   ];
   const report = Object.fromEntries(
     keys.map((k) => {
-      const v = process.env[k];
+      const value = process.env[k]?.trim();
       return [
         k,
-        v === undefined
+        value === undefined || value === ""
           ? { state: "undefined" }
-          : { state: "present", length: v.length, prefix: v.slice(0, 4) },
+          : { state: "present" },
       ];
     }),
   );
-  return NextResponse.json({ ok: true, env: report });
+  return NextResponse.json(
+    { ok: true, env: report },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }

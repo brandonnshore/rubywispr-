@@ -83,11 +83,6 @@ export async function parseDesktopTranscribeRequest(
 ): Promise<DesktopTranscribeRequestParseResult> {
   const rawContentType = request.headers.get("content-type");
   const contentType = normalizeMimeType(rawContentType);
-  console.error("desktop_transcribe_entry", {
-    rawContentType,
-    contentType,
-    contentLength: request.headers.get("content-length"),
-  });
 
   if (!contentType) {
     return invalidAudioFailure(undefined, "missing_content_type");
@@ -262,9 +257,6 @@ function invalidAudioFailure(
   metadata?: { audioDurationMs?: number },
   reason?: string,
 ): DesktopTranscribeRequestFailure {
-  const stack = new Error("invalidAudioFailure").stack ?? "";
-  const callsite = stack.split("\n").slice(1, 4).join(" | ");
-  console.error("INVALID_AUDIO_TRACE", { reason, callsite });
   return {
     code: "invalid_audio",
     ...(metadata

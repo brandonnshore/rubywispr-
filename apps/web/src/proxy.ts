@@ -12,11 +12,19 @@ const isClerkConfigured = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim(),
 );
 
-const clerkProtectedProxy = clerkMiddleware(async (auth, request) => {
-  if (isProtectedPageRoute(request)) {
-    await auth.protect();
-  }
-});
+const clerkProtectedProxy = clerkMiddleware(
+  async (auth, request) => {
+    if (isProtectedPageRoute(request)) {
+      await auth.protect({
+        unauthenticatedUrl: new URL("/sign-in", request.url).toString(),
+      });
+    }
+  },
+  {
+    signInUrl: "/sign-in",
+    signUpUrl: "/sign-up",
+  },
+);
 
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (!isClerkConfigured) {

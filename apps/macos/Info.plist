@@ -47,5 +47,7 @@
     <string>RubyWhisper needs speech recognition to convert your voice to text.</string>
     <key>NSAccessibilityUsageDescription</key>
     <string>RubyWhisper needs accessibility access to detect the text cursor position and paste transcribed text.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>RubyWhisper needs screen recording access to capture the active window for context-aware transcription.</string>
 </dict>
 </plist>

@@ -6,11 +6,13 @@ export const supabaseServerOnlyModuleId = "@/lib/supabase/server" as const;
 
 export const supabaseServiceRoleEnvVariableNames = [
   "SUPABASE_URL",
+  "SUPABASE_SECRET_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
 ] as const;
 
 export const supabaseMetadataTableNames = [
   "admin_roles",
+  "desktop_login_attempts",
   "friend_of_ruby_batches",
   "profiles",
   "stripe_webhook_events",
@@ -60,7 +62,7 @@ export const readSupabaseServiceRoleRuntimeConfig =
       }
 
       if (!serviceRoleKey) {
-        missingNames.push("SUPABASE_SERVICE_ROLE_KEY");
+        missingNames.push("SUPABASE_SECRET_KEY");
       }
 
       throw new Error(
