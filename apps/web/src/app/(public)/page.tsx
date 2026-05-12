@@ -214,31 +214,43 @@ export default function PublicHome() {
 function ProductProof() {
   return (
     <aside className="product-proof" aria-label="RubyWhisper dictation preview">
-      <div className="product-proof-window">
-        <div className="product-proof-toolbar" aria-hidden="true">
-          <span />
-          <span />
-          <span />
+      <div className="product-proof-stage" aria-hidden="true">
+        <div className="product-proof-glow" />
+        <div className="product-proof-pill">
+          <button
+            className="product-proof-pill-cancel"
+            type="button"
+            aria-label="Cancel recording (demo)"
+            tabIndex={-1}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path
+                d="M1 1l8 8M9 1l-8 8"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+          <div className="product-proof-waveform" aria-hidden="true">
+            {Array.from({ length: 14 }).map((_, index) => (
+              <span
+                key={index}
+                style={{ animationDelay: `${index * 70}ms` }}
+              />
+            ))}
+          </div>
+          <button
+            className="product-proof-pill-stop"
+            type="button"
+            aria-label="Stop recording (demo)"
+            tabIndex={-1}
+          >
+            <span />
+          </button>
         </div>
-        <div className="product-proof-document">
-          <p className="product-proof-app">Notes</p>
-          <h2>Launch plan notes</h2>
-          <p>
-            RubyWhisper should feel instant: speak into the Mac, keep focus in
-            the writing surface, and insert clean text without a detour.
-          </p>
-          <p className="product-proof-output">
-            The finished text appears where the cursor was already waiting.
-          </p>
-        </div>
-      </div>
-
-      <div className="recording-island" aria-label="Recording island preview">
-        <div>
-          <p>RubyWhisper</p>
-          <strong>Listening</strong>
-        </div>
-        <div className="voice-meter" aria-hidden="true">
+        <div className="product-proof-dock" aria-hidden="true">
+          <span />
           <span />
           <span />
           <span />
