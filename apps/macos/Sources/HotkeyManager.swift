@@ -69,7 +69,11 @@ struct HotkeyRegistrationState: Equatable {
 }
 
 final class HotkeyManager {
+    private static let defaultFnDoubleTapInterval: TimeInterval = 0.30
+
     private let backend: HotkeyBackending
+    private let clock: () -> Date
+    private let fnDoubleTapInterval: TimeInterval
     private var configuration = ShortcutConfiguration(
         hold: .defaultHold,
         toggle: .defaultToggle
@@ -77,6 +81,8 @@ final class HotkeyManager {
     private var inputState = ShortcutInputState()
     private var desiredConfiguration: ShortcutConfiguration?
     private var pauseReasons: Set<HotkeyLifecyclePauseReason> = []
+    private var lastStandaloneFnHoldReleaseAt: Date?
+    private var suppressNextStandaloneFnHoldRelease = false
 
     private(set) var registrationState = HotkeyRegistrationState.unregistered {
         didSet {
@@ -98,8 +104,14 @@ final class HotkeyManager {
     var onEscapeKeyPressed: (() -> Bool)?
     var onRegistrationStateChanged: ((HotkeyRegistrationState) -> Void)?
 
-    init(backend: HotkeyBackending = GlobalShortcutBackend()) {
+    init(
+        backend: HotkeyBackending = GlobalShortcutBackend(),
+        fnDoubleTapInterval: TimeInterval = HotkeyManager.defaultFnDoubleTapInterval,
+        clock: @escaping () -> Date = { Date() }
+    ) {
         self.backend = backend
+        self.fnDoubleTapInterval = fnDoubleTapInterval
+        self.clock = clock
     }
 
     var currentPressedModifiers: ShortcutModifiers {
@@ -149,6 +161,7 @@ final class HotkeyManager {
             backend.onEscapeKeyPressed = nil
             backend.onCaptureFailure = nil
             inputState = ShortcutInputState()
+            resetDoubleTapTracking()
             registrationState = failedRegistrationState(for: error)
             throw error
         }
@@ -167,6 +180,7 @@ final class HotkeyManager {
         backend.onEscapeKeyPressed = nil
         backend.onCaptureFailure = nil
         inputState = ShortcutInputState()
+        resetDoubleTapTracking()
         registrationState = HotkeyRegistrationState(
             phase: reason == nil ? .unregistered : .disabled,
             reason: reason == nil ? .none : .paused,
@@ -206,10 +220,67 @@ final class HotkeyManager {
             configuration: configuration
         )
         inputState = result.state
-        for event in result.emittedEvents {
+        for event in shortcutEventsWithFnDoubleTapPromotion(result.emittedEvents) {
             onShortcutEvent?(event)
         }
         return result.consumeDecision
+    }
+
+    private func shortcutEventsWithFnDoubleTapPromotion(_ events: [ShortcutEvent]) -> [ShortcutEvent] {
+        let isStandaloneHoldRelease = events == [.holdDeactivated]
+
+        return events.map { event in
+            switch event {
+            case .holdActivated:
+                guard shouldPromoteFnHoldActivationToToggle() else { return event }
+                lastStandaloneFnHoldReleaseAt = nil
+                suppressNextStandaloneFnHoldRelease = true
+                return .toggleActivated
+
+            case .holdDeactivated:
+                guard isDefaultFnHoldBinding else { return event }
+                if suppressNextStandaloneFnHoldRelease {
+                    suppressNextStandaloneFnHoldRelease = false
+                    return event
+                }
+                if isStandaloneHoldRelease {
+                    lastStandaloneFnHoldReleaseAt = clock()
+                }
+                return event
+
+            case .toggleActivated:
+                lastStandaloneFnHoldReleaseAt = nil
+                return event
+
+            case .toggleDeactivated:
+                return event
+            }
+        }
+    }
+
+    private func shouldPromoteFnHoldActivationToToggle() -> Bool {
+        guard isDefaultFnHoldBinding, let releasedAt = lastStandaloneFnHoldReleaseAt else {
+            return false
+        }
+
+        let interval = clock().timeIntervalSince(releasedAt)
+        guard interval >= 0, interval <= fnDoubleTapInterval else {
+            lastStandaloneFnHoldReleaseAt = nil
+            return false
+        }
+        return true
+    }
+
+    private var isDefaultFnHoldBinding: Bool {
+        configuration.hold.kind == .modifierKey &&
+            configuration.hold.keyCode == 63 &&
+            configuration.hold.modifiers.isEmpty &&
+            configuration.hold.exactModifierKeyCodes == nil
+    }
+
+    private func resetDoubleTapTracking() {
+        lastStandaloneFnHoldReleaseAt = nil
+        suppressNextStandaloneFnHoldRelease = false
     }
 
     private func handleCaptureFailure(_ failure: HotkeyBackendCaptureFailure) {
@@ -217,6 +288,7 @@ final class HotkeyManager {
         backend.onEscapeKeyPressed = nil
         backend.onCaptureFailure = nil
         inputState = ShortcutInputState()
+        resetDoubleTapTracking()
         pauseReasons.insert(.registrationFailureRecovery)
 
         registrationState = HotkeyRegistrationState(

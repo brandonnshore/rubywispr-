@@ -519,6 +519,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var pendingManualCommandInvocation = false
     private var pendingShortcutStartTask: Task<Void, Never>?
     private var pendingShortcutStartMode: RecordingTriggerMode?
+    private var pendingHoldTapStopTask: Task<Void, Never>?
     private var automaticTerminationDisabled = false
     private var activeAudioInterruption: ActiveAudioInterruption?
     private var activeTransientRecordingArtifact: TransientRecordingArtifact?
@@ -530,6 +531,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var pendingMicrophonePermissionSelectionSnapshot: AppSelectionSnapshot?
     private var pendingMicrophonePermissionManualCommandRequested: Bool?
     private let postTranscriptionUpdateReminderDuration: TimeInterval = 7
+    private let holdTapToToggleGrace: TimeInterval = 0.32
+    private let alertSoundOutputScale: Float = 0.62
 
     init() {
         UserDefaults.standard.removeObject(forKey: "force_http2_transcription")
@@ -2056,10 +2059,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         switch action {
         case .start(let mode):
+            cancelPendingHoldTapStop()
             guard validateShortcutStartGate(mode: mode) else { return }
             os_log(.info, log: recordingLog, "Shortcut start fired for mode %{public}@", mode.rawValue)
             scheduleShortcutStart(mode: mode)
         case .stop:
+            cancelPendingHoldTapStop()
             cancelPendingShortcutStart()
             guard isRecording else {
                 shortcutSessionController.reset()
@@ -2067,7 +2072,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 return
             }
             stopAndTranscribe()
+        case .stopAfterHoldTapGrace:
+            scheduleHoldTapStop()
         case .switchedToToggle:
+            cancelPendingHoldTapStop()
             if isRecording {
                 activeRecordingTriggerMode = .toggle
                 recordingDurationMonitor.updateMode(.toggle)
@@ -2559,7 +2567,38 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
+    private func scheduleHoldTapStop() {
+        cancelPendingHoldTapStop()
+        let delay = holdTapToToggleGrace
+        pendingHoldTapStopTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            } catch {
+                return
+            }
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.pendingHoldTapStopTask = nil
+                self.cancelPendingShortcutStart()
+                guard self.isRecording else {
+                    self.shortcutSessionController.reset()
+                    self.activeRecordingTriggerMode = nil
+                    return
+                }
+                self.stopAndTranscribe()
+            }
+        }
+    }
+
+    private func cancelPendingHoldTapStop() {
+        pendingHoldTapStopTask?.cancel()
+        pendingHoldTapStopTask = nil
+    }
+
     private func cancelPendingShortcutStart(resetMode: Bool = true) {
+        pendingHoldTapStopTask?.cancel()
+        pendingHoldTapStopTask = nil
         pendingShortcutStartTask?.cancel()
         pendingShortcutStartTask = nil
         pendingSelectionSnapshot = nil
@@ -3090,7 +3129,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         guard alertSoundsEnabled else { return }
 
         let sound = NSSound(named: name)
-        sound?.volume = soundVolume
+        sound?.volume = min(max(soundVolume * alertSoundOutputScale, 0), 1)
         sound?.play()
     }
 
@@ -3183,6 +3222,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func stopAndTranscribe() {
+        cancelPendingHoldTapStop()
         let accountGateDecision = authCoordinatorState.dictationAccountGateDecision
         guard accountGateDecision.allowsDictation else {
             stopRecordingWithoutTranscribing(for: accountGateDecision)

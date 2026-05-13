@@ -48,6 +48,7 @@ private struct HotkeyManagerTests {
         try disabledConfigurationDoesNotStartBackend()
         holdSessionStartsAndStopsOnlyWhileHeld()
         commandFnToggleStartsAndStopsWithoutHoldFallback()
+        doubleFnTapSwitchesHeldSessionToToggle()
         plainFnStopsActiveToggleWithoutStartingHold()
         resetActiveSessionClearsHeldState()
 
@@ -149,10 +150,11 @@ private struct HotkeyManagerTests {
             "repeated hold activation should be ignored while held"
         )
         expect(
-            controller.handle(event: .holdDeactivated, isTranscribing: false) == .stop,
-            "hold release should stop active hold recording"
+            controller.handle(event: .holdDeactivated, isTranscribing: false) == .stopAfterHoldTapGrace,
+            "hold release should schedule a short grace stop for double-tap toggle"
         )
-        expect(controller.activeMode == nil, "hold release should reset active mode")
+        expect(controller.activeMode == .hold, "hold release should keep hold active during grace")
+        controller.reset()
         expect(
             controller.handle(event: .holdDeactivated, isTranscribing: false) == nil,
             "extra hold release should be ignored from idle"
@@ -187,6 +189,45 @@ private struct HotkeyManagerTests {
         backend.send(.modifierChanged(keyCode: 63, isDown: false))
         backend.send(.modifierChanged(keyCode: 55, isDown: false))
         expect(actions == [.start(.toggle), .stop], "release after toggle stop should not emit another action")
+    }
+
+    private static func doubleFnTapSwitchesHeldSessionToToggle() {
+        let backend = MockHotkeyBackend()
+        var now = Date(timeIntervalSinceReferenceDate: 1_000)
+        let manager = HotkeyManager(
+            backend: backend,
+            fnDoubleTapInterval: 0.30,
+            clock: { now }
+        )
+        let controller = DictationShortcutSessionController()
+        var actions: [DictationShortcutAction] = []
+        manager.onShortcutEvent = { event in
+            if let action = controller.handle(event: event, isTranscribing: false) {
+                actions.append(action)
+            }
+        }
+
+        try! manager.register(configuration: ShortcutConfiguration(hold: .defaultHold, toggle: .defaultToggle))
+
+        backend.send(.modifierChanged(keyCode: 63, isDown: true))
+        backend.send(.modifierChanged(keyCode: 63, isDown: false))
+        expect(
+            actions == [.start(.hold), .stopAfterHoldTapGrace],
+            "first Fn tap should start hold then schedule a grace stop"
+        )
+
+        now = now.addingTimeInterval(0.18)
+        backend.send(.modifierChanged(keyCode: 63, isDown: true))
+        expect(
+            actions == [.start(.hold), .stopAfterHoldTapGrace, .switchedToToggle],
+            "second Fn tap inside the grace window should latch the existing hold into toggle"
+        )
+
+        backend.send(.modifierChanged(keyCode: 63, isDown: false))
+        expect(
+            actions == [.start(.hold), .stopAfterHoldTapGrace, .switchedToToggle],
+            "release after double-Fn latch should not stop the toggle session"
+        )
     }
 
     private static func plainFnStopsActiveToggleWithoutStartingHold() {

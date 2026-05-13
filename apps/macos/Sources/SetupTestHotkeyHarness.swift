@@ -66,10 +66,10 @@ final class SetupTestHotkeyHarness: ObservableObject {
         switch action {
         case .start(let mode):
             scheduleStart(mode: mode, delay: startDelay)
-        case .stop:
+        case .stop, .stopAfterHoldTapGrace:
             cancelPendingStart()
             DispatchQueue.main.async {
-                self.onAction?(action)
+                self.onAction?(.stop)
             }
         case .switchedToToggle:
             if pendingStartMode != nil {
