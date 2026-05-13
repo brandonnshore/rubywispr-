@@ -23,11 +23,16 @@ enum OverlayPhase {
 // MARK: - Panel Helpers
 
 private enum RecordingOverlayGeometry {
-    /// Active expanded pill; compact enough to feel like a tool, not a Dock banner.
-    static let compactWidth: CGFloat = 160
+    /// Push-to-talk stays small: just a mic and live meter while the key is held.
+    static let holdWidth: CGFloat = 104
+    /// Hands-free/toggle mode has explicit cancel + stop controls.
+    static let toggleWidth: CGFloat = 150
+    /// Processing is a single centered status, not stacked loaders.
+    static let processingWidth: CGFloat = 124
+    static let confirmWidth: CGFloat = 86
     /// Recovery layout still needs more room for affordance copy + actions.
-    static let recoveryWidth: CGFloat = 252
-    static let baseHeight: CGFloat = 32
+    static let recoveryWidth: CGFloat = 248
+    static let baseHeight: CGFloat = 30
     static let screenMargin: CGFloat = 8
     /// Distance above the Dock chrome (or screen edge when Dock auto-hides).
     static let dockOffset: CGFloat = 6
@@ -61,22 +66,13 @@ private func makePillContent<V: View>(
     let pillShape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
     let shaped = rootView
         .frame(width: width, height: height)
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Theme.Color.islandActiveFillTop,
-                    Theme.Color.islandActiveFill,
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background(Theme.Color.islandActiveFill)
         .overlay(
             pillShape
                 .strokeBorder(Theme.Color.islandStrokeInner, lineWidth: 0.5)
         )
         .clipShape(pillShape)
-        .shadow(color: Theme.Color.islandShadow, radius: 8, x: 0, y: 2)
+        .shadow(color: Theme.Color.islandShadow, radius: 4, x: 0, y: 1)
 
     let hosting = NSHostingView(rootView: shaped)
     hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
@@ -299,6 +295,20 @@ final class RecordingOverlayManager {
     func showSyntheticIslandHarnessScenario(_ scenario: RecordingIslandVisualHarnessScenario) {
         DispatchQueue.main.async {
             self.overlayState.audioLevel = scenario.syntheticAudioLevel
+            switch scenario.presentation.state {
+            case .recordingHold:
+                self.overlayState.recordingTriggerMode = .hold
+            case .recordingToggle, .nearingDurationLimit:
+                self.overlayState.recordingTriggerMode = .toggle
+            case .hiddenIdle, .onboardingBlocked, .accountRefreshing, .signedOut,
+                 .termsRequired, .trialExhausted, .paymentFailed, .accountBlocked,
+                 .microphoneRecovery, .accessibilityRecovery, .hotkeyUnavailable,
+                 .hotkeyConflict, .recorderBusy, .durationLimitReached,
+                 .processingUploading, .inserting, .success, .insertionUnavailable,
+                 .fallbackCopied, .insertionFailed, .rateLimited, .networkError,
+                 .providerError, .invalidAudio, .serviceError, .unsafeRetryRequired:
+                break
+            }
             self.showIslandPresentation(
                 scenario.presentation,
                 animatedResize: true
@@ -430,9 +440,23 @@ final class RecordingOverlayManager {
     }
 
     private var overlayWidth: CGFloat {
-        overlayState.phase == .updateAvailable || overlayState.islandPresentation.usesRecoveryLayout
-            ? RecordingOverlayGeometry.recoveryWidth
-            : RecordingOverlayGeometry.compactWidth
+        if overlayState.phase == .updateAvailable || overlayState.islandPresentation.usesRecoveryLayout {
+            return RecordingOverlayGeometry.recoveryWidth
+        }
+
+        switch overlayState.islandPresentation.visualState {
+        case .listening:
+            return overlayState.recordingTriggerMode == .toggle ||
+                overlayState.islandPresentation.state == .nearingDurationLimit
+                ? RecordingOverlayGeometry.toggleWidth
+                : RecordingOverlayGeometry.holdWidth
+        case .processing:
+            return RecordingOverlayGeometry.processingWidth
+        case .confirm:
+            return RecordingOverlayGeometry.confirmWidth
+        case .idle, .error:
+            return RecordingOverlayGeometry.processingWidth
+        }
     }
 
     private func showIslandPresentation(
@@ -503,12 +527,12 @@ struct WaveformBar: View {
     let amplitude: CGFloat
 
     private let minHeight: CGFloat = 2
-    private let maxHeight: CGFloat = 16
+    private let maxHeight: CGFloat = 14
 
     var body: some View {
         Capsule()
             .fill(.white)
-            .frame(width: 2.5, height: minHeight + (maxHeight - minHeight) * amplitude)
+            .frame(width: 2.25, height: minHeight + (maxHeight - minHeight) * amplitude)
     }
 }
 
@@ -533,14 +557,14 @@ struct WaveformView: View {
                 waveformBars(pulseTime: nil)
             }
         }
-        .frame(height: 17)
+        .frame(height: 15)
     }
 
     private func reducedMotionBars() -> some View {
         let level = CGFloat(max(min(audioLevel, 1), 0))
         let tickLevel = (level * 4).rounded(.down) / 4
 
-        return HStack(spacing: 2.5) {
+        return HStack(spacing: 2.25) {
             ForEach(0..<Self.barCount, id: \.self) { index in
                 WaveformBar(amplitude: min(tickLevel * Self.multipliers[index], 1.0))
             }
@@ -548,7 +572,7 @@ struct WaveformView: View {
     }
 
     private func waveformBars(pulseTime: TimeInterval?) -> some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 1.75) {
             ForEach(0..<Self.barCount, id: \.self) { index in
                 WaveformBar(amplitude: barAmplitude(for: index, pulseTime: pulseTime))
                     .animation(
@@ -590,109 +614,31 @@ struct WaveformView: View {
     }
 }
 
-struct ProcessingWaveformView: View {
-    private static let barCount = 5
-    private static let centerIndex = CGFloat((barCount - 1) / 2)
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-
-            HStack(spacing: 4) {
-                ForEach(0..<Self.barCount, id: \.self) { index in
-                    ProcessingPill(
-                        amplitude: amplitude(for: index, time: time),
-                        opacity: opacity(for: index, time: time)
-                    )
-                }
-            }
-            .frame(height: 17)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func phase(for index: Int, time: TimeInterval) -> Double {
-        let cycle = 1.05
-        let stagger = 0.11
-        return ((time - Double(index) * stagger).truncatingRemainder(dividingBy: cycle)) / cycle
-    }
-
-    private func pulse(for index: Int, time: TimeInterval) -> CGFloat {
-        let phase = phase(for: index, time: time)
-        let wave = 0.5 + 0.5 * sin((phase * 2.0 * .pi) - (.pi / 2.0))
-        return CGFloat(pow(wave, 1.9))
-    }
-
-    private func amplitude(for index: Int, time: TimeInterval) -> CGFloat {
-        let centerDistance = abs(CGFloat(index) - Self.centerIndex) / Self.centerIndex
-        let baseline = 0.18 + (1.0 - centerDistance) * 0.1
-        return min(baseline + pulse(for: index, time: time) * 0.68, 1.0)
-    }
-
-    private func opacity(for index: Int, time: TimeInterval) -> CGFloat {
-        0.42 + pulse(for: index, time: time) * 0.52
-    }
-}
-
-private struct ProcessingPill: View {
-    let amplitude: CGFloat
-    let opacity: CGFloat
-
-    private let minHeight: CGFloat = 4
-    private let maxHeight: CGFloat = 15
-
-    var body: some View {
-        Capsule()
-            .fill(.white)
-            .frame(width: 3.5, height: minHeight + (maxHeight - minHeight) * amplitude)
-            .opacity(opacity)
-    }
-}
-
 struct ProcessingIndicatorView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var showsExtendedSpinner = false
     @State private var rotation: Double = 0
 
     var body: some View {
         ZStack {
             if reduceMotion {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.88))
-                    .frame(height: 17)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if showsExtendedSpinner {
                 Circle()
-                    .trim(from: 0.14, to: 0.88)
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                    .frame(width: 14, height: 14)
+                    .fill(.white.opacity(0.78))
+                    .frame(width: 6, height: 6)
+            } else {
+                Circle()
+                    .trim(from: 0.18, to: 0.86)
+                    .stroke(Color.white.opacity(0.92), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .frame(width: 13, height: 13)
                     .rotationEffect(.degrees(rotation))
-                    .frame(height: 17)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
                     .onAppear {
                         rotation = 0
                         withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
                             rotation = 360
                         }
                     }
-            } else {
-                ProcessingWaveformView()
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
-        .task {
-            guard !reduceMotion else { return }
-            showsExtendedSpinner = false
-            do {
-                try await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    showsExtendedSpinner = true
-                }
-            } catch {}
-        }
+        .frame(width: 16, height: 16)
     }
 }
 
@@ -729,6 +675,29 @@ struct InitializingDotsView: View {
     }
 }
 
+struct HoldRecordingView: View {
+    let audioLevel: Float
+    var showsActivityPulse = false
+    var reduceMotion = false
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(width: 15, height: 15)
+
+            WaveformView(
+                audioLevel: audioLevel,
+                showsActivityPulse: showsActivityPulse,
+                reduceMotion: reduceMotion
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel("Recording while held")
+    }
+}
+
 struct RecordingOverlayView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var state: RecordingOverlayState
@@ -736,9 +705,7 @@ struct RecordingOverlayView: View {
     let onUpdateOverlayPressed: () -> Void
     let onRecoveryActionPressed: (RecordingIslandAction) -> Void
 
-    @State private var controlsVisible = true
-
-    private let accessoryWidth: CGFloat = 26
+    private let accessoryWidth: CGFloat = 24
 
     private var visualState: RecordingIslandVisualState {
         state.islandPresentation.visualState
@@ -748,16 +715,22 @@ struct RecordingOverlayView: View {
         visualState == .listening && state.islandPresentation.showsVisualizer
     }
 
+    private var showsHandsFreeControls: Bool {
+        visualState == .listening &&
+            (state.recordingTriggerMode == .toggle ||
+             state.islandPresentation.state == .nearingDurationLimit)
+    }
+
     private var showsRecoveryFeedback: Bool {
         state.phase == .feedback && visualState == .error
     }
 
     private var showsCancelControl: Bool {
-        visualState == .listening || visualState == .processing
+        showsHandsFreeControls
     }
 
     private var showsRightControl: Bool {
-        visualState == .listening || visualState == .processing || visualState == .confirm
+        showsHandsFreeControls || visualState == .confirm
     }
 
     var body: some View {
@@ -772,9 +745,14 @@ struct RecordingOverlayView: View {
             } else {
                 ZStack {
                     Group {
-                        if state.phase == .initializing {
-                            InitializingDotsView()
-                                .transition(.opacity)
+                        if state.phase == .initializing ||
+                            (showsLiveRecordingContent && !showsHandsFreeControls) {
+                            HoldRecordingView(
+                                audioLevel: state.audioLevel,
+                                showsActivityPulse: state.phase == .recording,
+                                reduceMotion: reduceMotion
+                            )
+                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
                         } else if showsLiveRecordingContent {
                             WaveformView(
                                 audioLevel: state.audioLevel,
@@ -797,7 +775,7 @@ struct RecordingOverlayView: View {
                                     action: { onRecoveryActionPressed(.cancelIfSafe) }
                                 ) {
                                     Image(systemName: "xmark")
-                                        .font(.system(size: 9, weight: .bold))
+                                        .font(.system(size: 8.5, weight: .bold))
                                         .foregroundStyle(Theme.Color.cancelButtonGlyph)
                                 }
                                 .transition(controlTransition)
@@ -808,7 +786,6 @@ struct RecordingOverlayView: View {
                         }
                         .frame(width: accessoryWidth, alignment: .center)
                         .frame(maxHeight: .infinity, alignment: .center)
-                        .opacity(controlsVisible || !showsCancelControl ? 1 : 0)
 
                         Spacer(minLength: 0)
 
@@ -818,25 +795,18 @@ struct RecordingOverlayView: View {
                                     .transition(controlTransition)
                             }
                         }
-                        .frame(width: accessoryWidth, alignment: .trailing)
-                        .opacity(controlsVisible || !showsRightControl ? 1 : 0)
+                        .frame(width: accessoryWidth, alignment: .center)
+                        .frame(maxHeight: .infinity, alignment: .center)
                     }
                 }
             }
         }
-        .padding(.horizontal, 9)
+        .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.phase)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.recordingTriggerMode)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.isCommandMode)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.islandPresentation.state)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: controlsVisible)
-        .onAppear {
-            controlsVisible = true
-        }
-        .onChange(of: state.islandPresentation.state) { _ in
-            controlsVisible = true
-        }
     }
 
     @ViewBuilder
@@ -849,17 +819,9 @@ struct RecordingOverlayView: View {
                 action: onStopButtonPressed
             ) {
                 Image(systemName: "stop.fill")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 8.5, weight: .bold))
                     .foregroundStyle(Theme.Color.stopButtonGlyph)
             }
-        case .processing:
-            IslandControlCircle(fill: Theme.Color.cancelButtonFill) {
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.48)
-                    .tint(.white)
-            }
-            .accessibilityLabel("Processing")
         case .confirm:
             IslandControlCircle(fill: Theme.Color.confirmButtonFill) {
                 Image(systemName: "checkmark")
@@ -867,7 +829,7 @@ struct RecordingOverlayView: View {
                     .foregroundStyle(Theme.Color.confirmButtonGlyph)
             }
             .accessibilityLabel("Done")
-        case .idle, .error:
+        case .idle, .processing, .error:
             EmptyView()
         }
     }
@@ -902,7 +864,7 @@ private struct IslandControlCircle<Content: View>: View {
 
     var body: some View {
         content()
-            .frame(width: 23, height: 23)
+            .frame(width: 22, height: 22, alignment: .center)
             .background(Circle().fill(fill))
     }
 }
@@ -920,25 +882,34 @@ struct IslandProgressView: View {
     let presentation: RecordingIslandPresentation
 
     var body: some View {
-        ZStack {
-            ProcessingIndicatorView()
+        HStack(spacing: 6) {
+            if presentation.visualState == .processing {
+                ProcessingIndicatorView()
+                    .accessibilityLabel(presentation.title)
 
-            HStack {
+                if presentation.state != .processingUploading {
+                    Text(presentation.title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(maxWidth: 82, alignment: .leading)
+                }
+            } else {
                 Image(systemName: presentation.systemImageName)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.9))
-                    .frame(width: 18)
-
-                Spacer(minLength: 0)
+                    .frame(width: 15)
 
                 Text(presentation.title)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                    .frame(maxWidth: 72, alignment: .trailing)
+                    .frame(maxWidth: 62, alignment: .leading)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }
 
