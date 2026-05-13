@@ -23,13 +23,13 @@ enum OverlayPhase {
 // MARK: - Panel Helpers
 
 private enum RecordingOverlayGeometry {
-    /// Push-to-talk stays small: just a mic and live meter while the key is held.
-    static let holdWidth: CGFloat = 104
-    /// Hands-free/toggle mode has explicit cancel + stop controls.
-    static let toggleWidth: CGFloat = 150
-    /// Processing is a single centered status, not stacked loaders.
-    static let processingWidth: CGFloat = 124
-    static let confirmWidth: CGFloat = 86
+    /// Flow-style push-to-talk: waveform-only pill.
+    static let holdWidth: CGFloat = 72
+    /// Flow-style hands-free: cancel + waveform + finish.
+    static let toggleWidth: CGFloat = 104
+    /// Processing stays compact and wordless before dismissing.
+    static let processingWidth: CGFloat = 72
+    static let confirmWidth: CGFloat = 72
     /// Recovery layout still needs more room for affordance copy + actions.
     static let recoveryWidth: CGFloat = 248
     static let baseHeight: CGFloat = 30
@@ -72,7 +72,7 @@ private func makePillContent<V: View>(
                 .strokeBorder(Theme.Color.islandStrokeInner, lineWidth: 0.5)
         )
         .clipShape(pillShape)
-        .shadow(color: Theme.Color.islandShadow, radius: 4, x: 0, y: 1)
+        .shadow(color: Theme.Color.islandShadow, radius: 1, x: 0, y: 1)
 
     let hosting = NSHostingView(rootView: shaped)
     hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
@@ -251,7 +251,7 @@ final class RecordingOverlayManager {
 
     func showSuccess() {
         DispatchQueue.main.async {
-            self.showIslandPresentation(RecordingIslandStateMachine.success(), animatedResize: true)
+            self.dismissAll()
         }
     }
 
@@ -468,6 +468,10 @@ final class RecordingOverlayManager {
             dismissAll()
             return
         }
+        if presentation.state == .success {
+            dismissAll()
+            return
+        }
 
         switch presentation.state {
         case .recordingHold, .recordingToggle, .nearingDurationLimit:
@@ -681,18 +685,11 @@ struct HoldRecordingView: View {
     var reduceMotion = false
 
     var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.92))
-                .frame(width: 15, height: 15)
-
-            WaveformView(
-                audioLevel: audioLevel,
-                showsActivityPulse: showsActivityPulse,
-                reduceMotion: reduceMotion
-            )
-        }
+        WaveformView(
+            audioLevel: audioLevel,
+            showsActivityPulse: showsActivityPulse,
+            reduceMotion: reduceMotion
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityLabel("Recording while held")
     }
@@ -775,7 +772,7 @@ struct RecordingOverlayView: View {
                                     action: { onRecoveryActionPressed(.cancelIfSafe) }
                                 ) {
                                     Image(systemName: "xmark")
-                                        .font(.system(size: 8.5, weight: .bold))
+                                        .font(.system(size: 11, weight: .bold))
                                         .foregroundStyle(Theme.Color.cancelButtonGlyph)
                                 }
                                 .transition(controlTransition)
@@ -814,12 +811,12 @@ struct RecordingOverlayView: View {
         switch visualState {
         case .listening:
             IslandControlButton(
-                accessibilityLabel: "Stop recording",
+                accessibilityLabel: "Finish recording",
                 fill: Theme.Color.stopButtonFill,
                 action: onStopButtonPressed
             ) {
-                Image(systemName: "stop.fill")
-                    .font(.system(size: 8.5, weight: .bold))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11.5, weight: .bold))
                     .foregroundStyle(Theme.Color.stopButtonGlyph)
             }
         case .confirm:
@@ -864,7 +861,7 @@ private struct IslandControlCircle<Content: View>: View {
 
     var body: some View {
         content()
-            .frame(width: 22, height: 22, alignment: .center)
+            .frame(width: 23, height: 23, alignment: .center)
             .background(Circle().fill(fill))
     }
 }
@@ -887,7 +884,7 @@ struct IslandProgressView: View {
                 ProcessingIndicatorView()
                     .accessibilityLabel(presentation.title)
 
-                if presentation.state != .processingUploading {
+                if presentation.state != .processingUploading && presentation.state != .inserting {
                     Text(presentation.title)
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.9))

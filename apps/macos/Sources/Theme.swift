@@ -12,19 +12,19 @@ enum Theme {
 
         // Recording island palette (Wispr Flow inspired)
         static let islandIdleFill = SwiftUI.Color(red: 0x3A / 255, green: 0x33 / 255, blue: 0x40 / 255).opacity(0.70)
-        static let islandActiveFill = SwiftUI.Color(red: 0x0E / 255, green: 0x0E / 255, blue: 0x10 / 255)
-        static let islandActiveFillTop = SwiftUI.Color(red: 0x1A / 255, green: 0x18 / 255, blue: 0x1F / 255)
-        static let islandStrokeInner = SwiftUI.Color.white.opacity(0.06)
-        static let islandShadow = SwiftUI.Color.black.opacity(0.18)
+        static let islandActiveFill = SwiftUI.Color(red: 0x01 / 255, green: 0x01 / 255, blue: 0x01 / 255)
+        static let islandActiveFillTop = SwiftUI.Color(red: 0x08 / 255, green: 0x08 / 255, blue: 0x08 / 255)
+        static let islandStrokeInner = SwiftUI.Color.white.opacity(0.16)
+        static let islandShadow = SwiftUI.Color.black.opacity(0.10)
 
         // Waveform
         static let waveformBar = SwiftUI.Color(red: 0xF5 / 255, green: 0xF5 / 255, blue: 0xF0 / 255)
         static let waveformBarAccent = SwiftUI.Color(red: 0xD8 / 255, green: 0x6B / 255, blue: 0x7A / 255)
 
         // Controls
-        static let cancelButtonFill = SwiftUI.Color.white.opacity(0.12)
+        static let cancelButtonFill = SwiftUI.Color.white.opacity(0.18)
         static let cancelButtonGlyph = SwiftUI.Color.white.opacity(0.92)
-        static let stopButtonFill = SwiftUI.Color(red: 0xE5 / 255, green: 0x3E / 255, blue: 0x4C / 255)
+        static let stopButtonFill = SwiftUI.Color.white.opacity(0.18)
         static let stopButtonGlyph = SwiftUI.Color.white
         static let confirmButtonFill = SwiftUI.Color.white
         static let confirmButtonGlyph = SwiftUI.Color(red: 0x0E / 255, green: 0x0E / 255, blue: 0x10 / 255)
@@ -57,7 +57,7 @@ enum Theme {
         static let idleWidth: CGFloat = 64
         static let idleHeight: CGFloat = 20
         /// Active expanded pill containing controls + waveform.
-        static let activeWidth: CGFloat = 150
+        static let activeWidth: CGFloat = 104
         static let activeHeight: CGFloat = 30
         /// Distance above the Dock chrome.
         static let dockOffset: CGFloat = 6

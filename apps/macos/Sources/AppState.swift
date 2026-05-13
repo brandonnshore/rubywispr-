@@ -2905,7 +2905,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     )
                 }
                 overlayShown = true
-                self.playAlertSound(named: "Tink")
+                self.playAlertSound(named: "Bottle")
             }
         }
         audioRecorder.onRecordingFailure = { [weak self] error in
@@ -3217,7 +3217,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         isTranscribing = true
         statusText = "Preparing audio..."
         errorMessage = nil
-        playAlertSound(named: "Pop")
+        playAlertSound(named: "Bottle")
         overlayManager.showTranscribing()
         audioRecorder.stopRecording { [weak self] artifact in
             guard let self else { return }
@@ -3309,8 +3309,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                             self.statusText = shouldPressEnterAfterPaste ? enterOnlyStatusText : "Nothing to transcribe"
                             self.clearPendingOverlayDismissToken()
                             if !self.showPostTranscriptionUpdateReminderIfNeeded() {
-                                self.overlayManager.showSuccess()
-                                self.scheduleOverlayDismissAfterSuccess(after: 1.2)
+                                self.overlayManager.dismiss()
                             }
                             if shouldPressEnterAfterPaste {
                                 self.pressEnterWhenShortcutReleased()
@@ -3612,13 +3611,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 pressEnterAfterPaste { [weak self] in
                     guard let self else { return }
                     if !updateReminderShown {
-                        self.overlayManager.showSuccess()
-                        self.scheduleOverlayDismissAfterSuccess(after: 1.2)
+                        self.overlayManager.dismiss()
                     }
                 }
             } else if !updateReminderShown {
-                overlayManager.showSuccess()
-                scheduleOverlayDismissAfterSuccess(after: 1.2)
+                overlayManager.dismiss()
             }
             return
         }
@@ -4003,16 +4000,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let dismissToken = UUID()
         pendingOverlayDismissToken = dismissToken
         overlayManager.showFailureIndicator()
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self, self.pendingOverlayDismissToken == dismissToken else { return }
-            self.pendingOverlayDismissToken = nil
-            self.overlayManager.dismiss()
-        }
-    }
-
-    private func scheduleOverlayDismissAfterSuccess(after delay: TimeInterval) {
-        let dismissToken = UUID()
-        pendingOverlayDismissToken = dismissToken
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self, self.pendingOverlayDismissToken == dismissToken else { return }
             self.pendingOverlayDismissToken = nil
