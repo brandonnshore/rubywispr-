@@ -2,7 +2,8 @@ APP_NAME ?= RubyWhisper
 BUNDLE_ID ?= com.rubyadvisory.rubywhisper.dev
 BUILD_DIR = build
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
-CODESIGN_IDENTITY ?= -
+LOCAL_CODESIGN_IDENTITY := $(shell security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development:/ { print $$2; exit }')
+CODESIGN_IDENTITY ?= $(if $(strip $(LOCAL_CODESIGN_IDENTITY)),$(LOCAL_CODESIGN_IDENTITY),-)
 UPDATE_CHANNEL_ENABLED ?= false
 UPDATE_RELEASES_URL ?=
 RUBYWHISPER_BACKEND_BASE_URL ?= https://rubywhisper-web.vercel.app
@@ -30,7 +31,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run icon dmg local-dmg-preflight codesign-dmg release-signing-preflight notarize notarize-preflight test test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-update-manager test-secret-guardrails
+.PHONY: all clean run dev run-dev print-signing icon dmg local-dmg-preflight codesign-dmg release-signing-preflight notarize notarize-preflight test test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-update-manager test-secret-guardrails
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -74,6 +75,8 @@ endif
 	@plutil -replace NSMicrophoneUsageDescription -string "$(APP_NAME) needs microphone access to transcribe your speech." "$(CONTENTS)/Info.plist"
 	@plutil -replace NSSpeechRecognitionUsageDescription -string "$(APP_NAME) needs speech recognition to convert your voice to text." "$(CONTENTS)/Info.plist"
 	@plutil -replace NSAccessibilityUsageDescription -string "$(APP_NAME) needs accessibility access to detect the text cursor position and paste transcribed text." "$(CONTENTS)/Info.plist"
+	@plutil -replace NSScreenCaptureUsageDescription -string "$(APP_NAME) needs screen recording access to capture the active window for context-aware transcription." "$(CONTENTS)/Info.plist"
+	@echo "Signing $(APP_BUNDLE) with identity: $(CODESIGN_IDENTITY)"
 	@codesign --force --options runtime --sign "$(CODESIGN_IDENTITY)" --entitlements RubyWhisper.entitlements "$(APP_BUNDLE)"
 	@echo "Built $(APP_BUNDLE)"
 
@@ -195,6 +198,16 @@ clean:
 
 run: all
 	open "$(APP_BUNDLE)"
+
+dev:
+	$(MAKE) clean all APP_NAME="RubyWhisper Dev" BUNDLE_ID="com.rubyadvisory.rubywhisper.dev"
+
+run-dev:
+	$(MAKE) run APP_NAME="RubyWhisper Dev" BUNDLE_ID="com.rubyadvisory.rubywhisper.dev"
+
+print-signing:
+	@echo "Detected Apple Development identity: $(if $(strip $(LOCAL_CODESIGN_IDENTITY)),$(LOCAL_CODESIGN_IDENTITY),none)"
+	@echo "CODESIGN_IDENTITY=$(CODESIGN_IDENTITY)"
 
 test-session-store:
 	@mkdir -p $(BUILD_DIR)/tests

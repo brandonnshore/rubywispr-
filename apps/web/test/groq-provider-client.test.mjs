@@ -213,14 +213,9 @@ test("Groq transcription client normalizes network and cleanup shell failures", 
     },
   });
   assert.deepEqual(cleanupResult, {
-    ok: false,
-    error: {
-      apiErrorCode: "provider_error",
-      code: "provider_unavailable",
-      message: "Provider is unavailable.",
-      retryable: true,
-    },
-    metadata: {
+    ok: true,
+    result: {
+      cleanedText: "synthetic transcript",
       provider: "groq",
     },
   });

@@ -180,9 +180,9 @@ test("desktop account API composes synthetic billing states into metadata-only r
           ok: true,
         };
       },
-      requireAuth: async () => ({
+      requireAuth: () => ({
+        clerkUserId: syntheticBackendFixtures.clerk.memberUserId,
         ok: true,
-        userId: syntheticBackendFixtures.clerk.memberUserId,
       }),
     });
 
@@ -483,14 +483,11 @@ async function loadDesktopAccountRouteModule() {
         };
       case "@/lib/api/errors":
         return { rubyWhisperApiErrorResponse: createApiErrorResponse };
-      case "@/lib/auth/clerk":
+      case "@/lib/desktop/auth":
         return {
-          requireClerkUserId: async () => ({
-            error: {
-              code: "clerk_session_required",
-              message: "A Clerk user session is required.",
-            },
+          requireDesktopUserId: () => ({
             ok: false,
+            reason: "missing_token",
           }),
         };
       case "@/lib/usage/supabase-usage-counters":

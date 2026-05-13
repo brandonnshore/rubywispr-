@@ -11,21 +11,14 @@ struct SetupView: View {
     @Environment(\.openURL) private var openURL
     private let freeFlowAttributionSourceURL = URL(string: "https://github.com/zachlatta/freeflow")!
     private enum SetupStep: Int, CaseIterable {
-        case welcome = 0
-        case accountGate
-        case micPermission
-        case accessibility
-        case screenRecording
-        case holdShortcut
-        case toggleShortcut
-        case commandMode
-        case vocabulary
-        case launchAtLogin
+        case welcomeAccount = 0
+        case permissions
+        case shortcuts
         case testTranscription
         case ready
     }
 
-    @State private var currentStep = SetupStep.welcome
+    @State private var currentStep = SetupStep.welcomeAccount
     @State private var micPermissionStatus: FirstRunOnboardingPermissionCategory = .unknown
     @State private var accessibilityStatus: FirstRunOnboardingPermissionCategory = .notDetermined
     @State private var accessibilityTimer: Timer?
@@ -68,7 +61,7 @@ struct SetupView: View {
 
                 HStack(alignment: .center) {
                     Group {
-                        if currentStep != .welcome {
+                        if currentStep != .welcomeAccount {
                             Button("Back") {
                                 withAnimation {
                                     currentStep = previousStep(currentStep)
@@ -81,7 +74,7 @@ struct SetupView: View {
 
                     Group {
                         if currentStep != .ready {
-                            if currentStep == .vocabulary {
+                            if currentStep == .shortcuts {
                                 Button("Continue") {
                                     saveCustomVocabularyAndContinue()
                                 }
@@ -128,7 +121,7 @@ struct SetupView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             checkMicPermission()
-            if currentStep == .accessibility {
+            if currentStep == .permissions {
                 appState.markAccessibilityRecoveryIfStillMissing()
                 syncAccessibilityStatus()
             } else {
@@ -152,26 +145,12 @@ struct SetupView: View {
     @ViewBuilder
     private var currentStepView: some View {
         switch currentStep {
-        case .welcome:
-            welcomeStep
-        case .accountGate:
-            accountGateStep
-        case .micPermission:
-            micPermissionStep
-        case .accessibility:
-            accessibilityStep
-        case .screenRecording:
-            screenRecordingStep
-        case .holdShortcut:
-            holdShortcutStep
-        case .toggleShortcut:
-            toggleShortcutStep
-        case .commandMode:
-            commandModeStep
-        case .vocabulary:
-            vocabularyStep
-        case .launchAtLogin:
-            launchAtLoginStep
+        case .welcomeAccount:
+            welcomeAccountStep
+        case .permissions:
+            permissionsStep
+        case .shortcuts:
+            shortcutsStep
         case .testTranscription:
             testTranscriptionStep
         case .ready:
@@ -180,6 +159,338 @@ struct SetupView: View {
     }
 
     // MARK: - Steps
+
+    var welcomeAccountStep: some View {
+        let presentation = FirstRunOnboardingCoordinator.accountGatePresentation(
+            for: appState.authCoordinatorState,
+            recovery: appState.authAccountSnapshot.recovery
+        )
+
+        return ScrollView {
+            VStack(spacing: 18) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 96, height: 96)
+
+                VStack(spacing: 6) {
+                    Text("Welcome to \(AppName.displayName)")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+
+                    Text("Sign in, grant the two Mac permissions, choose shortcuts, then run one test whisper.")
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                setupCard(
+                    "RubyWhisper Account",
+                    systemImage: presentation.systemImageName,
+                    tint: presentation.canContinue ? .green : .blue
+                ) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(presentation.title)
+                                .font(.headline)
+                            Spacer()
+                            if presentation.showsProgress {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text(presentation.statusLabel)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Text(presentation.message)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if let failureCode = appState.authAccountSnapshot.failureCode {
+                            Text(accountRecoveryHint(for: failureCode))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        HStack(spacing: 10) {
+                            if let title = presentation.primaryActionTitle {
+                                Button(title) {
+                                    _ = appState.performDesktopAccountRecoveryAction(presentation.primaryRecoveryAction)
+                                }
+                                .keyboardShortcut(.defaultAction)
+                            }
+
+                            if appState.authCoordinatorState.isLoginBridgePending {
+                                Button("Cancel Sign In") {
+                                    appState.cancelDesktopSignIn()
+                                }
+                            }
+
+                            Button("Refresh Account") {
+                                appState.refreshDesktopAccountState()
+                            }
+                            .disabled(appState.authCoordinatorState.isLoginBridgePending)
+                        }
+                        .controlSize(.regular)
+                    }
+                }
+
+                setupCard("Attribution", systemImage: "doc.text.magnifyingglass", tint: .secondary) {
+                    HStack(spacing: 8) {
+                        Text("Derived from FreeFlow under the MIT license.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button {
+                            openURL(freeFlowAttributionSourceURL)
+                        } label: {
+                            Label("Source", systemImage: "arrow.up.right")
+                        }
+                        .controlSize(.small)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .onAppear {
+            if appState.authCoordinatorState != .signedOut &&
+                !appState.authCoordinatorState.isLoginBridgePending {
+                appState.refreshDesktopAccountState()
+            }
+        }
+    }
+
+    var permissionsStep: some View {
+        let micPresentation = MicrophonePermissionGate.presentation(for: micPermissionStatus)
+
+        return ScrollView {
+            VStack(spacing: 16) {
+                VStack(spacing: 6) {
+                    Text("Mac Permissions")
+                        .font(.title.bold())
+                    Text("RubyWhisper needs microphone input, Accessibility insertion, and app-context permission before the test whisper.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                setupCard("Microphone", systemImage: "mic.fill", tint: micPermissionColor) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text(micPresentation.title)
+                                .font(.headline)
+                            Spacer()
+                            Text(micPresentation.statusLabel)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(micPermissionColor)
+                        }
+
+                        Text(micPresentation.message)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if micPresentation.showsRecoveryPath {
+                            Text(MicrophonePermissionGate.recoveryPath)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        HStack(spacing: 10) {
+                            if let actionTitle = micPresentation.primaryActionTitle {
+                                Button(actionTitle) {
+                                    handleMicrophonePrimaryAction(micPresentation.primaryAction)
+                                }
+                            }
+
+                            if micPresentation.primaryAction == .openSystemSettings {
+                                Button("Check Again") {
+                                    checkMicPermission()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                setupCard("Accessibility", systemImage: "hand.raised.fill", tint: accessibilityStatus == .granted ? .green : .blue) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Type finished dictation where your cursor already is. RubyWhisper only asks macOS whether it is trusted.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack {
+                            Text("Status")
+                                .font(.headline)
+                            Spacer()
+                            if accessibilityStatus == .granted {
+                                Label("Granted", systemImage: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            } else if accessibilityStatus == .requesting {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Waiting")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text(accessibilityStatus.blocksInRecovery ? "Not Enabled" : "Not Requested")
+                                    .foregroundStyle(accessibilityStatus.blocksInRecovery ? .orange : .secondary)
+                            }
+                        }
+
+                        HStack(spacing: 10) {
+                            Button(accessibilityStatus.blocksInRecovery ? "Open Settings" : "Request Access") {
+                                requestAccessibility()
+                            }
+                            Button("Retry") {
+                                checkAccessibility(recoveryWhenMissing: true)
+                            }
+                        }
+                    }
+                }
+
+                setupCard("Screen Context", systemImage: "camera.viewfinder", tint: appState.hasScreenRecordingPermission ? .green : .blue) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("\(AppName.displayName) uses app context to adapt cleanup. Nothing is stored on RubyWhisper servers.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        HStack {
+                            Text("Status")
+                                .font(.headline)
+                            Spacer()
+                            if appState.hasScreenRecordingPermission {
+                                Label("Granted", systemImage: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            } else {
+                                Button("Grant Access") {
+                                    appState.requestScreenCapturePermission()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear {
+            checkMicPermission()
+            checkAccessibility()
+            startAccessibilityPolling()
+            startScreenRecordingPolling()
+        }
+        .onDisappear {
+            accessibilityTimer?.invalidate()
+            screenRecordingTimer?.invalidate()
+        }
+    }
+
+    var shortcutsStep: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                VStack(spacing: 6) {
+                    Text("Shortcuts and Preferences")
+                        .font(.title.bold())
+                    Text("Choose how dictation starts, whether selected text can be transformed, and which local preferences should be enabled.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                setupCard("Dictation Shortcuts", systemImage: "keyboard.fill") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ShortcutRoleSection(
+                            role: .hold,
+                            selection: appState.holdShortcut,
+                            validationMessage: holdShortcutValidationMessage,
+                            isCapturing: $isCapturingHoldShortcut,
+                            onSelect: { binding in
+                                holdShortcutValidationMessage = appState.setShortcut(binding, for: .hold)
+                            }
+                        )
+
+                        Divider()
+
+                        ShortcutRoleSection(
+                            role: .toggle,
+                            selection: appState.toggleShortcut,
+                            validationMessage: toggleShortcutValidationMessage,
+                            isCapturing: $isCapturingToggleShortcut,
+                            onSelect: { binding in
+                                toggleShortcutValidationMessage = appState.setShortcut(binding, for: .toggle)
+                            }
+                        )
+                    }
+                }
+
+                setupCard("Edit Mode", systemImage: "pencil") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle("Enable Edit Mode", isOn: Binding(
+                            get: { appState.isCommandModeEnabled },
+                            set: { newValue in
+                                _ = appState.setCommandModeEnabled(newValue)
+                            }
+                        ))
+
+                        Picker("Invocation Style", selection: Binding(
+                            get: { appState.commandModeStyle },
+                            set: { newValue in
+                                _ = appState.setCommandModeStyle(newValue)
+                            }
+                        )) {
+                            ForEach(CommandModeStyle.allCases) { style in
+                                Text(style.title).tag(style)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .disabled(!appState.isCommandModeEnabled)
+
+                        if appState.commandModeStyle == .manual {
+                            Picker("Extra Modifier", selection: Binding(
+                                get: { appState.commandModeManualModifier },
+                                set: { newValue in
+                                    _ = appState.setCommandModeManualModifier(newValue)
+                                }
+                            )) {
+                                ForEach(CommandModeManualModifier.allCases) { modifier in
+                                    Text(modifier.title).tag(modifier)
+                                }
+                            }
+                            .disabled(!appState.isCommandModeEnabled)
+                        }
+                    }
+                }
+
+                setupCard("Local Preferences", systemImage: "slider.horizontal.3") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle("Launch \(AppName.displayName) at login", isOn: $appState.launchAtLogin)
+
+                        Text("Vocabulary")
+                            .font(.headline)
+
+                        TextEditor(text: $customVocabularyInput)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(minHeight: 84)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                            )
+
+                        Text("Separate entries with commas, new lines, or semicolons.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            customVocabularyInput = appState.customVocabulary
+        }
+    }
 
     var welcomeStep: some View {
         VStack(spacing: 16) {
@@ -284,9 +595,10 @@ struct SetupView: View {
                 }
 
                 if let failureCode = appState.authAccountSnapshot.failureCode {
-                    Text("reason=\(failureCode.rawValue)")
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.tertiary)
+                    Text(accountRecoveryHint(for: failureCode))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 HStack(spacing: 10) {
@@ -774,7 +1086,7 @@ struct SetupView: View {
                             hotkeyRecoveryBox(
                                 title: "Global Shortcuts Unavailable",
                                 message: hotkeyError,
-                                diagnostic: "reason=\(testHotkeyHarness.registrationState.reason.rawValue)"
+                                guidance: "Enable RubyWhisper in Accessibility, then press Retry. If System Settings already shows RubyWhisper enabled, quit RubyWhisper and reset the development Accessibility row before reopening."
                             )
                         } else {
                             Text(testShortcutPrompt)
@@ -949,9 +1261,9 @@ struct SetupView: View {
                     message: appState.firstRunOnboardingStep == .ready
                         ? appState.hotkeyRecoveryMessage
                         : "Finish the required permission and test whisper steps before starting dictation.",
-                    diagnostic: appState.firstRunOnboardingStep == .ready
-                        ? appState.hotkeyDiagnosticCategory
-                        : "step=\(appState.firstRunOnboardingStep.rawValue)"
+                    guidance: appState.firstRunOnboardingStep == .ready
+                        ? "Use Accessibility first, then Retry. If macOS still blocks global shortcut capture, quit and reopen the freshly signed build before re-granting Accessibility."
+                        : "Return to the highlighted onboarding step and complete the required permission or test whisper."
                 )
             }
 
@@ -970,21 +1282,19 @@ struct SetupView: View {
 
     private var canContinueFromCurrentStep: Bool {
         switch currentStep {
-        case .accountGate:
+        case .welcomeAccount:
             let presentation = FirstRunOnboardingCoordinator.accountGatePresentation(
                 for: appState.authCoordinatorState,
                 recovery: appState.authAccountSnapshot.recovery
             )
             return presentation.canContinue
-        case .micPermission:
-            return MicrophonePermissionGate.presentation(for: micPermissionStatus).canProceed
-        case .accessibility:
-            return accessibilityStatus == .granted
-        case .screenRecording:
-            return appState.hasScreenRecordingPermission
+        case .permissions:
+            return MicrophonePermissionGate.presentation(for: micPermissionStatus).canProceed &&
+                accessibilityStatus == .granted &&
+                appState.hasScreenRecordingPermission
         case .testTranscription:
             return testPhase == .done && !testTranscript.isEmpty && testError == nil
-        default:
+        case .shortcuts, .ready:
             return true
         }
     }
@@ -1004,6 +1314,29 @@ struct SetupView: View {
 
     private var retryShortcutPrompt: String {
         "\(testShortcutPrompt) to try again"
+    }
+
+    private func accountRecoveryHint(for failureCode: RubyWhisperBackendErrorCode) -> String {
+        switch failureCode {
+        case .signedOut:
+            return "Sign in again to connect this Mac."
+        case .termsRequired:
+            return "Accept the current beta terms in your account before continuing."
+        case .subscriptionRequired, .trialExhausted:
+            return "Open Account to finish plan setup before dictation."
+        case .paymentFailed:
+            return "Update billing from Account before continuing."
+        case .accountBlocked:
+            return "Contact support if this account state looks wrong."
+        case .rateLimited:
+            return "Wait for the retry window, then try again."
+        case .durationLimitReached, .invalidAudio:
+            return "Record a shorter test whisper and try again."
+        case .providerError, .networkError, .serviceUnavailable, .internalError:
+            return "Retry after a moment. If this repeats, contact support."
+        case .unknown:
+            return "Retry after a moment. If this repeats, contact support."
+        }
     }
 
     private var canFinishSetup: Bool {
@@ -1027,7 +1360,7 @@ struct SetupView: View {
         return "Complete the local permission steps before trying a test whisper."
     }
 
-    private func hotkeyRecoveryBox(title: String, message: String, diagnostic: String) -> some View {
+    private func hotkeyRecoveryBox(title: String, message: String, guidance: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label(title, systemImage: "keyboard.badge.exclamationmark")
                 .font(.headline)
@@ -1036,9 +1369,10 @@ struct SetupView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(diagnostic)
-                .font(.caption2.monospaced())
-                .foregroundStyle(.tertiary)
+            Text(guidance)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Button("Retry") {
                     appState.retryHotkeyRegistration()
@@ -1046,8 +1380,8 @@ struct SetupView: View {
                         startTestHotkeyMonitoring()
                     }
                 }
-                Button("Keyboard Settings") {
-                    appState.openKeyboardSettings()
+                Button("Accessibility") {
+                    appState.requestAccessibilityTrust()
                 }
                 Button("Hotkey Settings") {
                     appState.openHotkeySettings()
@@ -1075,6 +1409,29 @@ struct SetupView: View {
         }
     }
 
+    private func setupCard<Content: View>(
+        _ title: String,
+        systemImage: String,
+        tint: Color = .blue,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: systemImage)
+                .font(.headline)
+                .foregroundStyle(tint)
+
+            content()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
     // MARK: - Actions
 
     func saveCustomVocabularyAndContinue() {
@@ -1088,7 +1445,7 @@ struct SetupView: View {
 
     private func previousStep(_ step: SetupStep) -> SetupStep {
         let previous = SetupStep(rawValue: step.rawValue - 1)
-        return previous ?? .welcome
+        return previous ?? .welcomeAccount
     }
 
     private func nextStep(_ step: SetupStep) -> SetupStep {
@@ -1341,7 +1698,7 @@ struct SetupView: View {
         guard appState.refreshAccessibilityTrustStatus(recoveryWhenMissing: true) else {
             syncAccessibilityStatus()
             testError = firstRunTestLocalGateError()
-            currentStep = .accessibility
+            currentStep = .permissions
             return false
         }
 

@@ -92,6 +92,7 @@ const expectedMetadataKeys = [
   "provider",
   "providerLatencyMs",
   "totalLatencyMs",
+  "traceReason",
 ];
 const expectedPayloadKeys = ["error", "metadata", "ok", "requestId"];
 const expectedErrorKeys = ["code", "desktopState", "message", "recovery", "retryable"];
@@ -350,7 +351,7 @@ test("API error helper is server-only and framework-neutral", async () => {
   assert.match(source, /^import\s+["']server-only["'];/m);
   assert.doesNotMatch(source, /from\s+["']next\/server["']/);
   assert.doesNotMatch(source, /\bserverEnv\b|\bprocess\.env\b/);
-  assert.doesNotMatch(source, /CLERK_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|GROQ_API_KEY/);
+  assert.doesNotMatch(source, /CLERK_SECRET_KEY|SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|DESKTOP_TOKEN_SECRET|STRIPE_SECRET_KEY|GROQ_API_KEY/);
 });
 
 test("account Terms route has a documented migration path to the shared helper", async () => {

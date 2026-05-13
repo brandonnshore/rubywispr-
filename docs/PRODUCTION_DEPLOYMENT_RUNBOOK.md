@@ -66,14 +66,23 @@ password/social auth, webhook endpoint, and secret values require approval.
 ### Supabase
 
 - `SUPABASE_URL`: server runtime Supabase project URL in the current scaffold.
-- `SUPABASE_ANON_KEY`: Supabase anon key, kept out of browser config until a
-  future ticket defines client access and row-level security.
-- `SUPABASE_SERVICE_ROLE_KEY`: server-only service-role key.
+- `SUPABASE_PUBLISHABLE_KEY`: Supabase publishable key, kept out of browser
+  config until a future ticket defines client access and row-level security.
+- `SUPABASE_SECRET_KEY`: server-only Supabase secret key. The app still accepts
+  legacy `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` names as fallback
+  aliases for older local environments.
 
 Human gate: production project creation, production service-role handling,
 linking, config pushes, database pushes, and migrations require approval.
 Supabase must remain metadata-only: no audio, transcripts, clipboard contents,
 context, prompts, provider payloads, or dictionary terms.
+
+### Desktop Auth
+
+- `DESKTOP_TOKEN_SECRET`: server-only signing secret for desktop account tokens.
+
+Human gate: production token signing secret generation and rotation require
+approval.
 
 ### Stripe
 

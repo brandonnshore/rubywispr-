@@ -130,7 +130,7 @@ Surfaces 3 and 4 are stock SwiftUI today — they're the next major UI lift (M3.
 
 ### Hotkey backend
 
-`GlobalShortcutBackend.swift` installs a `CGEvent.tapCreate(.cgSessionEventTap, .headInsertEventTap, .defaultTap, ...)`. Requires **Accessibility** permission. With ad-hoc-signed dev builds + hardened runtime, every rebuild has a new cdhash, which can invalidate the TCC grant. See [ADR-002 §Dev-loop pain](adr/ADR-002-reliability-and-ui-refresh.md) for the workaround (`APP_NAME="RubyWhisper Dev" make all`).
+`GlobalShortcutBackend.swift` installs a `CGEvent.tapCreate(.cgSessionEventTap, .headInsertEventTap, .defaultTap, ...)`. Requires **Accessibility** permission. Local builds prefer an installed `Apple Development` signing identity so TCC grants survive rebuilds; explicit ad hoc builds (`CODESIGN_IDENTITY=-`) can still invalidate grants because the code hash changes. See [ADR-002 §TCC dev-loop friction](adr/ADR-002-reliability-and-ui-refresh.md) for reset/re-grant steps.
 
 ### Backend client
 
@@ -166,8 +166,8 @@ Two manually-synced sources of truth:
 ### Mac
 - `cd apps/macos && make all` — single swiftc invocation, all sources at once.
 - Output: `build/RubyWhisper.app`.
-- Build with distinct bundle name to avoid Accessibility ambiguity: `APP_NAME="RubyWhisper Dev" make all` → `build/RubyWhisper Dev.app`. See [ADR-002](adr/ADR-002-reliability-and-ui-refresh.md).
-- Code signing: ad-hoc (`CODESIGN_IDENTITY ?= -`). Hardened runtime enabled.
+- Build with distinct bundle name to avoid Accessibility ambiguity: `make run-dev` → `build/RubyWhisper Dev.app`. See [ADR-002](adr/ADR-002-reliability-and-ui-refresh.md).
+- Code signing: local `Apple Development` identity when installed, explicit ad hoc when `CODESIGN_IDENTITY=-`. Hardened runtime enabled.
 - No notarization yet; not shipping outside dev machines.
 
 ### Tests

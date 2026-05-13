@@ -18,6 +18,7 @@ private struct RecordingIslandStateMachineTests {
         mapsAccountStates()
         mapsBackendFailuresToSafeRecoveryActions()
         mapsDirectInsertionResultsToIslandRecoveryStates()
+        mapsSemanticStatesIntoFiveVisualStates()
         requiredRecoveryStatesHaveCompactCopyAndActions()
         exposesPrivacySafeSyntheticRecoveryProofStates()
         visualHarnessCoversEveryImplementedState()
@@ -259,6 +260,38 @@ private struct RecordingIslandStateMachineTests {
         ))
         expect(duplicate.state == .unsafeRetryRequired, "duplicate in-flight insertion should require a new whisper")
         expect(duplicate.primaryAction == .startNewWhisper, "duplicate in-flight insertion should expose new whisper")
+    }
+
+    private static func mapsSemanticStatesIntoFiveVisualStates() {
+        let visualStates = Set(RecordingIslandStateName.allCases.map(\.visualState))
+        expect(
+            visualStates == Set(RecordingIslandVisualState.allCases),
+            "island semantic states should collapse into the five-state visual contract"
+        )
+
+        let expectedMappings: [(RecordingIslandStateName, RecordingIslandVisualState)] = [
+            (.hiddenIdle, .idle),
+            (.recordingHold, .listening),
+            (.recordingToggle, .listening),
+            (.nearingDurationLimit, .listening),
+            (.processingUploading, .processing),
+            (.inserting, .processing),
+            (.success, .confirm),
+            (.signedOut, .error),
+            (.durationLimitReached, .error),
+            (.fallbackCopied, .error),
+            (.providerError, .error),
+        ]
+
+        for (state, visualState) in expectedMappings {
+            let presentation = RecordingIslandStateMachine.syntheticPresentation(for: state)
+            expect(state.visualState == visualState, "\(state.rawValue) should map to \(visualState.rawValue)")
+            expect(presentation.visualState == visualState, "\(state.rawValue) presentation should expose \(visualState.rawValue)")
+            expect(
+                presentation.safeLogSummary.contains("visual_state=\(visualState.rawValue)"),
+                "\(state.rawValue) safe summary should include visual state metadata"
+            )
+        }
     }
 
     private static func requiredRecoveryStatesHaveCompactCopyAndActions() {

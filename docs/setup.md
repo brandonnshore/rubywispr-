@@ -35,8 +35,9 @@ Every variable named in `TECHNICAL_INFRASTRUCTURE.md` is accounted for here. Rec
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk | dev, staging, production | Public client identifier. Keep environment-specific. |
 | `CLERK_WEBHOOK_SECRET` | Clerk | dev, staging, production | Server-only webhook secret. Production requires human approval. |
 | `SUPABASE_URL` | Supabase | dev, staging, production | Non-public server runtime URL in the current scaffold. Add a separate `NEXT_PUBLIC_*` client name only when a future integration explicitly needs browser access. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase | dev, staging, production | Server-only admin key. Production requires human approval. |
-| `SUPABASE_ANON_KEY` | Supabase | dev, staging, production | Client-safe anon key, but kept out of client config until an integration adds a `NEXT_PUBLIC_*` alias and confirms row-level security. |
+| `SUPABASE_SECRET_KEY` | Supabase | dev, staging, production | Server-only Supabase secret key. Production requires human approval. Legacy `SUPABASE_SERVICE_ROLE_KEY` is still accepted as a fallback alias. |
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase | dev, staging, production | Client-safe Supabase publishable key, but kept out of client config until an integration adds a `NEXT_PUBLIC_*` alias and confirms row-level security. Legacy `SUPABASE_ANON_KEY` is still accepted as a fallback alias. |
+| `DESKTOP_TOKEN_SECRET` | RubyWhisper web | dev, staging, production | Server-only signing secret for desktop account tokens. Production requires human approval. |
 | `STRIPE_SECRET_KEY` | Stripe | dev, staging, production | Use test keys outside production. Live key requires human approval. |
 | `STRIPE_WEBHOOK_SECRET` | Stripe | dev, staging, production | Use Stripe CLI forwarding locally and test webhook secrets for non-production. Live webhook secret requires human approval. |
 | `STRIPE_MONTHLY_PRICE_ID` | Stripe | dev, staging, production | Non-public server runtime config. Use test price IDs outside production. Live price IDs require human approval. |

@@ -57,12 +57,6 @@ async function transcribeWithGroq(
   config: RubyWhisperGroqProviderConfig,
 ) {
   const apiKey = normalizeGroqApiKey(config.apiKey ?? serverEnv.groq.apiKey);
-  console.error("GROQ_SENTINEL_2026_05_11_v2 groq_transcribe_entry", {
-    apiKeyLength: apiKey ? apiKey.length : 0,
-    apiKeyPrefix: apiKey ? apiKey.slice(0, 4) : "(empty)",
-    audioMimeType: input.audioMimeType,
-    audioDurationMs: input.audioDurationMs,
-  });
 
   if (!apiKey) {
     return createGroqTranscriptionFailure("missing_config", input);
@@ -95,16 +89,6 @@ async function transcribeWithGroq(
       const latencyMs = elapsedMs(nowMs, startedAtMs);
 
       if (!response.ok) {
-        const errorBody = await response.text().catch(() => "(unreadable)");
-        console.error("groq_transcription_failed", {
-          attempt,
-          status: response.status,
-          statusText: response.statusText,
-          body: errorBody.slice(0, 500),
-          audioMimeType: input.audioMimeType,
-          audioDurationMs: input.audioDurationMs,
-          model: input.model,
-        });
         const failure = createGroqTranscriptionFailure(
           providerErrorCodeForGroqStatus(response.status),
           input,
@@ -119,10 +103,6 @@ async function transcribeWithGroq(
           attempt < GROQ_MAX_ATTEMPTS &&
           isRetryableGroqStatus(response.status)
         ) {
-          console.error("groq_retry_scheduled", {
-            attempt,
-            reason: `status_${response.status}`,
-          });
           await sleep(GROQ_RETRY_BACKOFF_MS);
           continue;
         }
@@ -144,10 +124,6 @@ async function transcribeWithGroq(
         );
       }
 
-      if (attempt > 1) {
-        console.error("groq_retry_succeeded", { attempt });
-      }
-
       const result: RubyWhisperProviderTranscriptionResult = {
         ...(input.audioDurationMs ? { audioDurationMs: input.audioDurationMs } : {}),
         provider: rubyWhisperGroqProviderName,
@@ -160,21 +136,13 @@ async function transcribeWithGroq(
       const latencyMs = elapsedMs(nowMs, startedAtMs);
       const isAbort = error instanceof DOMException && error.name === "AbortError";
       const errorCode = isAbort ? "provider_timeout" : "network_error";
-      console.error("groq_transcription_threw", {
-        attempt,
-        name: error instanceof Error ? error.name : "unknown",
-        message:
-          error instanceof Error ? error.message.slice(0, 200) : "unknown",
-        isAbort,
-      });
       const failure = createGroqTranscriptionFailure(errorCode, input, {
         providerLatencyMs: latencyMs,
         totalLatencyMs: latencyMs,
       });
 
       if (attempt < GROQ_MAX_ATTEMPTS) {
-        console.error("groq_retry_scheduled", { attempt, reason: errorCode });
-        await sleepMs(GROQ_RETRY_BACKOFF_MS);
+        await sleep(GROQ_RETRY_BACKOFF_MS);
         continue;
       }
 

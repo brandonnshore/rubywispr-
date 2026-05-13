@@ -165,6 +165,22 @@ button {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
   }
+
+  .rw-reveal,
+  .rw-scroll-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .rw-button:hover,
+  .route-link:hover,
+  .email-auth-form button:hover:not(:disabled),
+  .account-acceptance-form button:hover:not(:disabled),
+  .account-billing-actions button:hover:not(:disabled),
+  .admin-friend-form button:hover:not(:disabled) {
+    transform: none !important;
+  }
 }
 
 h1,
@@ -184,6 +200,34 @@ h1 {
   font-size: clamp(2.1rem, 6.5vw, 4.25rem);
   line-height: 1;
   letter-spacing: 0;
+}
+
+.rw-reveal {
+  animation: rw-reveal-in var(--rw-duration-slow) var(--rw-easing-standard) both;
+  animation-delay: var(--rw-reveal-delay, 0ms);
+}
+
+.rw-scroll-reveal {
+  animation: rw-reveal-in var(--rw-duration-slow) var(--rw-easing-standard) both;
+}
+
+@supports (animation-timeline: view()) {
+  .rw-scroll-reveal {
+    animation-timeline: view();
+    animation-range: entry 0% cover 28%;
+  }
+}
+
+@keyframes rw-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .rw-page-shell,
@@ -277,7 +321,9 @@ h1 {
   transition:
     background var(--rw-duration-fast) var(--rw-easing-standard),
     border-color var(--rw-duration-fast) var(--rw-easing-standard),
-    color var(--rw-duration-fast) var(--rw-easing-standard);
+    color var(--rw-duration-fast) var(--rw-easing-standard),
+    box-shadow var(--rw-duration-fast) var(--rw-easing-standard),
+    transform var(--rw-duration-fast) var(--rw-easing-spring);
 }
 
 .rw-button:hover,
@@ -288,6 +334,8 @@ h1 {
   border-color: var(--rw-color-accent-hover);
   background: var(--rw-color-accent-hover);
   color: var(--rw-color-accent-contrast);
+  box-shadow: var(--rw-shadow-lift);
+  transform: translateY(-1px) scale(1.02);
 }
 
 .rw-button-secondary,
@@ -827,13 +875,17 @@ h1 {
   text-decoration: none;
   transition:
     border-color var(--rw-duration-fast) var(--rw-easing-standard),
-    background var(--rw-duration-fast) var(--rw-easing-standard);
+    background var(--rw-duration-fast) var(--rw-easing-standard),
+    box-shadow var(--rw-duration-fast) var(--rw-easing-standard),
+    transform var(--rw-duration-fast) var(--rw-easing-spring);
 }
 
 .route-link:hover {
   border-color: var(--rw-color-accent-border);
   background: var(--rw-color-surface-subtle);
   color: inherit;
+  box-shadow: var(--rw-shadow-card);
+  transform: translateY(-1px) scale(1.02);
 }
 
 .route-link span {

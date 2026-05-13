@@ -75,7 +75,7 @@ export default function PublicHome() {
   return (
     <main className="surface-shell public-shell marketing-home">
       <section
-        className="surface-panel public-panel marketing-home-panel"
+        className="surface-panel public-panel marketing-home-panel rw-reveal"
         aria-labelledby="public-heading"
       >
         <header className="route-header marketing-home-header">
@@ -93,7 +93,7 @@ export default function PublicHome() {
         </header>
 
         <section className="marketing-hero" aria-label="RubyWhisper overview">
-          <div className="marketing-hero-copy">
+          <div className="marketing-hero-copy rw-reveal">
             <p className="surface-kicker">Mac dictation</p>
             <h1 id="public-heading">RubyWhisper</h1>
             <p className="surface-offer marketing-offer">
@@ -118,7 +118,10 @@ export default function PublicHome() {
           <ProductProof />
         </section>
 
-        <section className="marketing-section" aria-labelledby="works-heading">
+        <section
+          className="marketing-section rw-scroll-reveal"
+          aria-labelledby="works-heading"
+        >
           <div className="marketing-section-heading">
             <p className="surface-kicker">How it works</p>
             <h2 id="works-heading">Dictate without leaving the app you are in.</h2>
@@ -134,7 +137,10 @@ export default function PublicHome() {
           </div>
         </section>
 
-        <section className="marketing-proof-band" aria-labelledby="proof-heading">
+        <section
+          className="marketing-proof-band rw-scroll-reveal"
+          aria-labelledby="proof-heading"
+        >
           <div>
             <p className="surface-kicker">Product proof</p>
             <h2 id="proof-heading">Built around the recording island.</h2>
@@ -142,12 +148,13 @@ export default function PublicHome() {
           <p>
             The signature surface is compact, visible, and focused on the
             state that matters: listening, processing, success, or recovery.
+            The finished text appears where the cursor was already waiting.
             It is product proof, not a generic dashboard decoration.
           </p>
         </section>
 
         <section
-          className="marketing-section marketing-privacy"
+          className="marketing-section marketing-privacy rw-scroll-reveal"
           aria-labelledby="privacy-heading"
         >
           <div className="marketing-section-heading">
@@ -168,7 +175,10 @@ export default function PublicHome() {
           </div>
         </section>
 
-        <section className="marketing-pricing" aria-labelledby="pricing-heading">
+        <section
+          className="marketing-pricing rw-scroll-reveal"
+          aria-labelledby="pricing-heading"
+        >
           <div>
             <p className="surface-kicker">Pricing</p>
             <h2 id="pricing-heading">Start with 5,000 trial words.</h2>
@@ -183,7 +193,10 @@ export default function PublicHome() {
           </Link>
         </section>
 
-        <section className="marketing-section" aria-labelledby="routes-heading">
+        <section
+          className="marketing-section rw-scroll-reveal"
+          aria-labelledby="routes-heading"
+        >
           <div className="marketing-section-heading">
             <p className="surface-kicker">Next steps</p>
             <h2 id="routes-heading">
@@ -213,7 +226,10 @@ export default function PublicHome() {
 
 function ProductProof() {
   return (
-    <aside className="product-proof" aria-label="RubyWhisper dictation preview">
+    <aside
+      className="product-proof rw-reveal"
+      aria-label="RubyWhisper dictation preview"
+    >
       <div className="product-proof-stage" aria-hidden="true">
         <div className="product-proof-glow" />
         <div className="product-proof-pill">
