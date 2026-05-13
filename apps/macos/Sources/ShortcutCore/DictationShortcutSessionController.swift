@@ -3,6 +3,7 @@ import Foundation
 enum DictationShortcutAction: Equatable {
     case start(RecordingTriggerMode)
     case stop
+    case stopAfterHoldTapGrace
     case switchedToToggle
 }
 
@@ -37,8 +38,7 @@ final class DictationShortcutSessionController {
                 toggleStopArmed = false
                 return .switchedToToggle
             case .holdDeactivated:
-                reset()
-                return .stop
+                return .stopAfterHoldTapGrace
             case .holdActivated, .toggleDeactivated:
                 return nil
             }

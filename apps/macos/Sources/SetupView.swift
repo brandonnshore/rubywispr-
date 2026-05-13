@@ -1593,7 +1593,7 @@ struct SetupView: View {
                     }
                 }
 
-            case .stop:
+            case .stop, .stopAfterHoldTapGrace:
                 guard testPhase == .recording, let recorder = testAudioRecorder else { return }
                 testAudioLevelCancellable?.cancel()
                 testAudioLevelCancellable = nil

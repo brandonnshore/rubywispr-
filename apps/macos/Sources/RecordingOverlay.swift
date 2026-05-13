@@ -24,15 +24,15 @@ enum OverlayPhase {
 
 private enum RecordingOverlayGeometry {
     /// Flow-style push-to-talk: waveform-only pill.
-    static let holdWidth: CGFloat = 72
+    static let holdWidth: CGFloat = 61
     /// Flow-style hands-free: cancel + waveform + finish.
     static let toggleWidth: CGFloat = 104
     /// Processing stays compact and wordless before dismissing.
-    static let processingWidth: CGFloat = 72
-    static let confirmWidth: CGFloat = 72
+    static let processingWidth: CGFloat = 61
+    static let confirmWidth: CGFloat = 61
     /// Recovery layout still needs more room for affordance copy + actions.
     static let recoveryWidth: CGFloat = 248
-    static let baseHeight: CGFloat = 30
+    static let baseHeight: CGFloat = 27
     static let screenMargin: CGFloat = 8
     /// Distance above the Dock chrome (or screen edge when Dock auto-hides).
     static let dockOffset: CGFloat = 6
@@ -531,12 +531,12 @@ struct WaveformBar: View {
     let amplitude: CGFloat
 
     private let minHeight: CGFloat = 2
-    private let maxHeight: CGFloat = 14
+    private let maxHeight: CGFloat = 12
 
     var body: some View {
         Capsule()
             .fill(.white)
-            .frame(width: 2.25, height: minHeight + (maxHeight - minHeight) * amplitude)
+            .frame(width: 2, height: minHeight + (maxHeight - minHeight) * amplitude)
     }
 }
 
@@ -561,14 +561,14 @@ struct WaveformView: View {
                 waveformBars(pulseTime: nil)
             }
         }
-        .frame(height: 15)
+        .frame(height: 13)
     }
 
     private func reducedMotionBars() -> some View {
         let level = CGFloat(max(min(audioLevel, 1), 0))
         let tickLevel = (level * 4).rounded(.down) / 4
 
-        return HStack(spacing: 2.25) {
+        return HStack(spacing: 2) {
             ForEach(0..<Self.barCount, id: \.self) { index in
                 WaveformBar(amplitude: min(tickLevel * Self.multipliers[index], 1.0))
             }
@@ -576,7 +576,7 @@ struct WaveformView: View {
     }
 
     private func waveformBars(pulseTime: TimeInterval?) -> some View {
-        HStack(spacing: 1.75) {
+        HStack(spacing: 1.65) {
             ForEach(0..<Self.barCount, id: \.self) { index in
                 WaveformBar(amplitude: barAmplitude(for: index, pulseTime: pulseTime))
                     .animation(
@@ -702,7 +702,7 @@ struct RecordingOverlayView: View {
     let onUpdateOverlayPressed: () -> Void
     let onRecoveryActionPressed: (RecordingIslandAction) -> Void
 
-    private let accessoryWidth: CGFloat = 24
+    private let accessoryWidth: CGFloat = 23
 
     private var visualState: RecordingIslandVisualState {
         state.islandPresentation.visualState
@@ -772,7 +772,7 @@ struct RecordingOverlayView: View {
                                     action: { onRecoveryActionPressed(.cancelIfSafe) }
                                 ) {
                                     Image(systemName: "xmark")
-                                        .font(.system(size: 11, weight: .bold))
+                                        .font(.system(size: 10.5, weight: .bold))
                                         .foregroundStyle(Theme.Color.cancelButtonGlyph)
                                 }
                                 .transition(controlTransition)
@@ -798,7 +798,7 @@ struct RecordingOverlayView: View {
                 }
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.phase)
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.recordingTriggerMode)
@@ -816,7 +816,7 @@ struct RecordingOverlayView: View {
                 action: onStopButtonPressed
             ) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11.5, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(Theme.Color.stopButtonGlyph)
             }
         case .confirm:
@@ -861,7 +861,7 @@ private struct IslandControlCircle<Content: View>: View {
 
     var body: some View {
         content()
-            .frame(width: 23, height: 23, alignment: .center)
+            .frame(width: 22, height: 22, alignment: .center)
             .background(Circle().fill(fill))
     }
 }
