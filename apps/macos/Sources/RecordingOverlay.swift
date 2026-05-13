@@ -24,15 +24,15 @@ enum OverlayPhase {
 
 private enum RecordingOverlayGeometry {
     /// Flow-style push-to-talk: waveform-only pill.
-    static let holdWidth: CGFloat = 61
+    static let holdWidth: CGFloat = 55
     /// Flow-style hands-free: cancel + waveform + finish.
-    static let toggleWidth: CGFloat = 104
+    static let toggleWidth: CGFloat = 94
     /// Processing stays compact and wordless before dismissing.
-    static let processingWidth: CGFloat = 61
-    static let confirmWidth: CGFloat = 61
+    static let processingWidth: CGFloat = 55
+    static let confirmWidth: CGFloat = 55
     /// Recovery layout still needs more room for affordance copy + actions.
     static let recoveryWidth: CGFloat = 248
-    static let baseHeight: CGFloat = 27
+    static let baseHeight: CGFloat = 24
     static let screenMargin: CGFloat = 8
     /// Distance above the Dock chrome (or screen edge when Dock auto-hides).
     static let dockOffset: CGFloat = 6
@@ -60,24 +60,75 @@ private func makeOverlayPanel(width: CGFloat, height: CGFloat) -> NSPanel {
 private func makePillContent<V: View>(
     width: CGFloat,
     height: CGFloat,
+    animateEntrance: Bool,
     rootView: V
 ) -> NSView {
-    let cornerRadius = height / 2
-    let pillShape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-    let shaped = rootView
-        .frame(width: width, height: height)
-        .background(Theme.Color.islandActiveFill)
-        .overlay(
-            pillShape
-                .strokeBorder(Theme.Color.islandStrokeInner, lineWidth: 0.5)
-        )
-        .clipShape(pillShape)
-        .shadow(color: Theme.Color.islandShadow, radius: 1, x: 0, y: 1)
-
-    let hosting = NSHostingView(rootView: shaped)
+    let hosting = NSHostingView(
+        rootView: RecordingIslandSurface(
+            width: width,
+            height: height,
+            animateEntrance: animateEntrance
+        ) {
+            rootView
+        }
+    )
     hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
     hosting.autoresizingMask = [.width, .height]
     return hosting
+}
+
+private struct RecordingIslandSurface<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isPresented: Bool
+
+    let width: CGFloat
+    let height: CGFloat
+    let animateEntrance: Bool
+    let content: Content
+
+    init(
+        width: CGFloat,
+        height: CGFloat,
+        animateEntrance: Bool,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.width = width
+        self.height = height
+        self.animateEntrance = animateEntrance
+        self.content = content()
+        _isPresented = State(initialValue: !animateEntrance)
+    }
+
+    var body: some View {
+        let cornerRadius = height / 2
+        let pillShape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        content
+            .frame(width: width, height: height)
+            .background(Theme.Color.islandActiveFill)
+            .overlay(
+                pillShape
+                    .strokeBorder(Theme.Color.islandStrokeInner, lineWidth: 0.5)
+            )
+            .clipShape(pillShape)
+            .shadow(color: Theme.Color.islandShadow, radius: 0.75, x: 0, y: 0.5)
+            .opacity(isPresented ? 1 : 0)
+            .scaleEffect(isPresented ? 1 : 0.98, anchor: .bottom)
+            .offset(y: isPresented ? 0 : 2)
+            .onAppear {
+                guard animateEntrance, !reduceMotion else {
+                    isPresented = true
+                    return
+                }
+
+                isPresented = false
+                DispatchQueue.main.async {
+                    withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: 0.16)) {
+                        isPresented = true
+                    }
+                }
+            }
+    }
 }
 
 // MARK: - Manager
@@ -337,7 +388,7 @@ final class RecordingOverlayManager {
 
         if let panel = overlayWindow {
             panel.ignoresMouseEvents = false
-            panel.contentView = makeOverlayContent(frame: frame)
+            panel.contentView = makeOverlayContent(frame: frame, animateEntrance: false)
             resize(panel: panel, to: frame, animated: animatedResize)
             panel.alphaValue = 1
             panel.orderFrontRegardless()
@@ -347,33 +398,10 @@ final class RecordingOverlayManager {
         let panel = makeOverlayPanel(width: frame.width, height: frame.height)
         panel.hasShadow = false
         panel.ignoresMouseEvents = false
-        panel.contentView = makeOverlayContent(frame: frame)
-
-        guard let screen = anchorScreen else { return }
-
-        // Slide up from just below the screen edge so the pill appears to rise from the Dock.
-        let hiddenFrame = NSRect(
-            x: frame.origin.x,
-            y: screen.frame.minY - frame.height,
-            width: frame.width,
-            height: frame.height
-        )
-        panel.setFrame(hiddenFrame, display: true)
+        panel.contentView = makeOverlayContent(frame: frame, animateEntrance: !shouldReduceMotion)
+        panel.setFrame(frame, display: true)
         panel.alphaValue = 1
         panel.orderFrontRegardless()
-
-        guard !shouldReduceMotion else {
-            panel.setFrame(frame, display: true)
-            overlayWindow = panel
-            return
-        }
-
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.18
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.34, 1.56, 0.64, 1.0)
-            panel.animator().setFrame(frame, display: true)
-        }
-
         overlayWindow = panel
     }
 
@@ -382,14 +410,15 @@ final class RecordingOverlayManager {
         overlayBottomCenterAnchor = nil
         let frame = overlayFrame
         panel.ignoresMouseEvents = false
-        panel.contentView = makeOverlayContent(frame: frame)
+        panel.contentView = makeOverlayContent(frame: frame, animateEntrance: false)
         resize(panel: panel, to: frame, animated: animated)
     }
 
-    private func makeOverlayContent(frame: NSRect) -> NSView {
+    private func makeOverlayContent(frame: NSRect, animateEntrance: Bool) -> NSView {
         makePillContent(
             width: frame.width,
             height: frame.height,
+            animateEntrance: animateEntrance,
             rootView: RecordingOverlayView(
                 state: overlayState,
                 onStopButtonPressed: { [weak self] in
@@ -412,8 +441,8 @@ final class RecordingOverlayManager {
         }
 
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.22
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.duration = 0.16
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
             panel.animator().setFrame(frame, display: true)
         }
     }
@@ -531,12 +560,12 @@ struct WaveformBar: View {
     let amplitude: CGFloat
 
     private let minHeight: CGFloat = 2
-    private let maxHeight: CGFloat = 12
+    private let maxHeight: CGFloat = 11
 
     var body: some View {
         Capsule()
             .fill(.white)
-            .frame(width: 2, height: minHeight + (maxHeight - minHeight) * amplitude)
+            .frame(width: 1.85, height: minHeight + (maxHeight - minHeight) * amplitude)
     }
 }
 
@@ -561,14 +590,14 @@ struct WaveformView: View {
                 waveformBars(pulseTime: nil)
             }
         }
-        .frame(height: 13)
+        .frame(height: 12)
     }
 
     private func reducedMotionBars() -> some View {
         let level = CGFloat(max(min(audioLevel, 1), 0))
         let tickLevel = (level * 4).rounded(.down) / 4
 
-        return HStack(spacing: 2) {
+        return HStack(spacing: 1.8) {
             ForEach(0..<Self.barCount, id: \.self) { index in
                 WaveformBar(amplitude: min(tickLevel * Self.multipliers[index], 1.0))
             }
@@ -576,7 +605,7 @@ struct WaveformView: View {
     }
 
     private func waveformBars(pulseTime: TimeInterval?) -> some View {
-        HStack(spacing: 1.65) {
+        HStack(spacing: 1.55) {
             ForEach(0..<Self.barCount, id: \.self) { index in
                 WaveformBar(amplitude: barAmplitude(for: index, pulseTime: pulseTime))
                     .animation(
@@ -702,7 +731,8 @@ struct RecordingOverlayView: View {
     let onUpdateOverlayPressed: () -> Void
     let onRecoveryActionPressed: (RecordingIslandAction) -> Void
 
-    private let accessoryWidth: CGFloat = 23
+    private let accessoryWidth: CGFloat = 20
+    private let horizontalInset: CGFloat = 2
 
     private var visualState: RecordingIslandVisualState {
         state.islandPresentation.visualState
@@ -798,12 +828,12 @@ struct RecordingOverlayView: View {
                 }
             }
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, horizontalInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.phase)
-        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.recordingTriggerMode)
-        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.isCommandMode)
-        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8), value: state.islandPresentation.state)
+        .animation(stateChangeAnimation, value: state.phase)
+        .animation(stateChangeAnimation, value: state.recordingTriggerMode)
+        .animation(stateChangeAnimation, value: state.isCommandMode)
+        .animation(stateChangeAnimation, value: state.islandPresentation.state)
     }
 
     @ViewBuilder
@@ -834,7 +864,11 @@ struct RecordingOverlayView: View {
     private var controlTransition: AnyTransition {
         reduceMotion
             ? .opacity
-            : .scale(scale: 0.86).combined(with: .opacity)
+            : .scale(scale: 0.92).combined(with: .opacity)
+    }
+
+    private var stateChangeAnimation: Animation? {
+        reduceMotion ? nil : .timingCurve(0.22, 1, 0.36, 1, duration: 0.16)
     }
 }
 
@@ -861,7 +895,7 @@ private struct IslandControlCircle<Content: View>: View {
 
     var body: some View {
         content()
-            .frame(width: 22, height: 22, alignment: .center)
+            .frame(width: 20, height: 20, alignment: .center)
             .background(Circle().fill(fill))
     }
 }
