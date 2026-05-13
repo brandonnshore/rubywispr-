@@ -46,7 +46,8 @@ private struct HotkeyManagerTests {
         try runtimeCaptureFailureBecomesRecoverableUnavailableState()
         try pauseReleasesActiveShortcutState()
         try disabledConfigurationDoesNotStartBackend()
-        holdSessionStartsAndStopsOnlyWhileHeld()
+        sustainedHoldSessionStopsImmediately()
+        quickHoldTapUsesGraceForDoubleTapToggle()
         commandFnToggleStartsAndStopsWithoutHoldFallback()
         doubleFnTapSwitchesHeldSessionToToggle()
         plainFnStopsActiveToggleWithoutStartingHold()
@@ -137,8 +138,12 @@ private struct HotkeyManagerTests {
         expect(manager.registrationState.affectedBinding == .both, "disabled configuration should affect both bindings")
     }
 
-    private static func holdSessionStartsAndStopsOnlyWhileHeld() {
-        let controller = DictationShortcutSessionController()
+    private static func sustainedHoldSessionStopsImmediately() {
+        var now = Date(timeIntervalSinceReferenceDate: 1_000)
+        let controller = DictationShortcutSessionController(
+            holdTapGraceMaximumDuration: 0.45,
+            clock: { now }
+        )
 
         expect(
             controller.handle(event: .holdActivated, isTranscribing: false) == .start(.hold),
@@ -149,15 +154,39 @@ private struct HotkeyManagerTests {
             controller.handle(event: .holdActivated, isTranscribing: false) == nil,
             "repeated hold activation should be ignored while held"
         )
+        now = now.addingTimeInterval(0.7)
         expect(
-            controller.handle(event: .holdDeactivated, isTranscribing: false) == .stopAfterHoldTapGrace,
-            "hold release should schedule a short grace stop for double-tap toggle"
+            controller.handle(event: .holdDeactivated, isTranscribing: false) == .stop,
+            "release after a spoken hold should stop immediately without double-tap grace"
         )
-        expect(controller.activeMode == .hold, "hold release should keep hold active during grace")
-        controller.reset()
+        expect(controller.activeMode == nil, "sustained hold release should clear active mode")
         expect(
             controller.handle(event: .holdDeactivated, isTranscribing: false) == nil,
             "extra hold release should be ignored from idle"
+        )
+    }
+
+    private static func quickHoldTapUsesGraceForDoubleTapToggle() {
+        var now = Date(timeIntervalSinceReferenceDate: 1_000)
+        let controller = DictationShortcutSessionController(
+            holdTapGraceMaximumDuration: 0.45,
+            clock: { now }
+        )
+
+        expect(
+            controller.handle(event: .holdActivated, isTranscribing: false) == .start(.hold),
+            "quick Fn tap should start hold recording from idle"
+        )
+        now = now.addingTimeInterval(0.12)
+        expect(
+            controller.handle(event: .holdDeactivated, isTranscribing: false) == .stopAfterHoldTapGrace,
+            "quick Fn tap should keep the double-tap latch grace"
+        )
+        expect(controller.activeMode == .hold, "quick Fn tap should keep hold active during grace")
+        controller.reset()
+        expect(
+            controller.handle(event: .holdDeactivated, isTranscribing: false) == nil,
+            "extra quick-tap release should be ignored from idle"
         )
     }
 

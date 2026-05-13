@@ -15,7 +15,7 @@ enum Theme {
         static let islandActiveFill = SwiftUI.Color(red: 0x01 / 255, green: 0x01 / 255, blue: 0x01 / 255)
         static let islandActiveFillTop = SwiftUI.Color(red: 0x08 / 255, green: 0x08 / 255, blue: 0x08 / 255)
         static let islandStrokeInner = SwiftUI.Color.white.opacity(0.16)
-        static let islandShadow = SwiftUI.Color.black.opacity(0.10)
+        static let islandShadow = SwiftUI.Color.black.opacity(0.08)
 
         // Waveform
         static let waveformBar = SwiftUI.Color(red: 0xF5 / 255, green: 0xF5 / 255, blue: 0xF0 / 255)
@@ -57,15 +57,15 @@ enum Theme {
         static let idleWidth: CGFloat = 64
         static let idleHeight: CGFloat = 20
         /// Active expanded pill containing controls + waveform.
-        static let activeWidth: CGFloat = 104
-        static let activeHeight: CGFloat = 27
+        static let activeWidth: CGFloat = 94
+        static let activeHeight: CGFloat = 24
         /// Distance above the Dock chrome.
         static let dockOffset: CGFloat = 6
     }
 
     enum Motion {
-        /// Spring expand with slight overshoot — matches Wispr Flow's idle → active transition cadence.
-        static let pillExpand = Animation.spring(response: 0.28, dampingFraction: 0.62, blendDuration: 0)
+        /// Fast HUD reveal without bounce; the island should feel native and stay out of the way.
+        static let pillExpand = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 0.16)
         /// Slow confident reveals — matches SuperWhisper's marketing site.
         static let standard = Animation.timingCurve(0.16, 1, 0.3, 1, duration: 0.4)
         /// Fast feedback for hover / state changes.
