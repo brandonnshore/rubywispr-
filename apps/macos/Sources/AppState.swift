@@ -1652,6 +1652,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
         openPrivacySettingsPane("Privacy_ScreenCapture")
     }
 
+    func revealAppInFinderForPermission() {
+        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+    }
+
     func openKeyboardSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
             NSWorkspace.shared.open(url)
