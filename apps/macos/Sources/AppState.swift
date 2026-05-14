@@ -212,6 +212,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
     static let defaultPostProcessingModel = "openai/gpt-oss-20b"
     static let defaultPostProcessingFallbackModel = "meta-llama/llama-4-scout-17b-16e-instruct"
     static let defaultContextModel = "meta-llama/llama-4-scout-17b-16e-instruct"
+    private static let localDefaultsMigrationKey = "rubywhisper_local_defaults_migrated_from_legacy_bundle_ids"
+    private static let localBundleIdentifier = "com.rubyadvisory.rubywhisper.local"
+    private static let legacyLocalBundleIdentifiers = [
+        "com.rubyadvisory.rubywhisper.dev",
+        "com.rubyadvisory.rubywhisper"
+    ]
     private static let trailingPressEnterCommandPattern = try! NSRegularExpression(
         pattern: #"(?i)(?:^|[ \t\r\n,;:\-]+)press[ \t\r\n]+enter[\s\p{P}]*$"#
     )
@@ -535,6 +541,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private let alertSoundOutputScale: Float = 0.62
 
     init() {
+        Self.migrateLocalDefaultsIfNeeded()
         UserDefaults.standard.removeObject(forKey: "force_http2_transcription")
         let desktopSessionStore = DesktopSessionKeychainStore()
         let desktopBackendClient = Self.makeDesktopBackendAPIClient(sessionStore: desktopSessionStore)
@@ -753,6 +760,27 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         // Clear any stale recording flag left over from an unclean exit.
         AppState.writeRecordingStateFlag(false)
+    }
+
+    private static func migrateLocalDefaultsIfNeeded() {
+        guard Bundle.main.bundleIdentifier == localBundleIdentifier else { return }
+
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: localDefaultsMigrationKey) == nil else { return }
+        let isFreshLocalDefaults = defaults.object(forKey: "hasCompletedSetup") == nil
+
+        for legacyBundleIdentifier in legacyLocalBundleIdentifiers {
+            guard let legacyDomain = defaults.persistentDomain(forName: legacyBundleIdentifier),
+                  !legacyDomain.isEmpty else {
+                continue
+            }
+
+            for (key, value) in legacyDomain where isFreshLocalDefaults || defaults.object(forKey: key) == nil {
+                defaults.set(value, forKey: key)
+            }
+        }
+
+        defaults.set(true, forKey: localDefaultsMigrationKey)
     }
 
     @discardableResult

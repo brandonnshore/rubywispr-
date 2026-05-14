@@ -58,6 +58,12 @@ by default so macOS TCC permissions stay attached across rebuilds. Passing
 checks, but ad hoc rebuilds can invalidate Accessibility grants because the
 binary's code hash changes.
 
+The regular local app uses the bundle identifier
+`com.rubyadvisory.rubywhisper.local`. The distinct Debug harness app uses
+`com.rubyadvisory.rubywhisper.dev`. Do not use an ad hoc build as the app you
+manually grant Accessibility or Screen Recording to; build without overriding
+`CODESIGN_IDENTITY` so the installed `Apple Development` identity is used.
+
 Build output:
 
 ```text
@@ -71,8 +77,8 @@ apps/macos/build/RubyWhisper.app/Contents/Resources/ThirdPartyNotices.md
 ```
 
 The output name, bundle identifier, entitlements filename, and resources use
-RubyWhisper development placeholders until later release-packaging tickets set
-approved production values.
+RubyWhisper local-development placeholders until later release-packaging tickets
+set approved production values.
 
 For a distinct local app name while testing TCC permissions:
 
@@ -81,12 +87,18 @@ make -C apps/macos run-dev
 ```
 
 If System Settings shows RubyWhisper as enabled but the app still reports
-global shortcuts blocked after switching from ad hoc to Apple Development
-signing, quit the app, reset only the development bundle's TCC rows, reopen,
-and re-grant:
+global shortcuts or Screen Recording blocked after switching from ad hoc to
+Apple Development signing, quit the app, reset only the local bundle's TCC
+rows, reopen, and re-grant:
 
 ```bash
-tccutil reset Accessibility com.rubyadvisory.rubywhisper.dev
+make -C apps/macos reset-tcc-local
+```
+
+For the Debug harness bundle:
+
+```bash
+make -C apps/macos reset-tcc-dev
 ```
 
 ## Local DMG Packaging
@@ -161,7 +173,7 @@ exits 66 in this directory.
 
 ## CI Validation
 
-`.github/workflows/macos-ci.yml` runs an explicit Debug/ad hoc command on
+`.github/workflows/macos-ci.yml` runs an explicit ad hoc command on
 GitHub-hosted `macos-latest` for macOS source changes:
 
 ```bash
@@ -169,8 +181,9 @@ make -C apps/macos clean all CODESIGN_IDENTITY=-
 ```
 
 The workflow verifies that `apps/macos/build/RubyWhisper.app` exists, keeps the
-development bundle identifier `com.rubyadvisory.rubywhisper.dev`, and is signed
-with an ad hoc signature. It is only a non-release build gate.
+local bundle identifier `com.rubyadvisory.rubywhisper.local`, and is signed with
+an ad hoc signature. It is only a non-release build gate and should not be used
+as the interactive app for local TCC permission testing.
 
 Release packaging, DMG creation, Apple Developer ID signing, notarization,
 provider keys, production secrets, and private env files are intentionally out

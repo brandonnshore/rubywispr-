@@ -106,7 +106,7 @@ User concurrently wanted the Mac recording UI to match Wispr Flow (Dock-anchored
 - 17 pre-existing broken route tests fixed as a side effect of the reliability work (`requireAuth` mock shape + missing test allow-list entries).
 
 ### Negative / known issues
-- **Dev-loop pain (TCC + ad-hoc codesign):** ad hoc rebuilds change the binary's `cdhash`, which can make macOS show Accessibility as enabled while rejecting the current rebuilt app. The Makefile now prefers an installed `Apple Development` identity for local builds and keeps `CODESIGN_IDENTITY=-` as the explicit CI/ad hoc path. `make -C apps/macos run-dev` still produces a distinct `RubyWhisper Dev.app` when System Settings has stale RubyWhisper entries.
+- **Dev-loop pain (TCC + ad-hoc codesign):** ad hoc rebuilds change the binary's `cdhash`, which can make macOS show Accessibility or Screen Recording as enabled while rejecting the current rebuilt app. The Makefile now prefers an installed `Apple Development` identity for interactive local builds, keeps `CODESIGN_IDENTITY=-` as the explicit CI/ad hoc path, and separates the regular local bundle id (`com.rubyadvisory.rubywhisper.local`) from the Debug harness bundle id (`com.rubyadvisory.rubywhisper.dev`).
 - **Drifted brand accent:** Mac `Theme.swift` uses `#a73e4c`, web `globals.css` uses `#d2546b`. Should unify in a future pass.
 - **Web has hardcoded light colors in some legacy components** that may not adapt to the new dark palette. Tracked via M4.5.
 - **No CI gate** running these tests yet. Manual `npm run test:auth-privacy` in the web workspace, `make all` for the Mac build.
@@ -121,17 +121,18 @@ User concurrently wanted the Mac recording UI to match Wispr Flow (Dock-anchored
 ## Open issues
 
 ### TCC dev-loop friction (mitigated)
-Ad-hoc-signed binaries lose their TCC Accessibility grant on rebuild because
-the code hash changes. Local builds now auto-detect an installed
-`Apple Development` identity and sign with it by default; CI still passes
-`CODESIGN_IDENTITY=-` explicitly. If System Settings is already confused from
-older ad hoc builds, quit RubyWhisper, run:
+Ad-hoc-signed binaries lose their TCC Accessibility and Screen Recording grants
+on rebuild because the code hash changes. Local builds now auto-detect an
+installed `Apple Development` identity and sign with it by default; CI still
+passes `CODESIGN_IDENTITY=-` explicitly. If System Settings is already confused
+from older ad hoc builds, quit RubyWhisper, run:
 
 ```bash
-tccutil reset Accessibility com.rubyadvisory.rubywhisper.dev
+make -C apps/macos reset-tcc-local
 ```
 
-Then reopen the freshly signed app and re-grant Accessibility.
+Then reopen the freshly signed app and re-grant Accessibility and Screen
+Recording once. Use `make -C apps/macos reset-tcc-dev` for the Debug harness.
 
 ### Trashed-app ghost
 `/Users/brandonshore/.Trash/RubyWhisper 2.34.33 PM.app` is stuck in Trash (Finder permission denied). Launch Services has it cached under `com.rubyadvisory.rubywhisper` (no `.dev` suffix). Cosmetic only — the dev build now displays as "RubyWhisper Dev" so System Settings is unambiguous. Should empty Trash with a fresh login or `sudo rm -rf` next time someone's at the machine.

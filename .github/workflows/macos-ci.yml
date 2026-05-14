@@ -30,9 +30,9 @@ jobs:
       - name: Build RubyWhisper.app without release signing
         run: make -C apps/macos clean all CODESIGN_IDENTITY=-
 
-      - name: Verify development bundle and ad hoc signature
+      - name: Verify local bundle and ad hoc signature
         run: |
           test -d "apps/macos/build/RubyWhisper.app"
-          test "$(plutil -extract CFBundleIdentifier raw "apps/macos/build/RubyWhisper.app/Contents/Info.plist")" = "com.rubyadvisory.rubywhisper.dev"
+          test "$(plutil -extract CFBundleIdentifier raw "apps/macos/build/RubyWhisper.app/Contents/Info.plist")" = "com.rubyadvisory.rubywhisper.local"
           codesign -dv "apps/macos/build/RubyWhisper.app" 2>&1 | tee /tmp/rubywhisper-codesign.txt
           grep -q "Signature=adhoc" /tmp/rubywhisper-codesign.txt
