@@ -32,6 +32,7 @@ struct TestCaseExporter {
             "post_processing_status": item.postProcessingStatus,
             "screenshot_status": item.contextScreenshotStatus,
             "debug_status": item.debugStatus,
+            "timing_summary": item.timingSummary,
             "has_audio_artifact": false,
             "has_source_text_payload": false,
             "has_final_text_payload": false,

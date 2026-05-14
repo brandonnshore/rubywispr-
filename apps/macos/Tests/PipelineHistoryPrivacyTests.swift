@@ -13,6 +13,7 @@ private func expect(_ condition: @autoclosure () -> Bool, _ message: String) -> 
 @main
 private struct PipelineHistoryPrivacyTests {
     private static let forbiddenValue = "forbidden_fixture_value"
+    private static let safeTimingSummary = "stop_to_audio_ms=20 upload_response_ms=450 total_stop_to_terminal_ms=500 status=inserted"
     private static let store = PipelineHistoryStore(storeURL: nil, inMemory: true)
 
     static func main() throws {
@@ -38,7 +39,8 @@ private struct PipelineHistoryPrivacyTests {
             timestamp: Date(timeIntervalSince1970: 1_800_000_000),
             contextScreenshotStatus: "available",
             postProcessingStatus: "RubyWhisper upload succeeded",
-            debugStatus: "Uploading audio"
+            debugStatus: "Uploading audio",
+            timingSummary: safeTimingSummary
         )
 
         _ = try store.append(item, maxCount: 10)
@@ -49,6 +51,7 @@ private struct PipelineHistoryPrivacyTests {
         expect(loaded[0].intent == .commandAutomatic, "new append should keep intent metadata")
         expect(loaded[0].postProcessingStatus == "RubyWhisper upload succeeded", "new append should keep status metadata")
         expect(loaded[0].debugStatus == "Uploading audio", "new append should keep debug status metadata")
+        expect(loaded[0].timingSummary == safeTimingSummary, "new append should keep timing metadata")
     }
 
     private static func testUpdateStripsExistingContentBearingColumns() throws {
@@ -63,7 +66,8 @@ private struct PipelineHistoryPrivacyTests {
             timestamp: Date(timeIntervalSince1970: 1_800_000_002),
             contextScreenshotStatus: "No screenshot",
             postProcessingStatus: "Upload failed: network_error",
-            debugStatus: "Done"
+            debugStatus: "Done",
+            timingSummary: "stop_to_audio_ms=25 upload_response_ms=900 status=network_error"
         )
         try store.update(update)
 
@@ -73,6 +77,7 @@ private struct PipelineHistoryPrivacyTests {
         expect(loaded[0].intent == .commandManual, "update should keep updated intent metadata")
         expect(loaded[0].postProcessingStatus == "Upload failed: network_error", "update should keep status metadata")
         expect(loaded[0].debugStatus == "Done", "update should keep debug status metadata")
+        expect(loaded[0].timingSummary == "stop_to_audio_ms=25 upload_response_ms=900 status=network_error", "update should keep timing metadata")
     }
 
     private static func testLoadStripsLegacyContentBearingColumns() throws {
@@ -110,6 +115,7 @@ private struct PipelineHistoryPrivacyTests {
         expect(pipeline["has_final_text_payload"] as? Bool == false, "export JSON should not report cleaned text payloads")
         expect(pipeline["has_context_payload"] as? Bool == false, "export JSON should not report context payloads")
         expect(pipeline["has_post_processing_prompt"] as? Bool == false, "export JSON should not report prompt payloads")
+        expect(pipeline["timing_summary"] as? String == safeTimingSummary, "export JSON may include safe timing metadata")
     }
 
     private static func testSanitizerRemovesLegacyUploadContentAndContextMetadata() throws {
@@ -127,6 +133,7 @@ private struct PipelineHistoryPrivacyTests {
         expectMetadataOnly(sanitized[0], "startup sanitizer")
         expect(sanitized[0].postProcessingStatus == "RubyWhisper upload succeeded", "sanitizer may keep status metadata")
         expect(sanitized[0].debugStatus == "Uploading audio", "sanitizer may keep lifecycle metadata")
+        expect(sanitized[0].timingSummary == safeTimingSummary, "sanitizer may keep timing metadata")
     }
 
     private static func metadataItem(id: UUID, timestamp: Date) -> PipelineHistoryItem {
@@ -135,7 +142,8 @@ private struct PipelineHistoryPrivacyTests {
             timestamp: timestamp,
             contextScreenshotStatus: "available",
             postProcessingStatus: "RubyWhisper upload succeeded",
-            debugStatus: "Uploading audio"
+            debugStatus: "Uploading audio",
+            timingSummary: safeTimingSummary
         )
     }
 
@@ -160,6 +168,7 @@ private struct PipelineHistoryPrivacyTests {
           "contextScreenshotStatus": "available",
           "postProcessingStatus": "RubyWhisper upload succeeded",
           "debugStatus": "Uploading audio",
+          "timingSummary": "\(forbiddenValue)",
           "customVocabulary": "\(forbiddenValue)",
           "audioFileName": "\(forbiddenValue)",
           "contextAppName": "\(forbiddenValue)",
@@ -187,6 +196,7 @@ private struct PipelineHistoryPrivacyTests {
         expect(item.contextAppName == nil, "\(label) should not expose app name")
         expect(item.contextBundleIdentifier == nil, "\(label) should not expose bundle identifier")
         expect(item.contextWindowTitle == nil, "\(label) should not expose window title")
+        expect(!item.timingSummary.contains(forbiddenValue), "\(label) should not expose unsafe timing metadata")
     }
 
     private static func requireOne(_ items: [PipelineHistoryItem], _ label: String) throws -> PipelineHistoryItem {

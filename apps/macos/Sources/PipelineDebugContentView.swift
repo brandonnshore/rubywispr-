@@ -10,6 +10,7 @@ func imageFromDataURL(_ dataURL: String) -> NSImage? {
 
 struct PipelineDebugContentView: View {
     let statusMessage: String
+    let timingSummary: String
     let postProcessingStatus: String
     let contextSummary: String
     let contextScreenshotStatus: String
@@ -22,6 +23,10 @@ struct PipelineDebugContentView: View {
         VStack(alignment: .leading, spacing: 16) {
             if !statusMessage.isEmpty {
                 debugRow(title: "Status", value: statusMessage)
+            }
+
+            if !timingSummary.isEmpty {
+                debugRow(title: "Timing", value: timingSummary)
             }
 
             if !postProcessingStatus.isEmpty {
@@ -51,7 +56,11 @@ struct PipelineDebugContentView: View {
                 debugRow(title: "Post-Processed Transcript", value: "Redacted")
             }
 
-            if contextSummary.isEmpty && rawTranscript.isEmpty && postProcessedTranscript.isEmpty && postProcessingPrompt.isEmpty {
+            if contextSummary.isEmpty &&
+                rawTranscript.isEmpty &&
+                postProcessedTranscript.isEmpty &&
+                postProcessingPrompt.isEmpty &&
+                timingSummary.isEmpty {
                 Text("No debug data for this entry.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

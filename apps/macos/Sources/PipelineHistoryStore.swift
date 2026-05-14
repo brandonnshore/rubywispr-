@@ -271,6 +271,7 @@ final class PipelineHistoryStore {
         entity.contextScreenshotStatus = item.contextScreenshotStatus
         entity.postProcessingStatus = item.postProcessingStatus
         entity.debugStatus = item.debugStatus
+        entity.timingSummary = item.timingSummary
         entity.customVocabulary = ""
         entity.audioFileName = nil
         entity.contextAppName = nil
@@ -318,7 +319,8 @@ final class PipelineHistoryStore {
             timestamp: entity.timestamp ?? Date(),
             contextScreenshotStatus: entity.contextScreenshotStatus ?? "available (image)",
             postProcessingStatus: entity.postProcessingStatus ?? "",
-            debugStatus: entity.debugStatus ?? ""
+            debugStatus: entity.debugStatus ?? "",
+            timingSummary: entity.timingSummary ?? ""
         )
     }
 
@@ -346,6 +348,7 @@ final class PipelineHistoryStore {
                 entity.contextScreenshotStatus = item.contextScreenshotStatus
                 entity.postProcessingStatus = item.postProcessingStatus
                 entity.debugStatus = item.debugStatus
+                entity.timingSummary = item.timingSummary
                 entity.customVocabulary = forbiddenValue
                 entity.audioFileName = forbiddenValue
                 entity.contextAppName = forbiddenValue
@@ -384,6 +387,7 @@ final class PipelineHistoryStore {
             makeAttribute(name: "contextScreenshotStatus", type: .stringAttributeType, isOptional: false),
             makeAttribute(name: "postProcessingStatus", type: .stringAttributeType, isOptional: false),
             makeAttribute(name: "debugStatus", type: .stringAttributeType, isOptional: false),
+            makeAttribute(name: "timingSummary", type: .stringAttributeType, isOptional: true, defaultValue: ""),
             makeAttribute(name: "customVocabulary", type: .stringAttributeType, isOptional: false),
             makeAttribute(name: "audioFileName", type: .stringAttributeType, isOptional: true),
             makeAttribute(name: "contextAppName", type: .stringAttributeType, isOptional: true),
@@ -428,6 +432,7 @@ final class PipelineHistoryEntry: NSManagedObject {
     @NSManaged var contextScreenshotStatus: String?
     @NSManaged var postProcessingStatus: String?
     @NSManaged var debugStatus: String?
+    @NSManaged var timingSummary: String?
     @NSManaged var customVocabulary: String?
     @NSManaged var audioFileName: String?
     @NSManaged var contextAppName: String?

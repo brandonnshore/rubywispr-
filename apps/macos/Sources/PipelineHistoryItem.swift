@@ -13,6 +13,7 @@ struct PipelineHistoryItem: Identifiable, Codable {
     let contextScreenshotStatus: String
     let postProcessingStatus: String
     let debugStatus: String
+    let timingSummary: String
 
     var selectedText: String? { nil }
     var capturedSelection: String? { nil }
@@ -36,7 +37,8 @@ struct PipelineHistoryItem: Identifiable, Codable {
         timestamp: Date,
         contextScreenshotStatus: String,
         postProcessingStatus: String,
-        debugStatus: String
+        debugStatus: String,
+        timingSummary: String = ""
     ) {
         self.intent = intent
         self.id = id
@@ -44,6 +46,7 @@ struct PipelineHistoryItem: Identifiable, Codable {
         self.contextScreenshotStatus = contextScreenshotStatus
         self.postProcessingStatus = postProcessingStatus
         self.debugStatus = debugStatus
+        self.timingSummary = Self.sanitizedTimingSummary(timingSummary)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -53,6 +56,7 @@ struct PipelineHistoryItem: Identifiable, Codable {
         case contextScreenshotStatus
         case postProcessingStatus
         case debugStatus
+        case timingSummary
     }
 
     init(from decoder: Decoder) throws {
@@ -66,5 +70,53 @@ struct PipelineHistoryItem: Identifiable, Codable {
         ) ?? "No screenshot"
         self.postProcessingStatus = try container.decodeIfPresent(String.self, forKey: .postProcessingStatus) ?? ""
         self.debugStatus = try container.decodeIfPresent(String.self, forKey: .debugStatus) ?? ""
+        self.timingSummary = Self.sanitizedTimingSummary(
+            try container.decodeIfPresent(String.self, forKey: .timingSummary) ?? ""
+        )
+    }
+
+    private static func sanitizedTimingSummary(_ rawValue: String) -> String {
+        let metricKeys: Set<String> = [
+            "stop_to_audio_ms",
+            "context_wait_ms",
+            "upload_response_ms",
+            "response_to_insert_ms",
+            "insertion_ms",
+            "total_stop_to_terminal_ms",
+        ]
+        let statusKeys: Set<String> = ["context", "status"]
+        let allowedStatusCharacters = CharacterSet(
+            charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:-"
+        )
+
+        return rawValue
+            .split(separator: " ")
+            .compactMap { token -> String? in
+                let parts = token.split(separator: "=", maxSplits: 1)
+                guard parts.count == 2 else { return nil }
+
+                let key = String(parts[0])
+                let value = String(parts[1])
+
+                if metricKeys.contains(key) {
+                    guard !value.isEmpty, value.allSatisfy(\.isNumber) else { return nil }
+                    return "\(key)=\(String(value.prefix(8)))"
+                }
+
+                if statusKeys.contains(key) {
+                    let normalized = String(value.map { character in
+                        character.unicodeScalars.allSatisfy { allowedStatusCharacters.contains($0) }
+                            ? character
+                            : "_"
+                    })
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+                    .lowercased()
+                    guard !normalized.isEmpty else { return nil }
+                    return "\(key)=\(String(normalized.prefix(80)))"
+                }
+
+                return nil
+            }
+            .joined(separator: " ")
     }
 }

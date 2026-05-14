@@ -1811,6 +1811,21 @@ struct RunLogView: View {
             .padding(.top, 20)
             .padding(.bottom, 12)
 
+            if !appState.lastDictationTimingSummary.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Latest timing")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(appState.lastDictationTimingSummary)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
+            }
+
             Divider()
 
             if appState.pipelineHistory.isEmpty {
@@ -1915,7 +1930,7 @@ struct RunLogEntryView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(item.timestamp.formatted(date: .numeric, time: .standard))
                                 .font(.subheadline.weight(.semibold))
-                            Text(item.postProcessedTranscript.isEmpty ? "(no transcript)" : item.postProcessedTranscript)
+                            Text(item.postProcessedTranscript.isEmpty ? "(transcript not stored)" : item.postProcessedTranscript)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
@@ -1991,7 +2006,7 @@ struct RunLogEntryView: View {
                             Image(systemName: "waveform.slash")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Text("No audio recorded")
+                            Text("Audio not stored")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -2001,6 +2016,10 @@ struct RunLogEntryView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Pipeline")
                             .font(.caption.weight(.semibold))
+
+                        if !item.timingSummary.isEmpty {
+                            PipelineTimingSummaryView(summary: item.timingSummary)
+                        }
 
                         // Step 1: Context Capture
                         PipelineStepView(
@@ -2089,7 +2108,7 @@ struct RunLogEntryView: View {
                                                 .help(copiedRawTranscript ? "Copied literal transcript" : "Copy literal transcript")
                                             }
                                     } else {
-                                        Text("(empty transcript)")
+                                        Text("(transcript not stored)")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -2222,6 +2241,33 @@ struct RunLogEntryView: View {
         }
         copiedCleanedTranscriptResetWorkItem = resetWorkItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: resetWorkItem)
+    }
+}
+
+struct PipelineTimingSummaryView: View {
+    let summary: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "timer")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 20, height: 20)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Timing")
+                    .font(.caption.weight(.semibold))
+                Text(summary)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        .cornerRadius(8)
     }
 }
 

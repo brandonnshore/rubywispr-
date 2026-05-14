@@ -80,6 +80,7 @@ private struct RubyWhisperBackendAPIClientTests {
             try await testTransportFailureMapsToNetworkError()
             try await testBinaryTranscriptionRequestMapping()
             try await testMultipartTranscriptionRequestMapping()
+            try testDesktopUploadFactoryChoosesBinaryForSimpleDictation()
             try await testMultipartTranscriptionOmitsDisabledContextAndDictionary()
             try await testDesktopMultipartFactoryAppliesCleanupPrivacyControls()
             try await testTranscriptionRequestDoesNotShapeRecentWisprsPayload()
@@ -590,6 +591,42 @@ private struct RubyWhisperBackendAPIClientTests {
         expect(body.contains("test"), "multipart body should include channel value")
         expect(body.contains("name=\"context\""), "multipart body should include optional context field")
         expect(body.contains("name=\"dictionaryTerms\""), "multipart body should include dictionary terms")
+    }
+
+    private static func testDesktopUploadFactoryChoosesBinaryForSimpleDictation() throws {
+        let audio = Data([0x52, 0x57, 0x10])
+        let metadata = RubyWhisperDesktopTranscriptionRequestMetadata(
+            appVersion: "0.1.0-test",
+            appChannel: "test",
+            osVersion: "macOS synthetic",
+            platform: "macos"
+        )
+
+        let simple = RubyWhisperDesktopTranscriptionRequest.desktopUpload(
+            audio: audio,
+            context: nil,
+            dictionaryTerms: [],
+            audioMimeType: "audio/wav",
+            audioDurationMs: 1111,
+            privacyControls: .enabled
+        )
+
+        expect(simple.contentType == "audio/wav", "simple dictation should use binary audio content type")
+        let simpleBody = try simple.httpBody(metadata: metadata)
+        expect(simpleBody == audio, "simple dictation should send raw audio bytes")
+
+        let withPayload = RubyWhisperDesktopTranscriptionRequest.desktopUpload(
+            audio: audio,
+            context: "context_placeholder_transient",
+            dictionaryTerms: [],
+            audioMimeType: "audio/wav",
+            audioDurationMs: 1111,
+            privacyControls: .enabled
+        )
+        let payloadBody = String(data: try withPayload.httpBody(metadata: metadata), encoding: .utf8) ?? ""
+
+        expect(withPayload.contentType.hasPrefix("multipart/form-data; boundary="), "context payload should keep multipart upload")
+        expect(payloadBody.contains("name=\"context\""), "multipart upload should include context payload when present")
     }
 
     private static func testMultipartTranscriptionOmitsDisabledContextAndDictionary() async throws {

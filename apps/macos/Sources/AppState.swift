@@ -462,6 +462,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var lastPostProcessingStatus = ""
     @Published var lastContextScreenshotDataURL: String? = nil
     @Published var lastContextScreenshotStatus = "No screenshot"
+    @Published var lastDictationTimingSummary = ""
     @Published var lastContextAppName: String = ""
     @Published var lastContextBundleIdentifier: String = ""
     @Published var lastContextWindowTitle: String = ""
@@ -509,6 +510,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var contextService: AppContextService
     private var contextCaptureTask: Task<AppContext?, Never>?
     private var capturedContext: AppContext?
+    private var activeDictationTiming = DictationTimingRun()
     private var hasShownScreenshotPermissionAlert = false
     private var audioDeviceObservers: [NSObjectProtocol] = []
     private var needsMicrophoneRefreshAfterRecording = false
@@ -1093,12 +1095,13 @@ final class AppState: ObservableObject, @unchecked Sendable {
         guard authStateOwner.authenticatedRequestGeneration == uploadGeneration else {
             throw CancellationError()
         }
-        let request = RubyWhisperDesktopTranscriptionRequest.desktopMultipart(
+        let dictionaryTerms = cleanupPrivacyControls.includesCleanupPayloads
+            ? personalDictionaryStore.termsForCleanupPayload()
+            : []
+        let request = RubyWhisperDesktopTranscriptionRequest.desktopUpload(
             audio: audio,
             context: context?.contextSummary,
-            dictionaryTerms: cleanupPrivacyControls.includesCleanupPayloads
-                ? personalDictionaryStore.termsForCleanupPayload()
-                : [],
+            dictionaryTerms: dictionaryTerms,
             audioMimeType: Self.audioMimeType(for: artifact.metadata),
             audioDurationMs: artifact.metadata.durationMs,
             privacyControls: cleanupPrivacyControls
@@ -2999,6 +3002,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     self.startRecordingDurationTimer(mode: activeMode)
                     if self.shouldCaptureContextForCurrentSession {
                         self.startContextCapture()
+                    } else if self.cleanupPrivacyControls.includesContextPayload {
+                        self.clearContextCaptureForFastDictation()
                     } else {
                         self.clearContextCaptureForDisabledCleanup()
                     }
@@ -3266,6 +3271,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         shortcutSessionController.reset()
         activeRecordingTriggerMode = nil
         let sessionIntent = currentSessionIntent
+        let shouldUploadSessionContext = shouldUploadContext(for: sessionIntent)
         currentSessionIntent = .dictation
         audioRecorder.onRecordingReady = nil
         audioRecorder.onRecordingFailure = nil
@@ -3284,6 +3290,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
         lastPostProcessingPrompt = ""
         lastContextScreenshotDataURL = nil
         lastContextScreenshotStatus = "No screenshot"
+        resetDictationTiming()
+        markDictationTiming { $0.markStopRequested() }
         isRecording = false
         restoreAudioInterruptionIfNeeded()
         isTranscribing = true
@@ -3293,12 +3301,14 @@ final class AppState: ObservableObject, @unchecked Sendable {
         overlayManager.showTranscribing()
         audioRecorder.stopRecording { [weak self] artifact in
             guard let self else { return }
+            self.markDictationTiming { $0.markArtifactReady() }
             guard let artifact else {
                 self.isTranscribing = false
                 self.audioRecorder.cleanup()
                 self.endCriticalDictationActivity()
                 self.errorMessage = "No audio recorded"
                 self.statusText = "Error"
+                self.markDictationTiming { $0.markTerminalStatus("no_audio") }
                 self.overlayManager.dismiss()
                 self.refreshAvailableMicrophonesIfNeeded()
                 return
@@ -3328,15 +3338,39 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     artifact.delete()
                 }
                 do {
-                    let appContext = await self.uploadContext(
-                        sessionContext: sessionContext,
-                        inFlightContextTask: inFlightContextTask
-                    )
+                    let appContext: AppContext?
+                    if shouldUploadSessionContext {
+                        await MainActor.run {
+                            self.markDictationTiming { $0.markContextWaitStarted() }
+                        }
+                        appContext = await self.uploadContext(
+                            sessionContext: sessionContext,
+                            inFlightContextTask: inFlightContextTask,
+                            shouldAllowContext: true
+                        )
+                        await MainActor.run {
+                            self.markDictationTiming {
+                                $0.markContextWaitFinished(status: appContext == nil ? "unavailable" : "ready")
+                            }
+                        }
+                    } else {
+                        inFlightContextTask?.cancel()
+                        appContext = nil
+                        await MainActor.run {
+                            self.markDictationTiming { $0.markContextSkipped(reason: "fast_dictation") }
+                        }
+                    }
                     try Task.checkCancellation()
+                    await MainActor.run {
+                        self.markDictationTiming { $0.markUploadStarted() }
+                    }
                     let uploadSuccess = try await self.transcribeTransientRecordingArtifact(
                         artifact,
                         context: appContext
                     )
+                    await MainActor.run {
+                        self.markDictationTiming { $0.markBackendResponse() }
+                    }
                     let uploadTerminalState = RubyWhisperDesktopUploadTerminalState.success(uploadSuccess)
                     guard let insertionInput = uploadTerminalState.insertionInput else {
                         throw CancellationError()
@@ -3356,7 +3390,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         self.lastRawTranscript = ""
                         self.lastPostProcessedTranscript = trimmedFinalTranscript
                         self.lastPostProcessingStatus = processingStatus
-                        self.recordPipelineHistoryEntry(
+                        let historyEntryID = self.recordPipelineHistoryEntry(
                             rawTranscript: "",
                             postProcessedTranscript: "",
                             postProcessingPrompt: "",
@@ -3379,6 +3413,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
                         if trimmedFinalTranscript.isEmpty {
                             self.statusText = shouldPressEnterAfterPaste ? enterOnlyStatusText : "Nothing to transcribe"
+                            self.markDictationTiming {
+                                $0.markInsertionFinished(
+                                    outcome: shouldPressEnterAfterPaste ? "press_enter_only" : "empty_transcript"
+                                )
+                            }
+                            self.persistLatestDictationTiming(for: historyEntryID)
                             self.clearPendingOverlayDismissToken()
                             if !self.showPostTranscriptionUpdateReminderIfNeeded() {
                                 self.overlayManager.dismiss()
@@ -3401,10 +3441,15 @@ final class AppState: ObservableObject, @unchecked Sendable {
                                 appEligibility: self.directInsertionAppEligibility(),
                                 islandIsInserting: true
                             )
+                            self.markDictationTiming { $0.markInsertionStarted() }
                             Task { [weak self] in
                                 let insertionResult = await coordinator.attempt(request)
                                 guard let appState = self else { return }
                                 await MainActor.run {
+                                    appState.markDictationTiming {
+                                        $0.markInsertionFinished(outcome: insertionResult.outcome.rawValue)
+                                    }
+                                    appState.persistLatestDictationTiming(for: historyEntryID)
                                     appState.handleDirectInsertionResult(
                                         insertionResult,
                                         finalText: trimmedFinalTranscript,
@@ -3424,15 +3469,23 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     await MainActor.run {
                         self.transcriptionTask = nil
                         self.endCriticalDictationActivity()
+                        self.markDictationTiming { $0.markTerminalStatus("cancelled") }
                         if self.activeTransientRecordingArtifact === artifact {
                             self.activeTransientRecordingArtifact = nil
                         }
                     }
                 } catch {
-                    let resolvedContext = await self.uploadContext(
-                        sessionContext: sessionContext,
-                        inFlightContextTask: inFlightContextTask
-                    )
+                    let resolvedContext: AppContext?
+                    if shouldUploadSessionContext {
+                        resolvedContext = await self.uploadContext(
+                            sessionContext: sessionContext,
+                            inFlightContextTask: inFlightContextTask,
+                            shouldAllowContext: true
+                        )
+                    } else {
+                        inFlightContextTask?.cancel()
+                        resolvedContext = nil
+                    }
                     await MainActor.run {
                         guard self.isTranscribing else { return }
                         self.transcriptionTask = nil
@@ -3446,6 +3499,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         self.errorMessage = failure?.message ?? error.localizedDescription
                         self.isTranscribing = false
                         self.endCriticalDictationActivity()
+                        self.markDictationTiming {
+                            $0.markTerminalStatus(failure?.code.rawValue ?? "upload_failed")
+                        }
                         self.statusText = failure.map(Self.statusText(for:)) ?? "Error"
                         if let failure {
                             self.overlayManager.showUploadFailure(failure)
@@ -3573,6 +3629,17 @@ final class AppState: ObservableObject, @unchecked Sendable {
         lastContextLLMPrompt = ""
     }
 
+    private func resetDictationTiming() {
+        activeDictationTiming = DictationTimingRun()
+        lastDictationTimingSummary = ""
+    }
+
+    private func markDictationTiming(_ update: (inout DictationTimingRun) -> Void) {
+        update(&activeDictationTiming)
+        lastDictationTimingSummary = activeDictationTiming.safeSummary
+    }
+
+    @discardableResult
     private func recordPipelineHistoryEntry(
         rawTranscript: String,
         postProcessedTranscript: String,
@@ -3582,7 +3649,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         processingStatus: String,
         intent: SessionIntent,
         audioFileName: String? = nil
-    ) {
+    ) -> UUID? {
         _ = rawTranscript
         _ = postProcessedTranscript
         _ = postProcessingPrompt
@@ -3595,7 +3662,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
             timestamp: Date(),
             contextScreenshotStatus: sanitizedScreenshotStatus,
             postProcessingStatus: processingStatus,
-            debugStatus: debugStatusMessage
+            debugStatus: debugStatusMessage,
+            timingSummary: lastDictationTimingSummary
         )
         do {
             let removedAudioFileNames = try pipelineHistoryStore.append(newEntry, maxCount: maxPipelineHistoryCount)
@@ -3603,8 +3671,35 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 Self.deleteAudioFile(audioFileName)
             }
             pipelineHistory = pipelineHistoryStore.loadAllHistory()
+            return newEntry.id
         } catch {
             errorMessage = "Unable to save run history entry: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    private func persistLatestDictationTiming(for historyEntryID: UUID?) {
+        guard let historyEntryID,
+              !lastDictationTimingSummary.isEmpty,
+              let existingItem = pipelineHistory.first(where: { $0.id == historyEntryID }) else {
+            return
+        }
+
+        let updatedItem = PipelineHistoryItem(
+            intent: existingItem.intent,
+            id: existingItem.id,
+            timestamp: existingItem.timestamp,
+            contextScreenshotStatus: existingItem.contextScreenshotStatus,
+            postProcessingStatus: existingItem.postProcessingStatus,
+            debugStatus: existingItem.debugStatus,
+            timingSummary: lastDictationTimingSummary
+        )
+
+        do {
+            try pipelineHistoryStore.update(updatedItem)
+            pipelineHistory = pipelineHistoryStore.loadAllHistory()
+        } catch {
+            errorMessage = "Unable to save run timing: \(error.localizedDescription)"
         }
     }
 
@@ -3740,7 +3835,14 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private var shouldCaptureContextForCurrentSession: Bool {
-        cleanupPrivacyControls.includesContextPayload
+        shouldUploadContext(for: currentSessionIntent)
+    }
+
+    private func shouldUploadContext(for intent: SessionIntent) -> Bool {
+        _ = intent
+        // The backend cleanup path is currently conservative and provider cleanup is a no-op.
+        // Skipping transient app/screenshot context keeps normal dictation on the fastest path.
+        return false
     }
 
     private func clearContextCaptureForDisabledCleanup() {
@@ -3757,10 +3859,30 @@ final class AppState: ObservableObject, @unchecked Sendable {
         lastContextLLMPrompt = ""
     }
 
+    private func clearContextCaptureForFastDictation() {
+        contextCaptureTask?.cancel()
+        contextCaptureTask = nil
+        capturedContext = nil
+        lastContextSummary = ""
+        lastContextScreenshotDataURL = nil
+        lastContextScreenshotStatus = "Context capture skipped for fast dictation"
+        lastContextAppName = ""
+        lastContextBundleIdentifier = ""
+        lastContextWindowTitle = ""
+        lastContextSelectedText = ""
+        lastContextLLMPrompt = ""
+    }
+
     private func uploadContext(
         sessionContext: AppContext?,
-        inFlightContextTask: Task<AppContext?, Never>?
+        inFlightContextTask: Task<AppContext?, Never>?,
+        shouldAllowContext: Bool
     ) async -> AppContext? {
+        guard shouldAllowContext else {
+            inFlightContextTask?.cancel()
+            return nil
+        }
+
         guard cleanupPrivacyControls.includesContextPayload else {
             inFlightContextTask?.cancel()
             return nil

@@ -10,6 +10,7 @@ struct PipelineDebugPanelView: View {
 
             PipelineDebugContentView(
                 statusMessage: appState.debugStatusMessage,
+                timingSummary: appState.lastDictationTimingSummary,
                 postProcessingStatus: appState.lastPostProcessingStatus,
                 contextSummary: appState.lastContextSummary,
                 contextScreenshotStatus: appState.lastContextScreenshotStatus,
