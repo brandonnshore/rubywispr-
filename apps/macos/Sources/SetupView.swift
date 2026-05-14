@@ -372,6 +372,10 @@ struct SetupView: View {
                                 }
                             }
                         }
+
+                        if !appState.hasScreenRecordingPermission {
+                            ScreenRecordingPermissionGuideView()
+                        }
                     }
                 }
             }
@@ -825,6 +829,10 @@ struct SetupView: View {
             .padding(12)
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(8)
+
+            if !appState.hasScreenRecordingPermission {
+                ScreenRecordingPermissionGuideView()
+            }
 
         }
         .onAppear {

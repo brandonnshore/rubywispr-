@@ -1438,6 +1438,10 @@ struct GeneralSettingsView: View {
                     appState.requestScreenCapturePermission()
                 }
             )
+
+            if !appState.hasScreenRecordingPermission {
+                ScreenRecordingPermissionGuideView()
+            }
         }
     }
 
