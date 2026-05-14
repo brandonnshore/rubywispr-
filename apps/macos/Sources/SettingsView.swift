@@ -869,6 +869,17 @@ struct GeneralSettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Launch \(AppName.displayName) at login", isOn: $appState.launchAtLogin)
             Toggle("Show menu bar icon", isOn: $showMenuBarIcon)
+                .disabled(!AppBuild.canHideMenuBarIcon)
+
+            if AppBuild.keepsDockIconVisibleWhenIdle {
+                Text("This local build stays visible in the Dock, so you can reopen settings or quit even if the menu bar icon is hidden.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Required because \(AppName.displayName) runs without a Dock icon when idle.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             if SMAppService.mainApp.status == .requiresApproval {
                 HStack(spacing: 6) {

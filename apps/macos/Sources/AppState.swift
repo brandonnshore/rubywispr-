@@ -69,6 +69,18 @@ enum AppBuild {
     static var isDevBundle: Bool {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String) == "RubyWhisper Dev"
     }
+
+    static var isLocalBundle: Bool {
+        (Bundle.main.bundleIdentifier ?? "").hasSuffix(".local")
+    }
+
+    static var keepsDockIconVisibleWhenIdle: Bool {
+        isLocalBundle || isDevBundle
+    }
+
+    static var canHideMenuBarIcon: Bool {
+        keepsDockIconVisibleWhenIdle
+    }
 }
 
 private struct TranscriptCommandParsingResult {
@@ -212,9 +224,15 @@ final class AppState: ObservableObject, @unchecked Sendable {
     static let defaultPostProcessingModel = "openai/gpt-oss-20b"
     static let defaultPostProcessingFallbackModel = "meta-llama/llama-4-scout-17b-16e-instruct"
     static let defaultContextModel = "meta-llama/llama-4-scout-17b-16e-instruct"
+    private static let setupCompletionStorageKey = "hasCompletedSetup"
     private static let localDefaultsMigrationKey = "rubywhisper_local_defaults_migrated_from_legacy_bundle_ids"
     private static let localBundleIdentifier = "com.rubyadvisory.rubywhisper.local"
     private static let legacyLocalBundleIdentifiers = [
+        "com.rubyadvisory.rubywhisper.dev",
+        "com.rubyadvisory.rubywhisper"
+    ]
+    private static let knownBundleIdentifiersForSetupCompletion = [
+        localBundleIdentifier,
         "com.rubyadvisory.rubywhisper.dev",
         "com.rubyadvisory.rubywhisper"
     ]
@@ -224,7 +242,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     @Published var hasCompletedSetup: Bool {
         didSet {
-            UserDefaults.standard.set(hasCompletedSetup, forKey: "hasCompletedSetup")
+            UserDefaults.standard.set(hasCompletedSetup, forKey: Self.setupCompletionStorageKey)
         }
     }
 
@@ -544,6 +562,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     init() {
         Self.migrateLocalDefaultsIfNeeded()
+        Self.migrateSetupCompletionAcrossKnownBundleIdentifiers()
         UserDefaults.standard.removeObject(forKey: "force_http2_transcription")
         let desktopSessionStore = DesktopSessionKeychainStore()
         let desktopBackendClient = Self.makeDesktopBackendAPIClient(sessionStore: desktopSessionStore)
@@ -562,7 +581,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
             handoffExchanger: desktopHandoffExchanger
         )
         let firstRunOnboardingCoordinator = FirstRunOnboardingCoordinator()
-        let hasCompletedSetup = UserDefaults.standard.bool(forKey: "hasCompletedSetup")
+        let hasCompletedSetup = UserDefaults.standard.bool(forKey: Self.setupCompletionStorageKey)
         let transcriptionModel = UserDefaults.standard.string(forKey: transcriptionModelStorageKey) ?? Self.defaultTranscriptionModel
         let postProcessingModel = UserDefaults.standard.string(forKey: postProcessingModelStorageKey) ?? Self.defaultPostProcessingModel
         let postProcessingFallbackModel = UserDefaults.standard.string(forKey: postProcessingFallbackModelStorageKey) ?? Self.defaultPostProcessingFallbackModel
@@ -769,7 +788,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: localDefaultsMigrationKey) == nil else { return }
-        let isFreshLocalDefaults = defaults.object(forKey: "hasCompletedSetup") == nil
+        let isFreshLocalDefaults = defaults.object(forKey: setupCompletionStorageKey) == nil
 
         for legacyBundleIdentifier in legacyLocalBundleIdentifiers {
             guard let legacyDomain = defaults.persistentDomain(forName: legacyBundleIdentifier),
@@ -783,6 +802,23 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
 
         defaults.set(true, forKey: localDefaultsMigrationKey)
+    }
+
+    private static func migrateSetupCompletionAcrossKnownBundleIdentifiers() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: setupCompletionStorageKey) else { return }
+
+        let completedSetupElsewhere = knownBundleIdentifiersForSetupCompletion.contains { bundleIdentifier in
+            guard bundleIdentifier != Bundle.main.bundleIdentifier,
+                  let domain = defaults.persistentDomain(forName: bundleIdentifier) else {
+                return false
+            }
+            return domain[setupCompletionStorageKey] as? Bool == true
+        }
+
+        if completedSetupElsewhere {
+            defaults.set(true, forKey: setupCompletionStorageKey)
+        }
     }
 
     @discardableResult

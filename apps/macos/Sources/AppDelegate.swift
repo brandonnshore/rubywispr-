@@ -6,6 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        ensureReachableMenuBarIcon()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleShowSetup),
@@ -24,6 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !appState.hasCompletedSetup {
             showSetupWindow()
         } else {
+            restoreIdleActivationPolicy()
             appState.startAccessibilityPolling()
             Task { @MainActor in
                 UpdateManager.shared.startPeriodicChecks()
@@ -87,7 +89,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.appState.hasCompletedSetup = true
                     self.appState.startHotkeyMonitoring()
                     self.appState.startAccessibilityPolling()
-                    NSApp.setActivationPolicy(.accessory)
+                    self.restoreIdleActivationPolicy()
                 }
                 self.setupWindow = nil
             }
@@ -141,7 +143,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] _ in
             if self?.setupWindow == nil {
-                NSApp.setActivationPolicy(.accessory)
+                self?.restoreIdleActivationPolicy()
             }
             self?.settingsWindow = nil
         }
@@ -186,7 +188,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appState.hasCompletedSetup = true
         setupWindow?.close()
         setupWindow = nil
-        NSApp.setActivationPolicy(.accessory)
+        restoreIdleActivationPolicy()
         appState.startHotkeyMonitoring()
         appState.startAccessibilityPolling()
         Task { @MainActor in
@@ -196,5 +198,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !AXIsProcessTrusted() {
             appState.showAccessibilityAlert()
         }
+    }
+
+    private func ensureReachableMenuBarIcon() {
+        guard !AppBuild.canHideMenuBarIcon else { return }
+        UserDefaults.standard.set(true, forKey: "show_menu_bar_icon")
+    }
+
+    private func restoreIdleActivationPolicy() {
+        NSApp.setActivationPolicy(AppBuild.keepsDockIconVisibleWhenIdle ? .regular : .accessory)
     }
 }
