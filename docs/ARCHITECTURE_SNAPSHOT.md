@@ -130,7 +130,7 @@ Surfaces 3 and 4 are stock SwiftUI today — they're the next major UI lift (M3.
 
 ### Hotkey backend
 
-`GlobalShortcutBackend.swift` installs a `CGEvent.tapCreate(.cgSessionEventTap, .headInsertEventTap, .defaultTap, ...)`. Requires **Accessibility** permission. Local builds prefer an installed `Apple Development` signing identity so TCC grants survive rebuilds; explicit ad hoc builds (`CODESIGN_IDENTITY=-`) can still invalidate grants because the code hash changes. See [ADR-002 §TCC dev-loop friction](adr/ADR-002-reliability-and-ui-refresh.md) for reset/re-grant steps.
+`GlobalShortcutBackend.swift` installs a `CGEvent.tapCreate(.cgSessionEventTap, .headInsertEventTap, .defaultTap, ...)`. Requires **Accessibility** permission. Local interactive builds prefer an installed `Apple Development` signing identity so TCC grants survive rebuilds; explicit ad hoc builds (`CODESIGN_IDENTITY=-`) are for CI/smoke only and can still invalidate grants because the code hash changes. See [ADR-002 §TCC dev-loop friction](adr/ADR-002-reliability-and-ui-refresh.md) for reset/re-grant steps.
 
 ### Backend client
 
@@ -166,8 +166,9 @@ Two manually-synced sources of truth:
 ### Mac
 - `cd apps/macos && make all` — single swiftc invocation, all sources at once.
 - Output: `build/RubyWhisper.app`.
-- Build with distinct bundle name to avoid Accessibility ambiguity: `make run-dev` → `build/RubyWhisper Dev.app`. See [ADR-002](adr/ADR-002-reliability-and-ui-refresh.md).
-- Code signing: local `Apple Development` identity when installed, explicit ad hoc when `CODESIGN_IDENTITY=-`. Hardened runtime enabled.
+- Regular local bundle: `make all` → `build/RubyWhisper.app` with bundle id `com.rubyadvisory.rubywhisper.local`.
+- Debug harness bundle: `make run-dev` → `build/RubyWhisper Dev.app` with bundle id `com.rubyadvisory.rubywhisper.dev`.
+- Code signing: local `Apple Development` identity when installed, explicit ad hoc when `CODESIGN_IDENTITY=-`. Hardened runtime enabled. Do not use an ad hoc artifact as the app you grant Accessibility or Screen Recording to.
 - No notarization yet; not shipping outside dev machines.
 
 ### Tests
