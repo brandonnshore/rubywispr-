@@ -12,13 +12,20 @@ or live provider traffic.
 
 ## Source State
 
-- Validated app source/config head for this evidence pass: `4439c91` (`Fix
-  duplicate Vercel output handling (#206)`).
-- Landed PRs in the app source/config RC stack: `#200`, `#201`, `#202`, `#203`,
-  `#192`, `#204`, `#205`, and `#206`.
+- Validated app/package/CI source/config head for this evidence pass:
+  `f241977` (`Update GitHub Actions runtime versions (#210)`).
+- Landed PRs in the source/config RC stack: `#200`, `#201`, `#202`, `#203`,
+  `#192`, `#204`, `#205`, `#206`, `#209`, and `#210`.
 - PR `#207` refreshed deployment/runbook evidence after the source-side Vercel
   fix and did not change app runtime source, macOS source, backend source, or
   deployment config.
+- PR `#208` stabilized the evidence wording so later docs-only refreshes do not
+  change the app/source validation claim.
+- PR `#209` replaced the local DMG packaging helper with macOS built-in
+  `hdiutil`, added automatic macOS CI coverage for macOS PRs, and added CI
+  verification for the local app-plus-Applications DMG shape.
+- PR `#210` updated GitHub Actions runtime versions after the macOS CI
+  Node 20 action-runtime deprecation warning; web and macOS PR checks passed.
 - Check open GitHub PR state directly before release; it is intentionally not
   treated as durable evidence in this note.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
@@ -62,6 +69,8 @@ Commands run against the validated source/config tree:
 | macOS clean build | `make -C apps/macos clean all CODESIGN_IDENTITY=-` | Passed. |
 | macOS ad hoc signature | `codesign --verify --deep --strict --verbose=2 apps/macos/build/RubyWhisper.app` | Passed. |
 | Local DMG packaging shape | `make -C apps/macos clean dmg CODESIGN_IDENTITY=-`; `hdiutil attach`; verify `RubyWhisper.app` and `Applications` symlink; detach | Passed; local/ad hoc artifact only, not Developer ID signed, notarized, stapled, uploaded, or release-approved. |
+| macOS CI PR build/package gate | PR `#209` and PR `#210` `Debug ad hoc build` checks | Passed; builds the ad hoc app, verifies bundle/signature, packages local DMG, mounts it, verifies contents/symlink, and runs `hdiutil verify`. |
+| macOS CI main dispatch | `gh workflow run macos-ci.yml --ref main` at commit `90e1f30` | Passed; post-merge check after PR `#209` verified the app build and local DMG shape on GitHub-hosted macOS. |
 
 ## Deployed Web/Backend Smoke
 
