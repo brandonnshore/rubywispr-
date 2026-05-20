@@ -12,9 +12,9 @@ or live provider traffic.
 
 ## Source State
 
-- `origin/main`: `03d08f2` (`Benchmark Groq latency and cost assumptions
-  (#192)`).
-- Landed PRs in the RC stack: `#200`, `#201`, `#202`, `#203`, and `#192`.
+- `origin/main`: `5c69918` (`Update RC readiness after PR cleanup (#204)`).
+- Landed PRs in the RC stack: `#200`, `#201`, `#202`, `#203`, `#192`, and
+  `#204`.
 - Remaining open GitHub PRs checked during this pass: none.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
   superseded. Current `main` already uses `SUPABASE_SECRET_KEY` and
@@ -24,14 +24,10 @@ or live provider traffic.
   refreshed onto current `main`, revalidated, and merged. It records
   source-safe Groq benchmark evidence and updates ADR-006 with official Groq
   pricing/docs rechecked on 2026-05-20.
-- PR `#203` check diagnosis: the real `Vercel - rubywhisper-web` deployment
-  passed; the duplicate legacy `Vercel - rubywispr-` project built Next
-  successfully and then failed because its project setting expects an output
-  directory named `public`.
-- PR `#192` check diagnosis: the real `Vercel - rubywhisper-web` deployment
-  passed; the duplicate legacy `Vercel - rubywispr-` project again built Next
-  successfully and then failed because its project setting expects an output
-  directory named `public`.
+- PR `#203`, `#192`, and `#204` check diagnosis: the real
+  `Vercel - rubywhisper-web` deployment passed; the duplicate legacy
+  `Vercel - rubywispr-` project built Next successfully and then failed because
+  its project setting expects an output directory named `public`.
 
 ## Automated Validation
 
