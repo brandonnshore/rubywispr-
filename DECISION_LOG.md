@@ -13,7 +13,7 @@ This log tracks architecture decision records that future implementation work sh
 | ADR-003 | Proposed | Authentication | Use Clerk for auth, starting with email magic-link login. | `TECHNICAL_SPEC.md#ADR Candidates`, `TECHNICAL_INFRASTRUCTURE.md#Services And Dependencies` |
 | ADR-004 | Proposed | Product database | Use Supabase for product metadata only. | `TECHNICAL_SPEC.md#ADR Candidates`, `TECHNICAL_INFRASTRUCTURE.md#Services And Dependencies` |
 | ADR-005 | Proposed | Billing | Use Stripe as the billing source of truth. | `TECHNICAL_SPEC.md#ADR Candidates`, `TECHNICAL_INFRASTRUCTURE.md#Third-Party Provider Contracts` |
-| ADR-006 | Proposed | Transcription and cleanup | Use Groq for transcription and cleanup, with provider abstraction kept flexible. | `TECHNICAL_SPEC.md#ADR Candidates`, `FORK_STRATEGY.md#Provider Recommendation` |
+| ADR-006 | Proposed | Transcription and cleanup | Use Groq as the v0.1 default transcription provider after RUB-26 benchmark evidence; keep cleanup model/prompt selection separate and keep provider abstraction flexible. | `docs/adr/ADR-006-groq-v0-1-provider-default.md`, `RESEARCH_LOG.md#rw-015-groq-latency-and-cost-benchmark`, `TECHNICAL_SPEC.md#ADR Candidates`, `FORK_STRATEGY.md#Provider Recommendation` |
 | ADR-007 | Proposed | Auto-update | Use Sparkle for direct-download auto-update after FreeFlow import fit is confirmed. | `TECHNICAL_SPEC.md#ADR Candidates`, `TECHNICAL_INFRASTRUCTURE.md#Services And Dependencies` |
 | ADR-008 | Proposed | Crash reporting | Use Sentry or an equivalent privacy-safe crash reporting tool. | `TECHNICAL_SPEC.md#ADR Candidates`, `TECHNICAL_INFRASTRUCTURE.md#Services And Dependencies` |
 
