@@ -125,6 +125,18 @@ require_env() {
   fi
 }
 
+normalize_linear_project_slug() {
+  local slug="$1"
+
+  # Linear project URLs include a human slug plus the GraphQL slugId suffix.
+  # The Linear API filter below expects only the slugId, e.g. "caaab48c6aa9".
+  if [[ "$slug" =~ ^.+-([[:alnum:]]{8,})$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  else
+    printf '%s\n' "$slug"
+  fi
+}
+
 expand_path() {
   case "$1" in
     "~") printf '%s\n' "$HOME" ;;
@@ -138,6 +150,9 @@ require_env LINEAR_API_KEY
 require_env LINEAR_PROJECT_SLUG
 require_env SYMPHONY_WORKSPACE_ROOT
 require_env SYMPHONY_CODEX_HOME
+
+LINEAR_PROJECT_SLUG="$(normalize_linear_project_slug "$LINEAR_PROJECT_SLUG")"
+export LINEAR_PROJECT_SLUG
 
 SYMPHONY_WORKSPACE_ROOT="$(expand_path "$SYMPHONY_WORKSPACE_ROOT")"
 export SYMPHONY_WORKSPACE_ROOT
