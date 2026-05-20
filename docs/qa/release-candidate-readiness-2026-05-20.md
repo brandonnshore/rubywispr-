@@ -30,9 +30,11 @@ or live provider traffic.
   its project setting expects an output directory named `public`.
 - PR `#206` is testing a source-side `vercel.json` override for the duplicate
   legacy project. The first `framework: nextjs` / default-output attempt reached
-  the legacy project but still looked for root `.next`; the current attempt pins
-  `outputDirectory` to `apps/web/.next`, where the workspace build writes Next
-  output.
+  the legacy project but still looked for root `.next`; the workspace-output
+  attempt fixed the legacy project but broke the active app-root project by
+  resolving `apps/web/.next` relative to `apps/web`. The current attempt keeps
+  `outputDirectory` at `.next` for both projects and copies `apps/web/.next` to
+  root `.next` only when the build is running from the repository root.
 
 ## Automated Validation
 
@@ -96,8 +98,8 @@ These are not proved by the automated checks above:
 - Cleanup or disconnection of the duplicate legacy Vercel `rubywispr-` project
   check, which is configured for the wrong output directory and should not be a
   release signal for the active `rubywhisper-web` project. A source-side
-  `vercel.json` framework/workspace-output override is being tested in PR
-  `#206`; if both Vercel projects pass there, this gate can be removed.
+  `vercel.json` cross-root output override is being tested in PR `#206`; if
+  both Vercel projects pass there, this gate can be removed.
 
 ## Beta Readiness Conclusion
 
