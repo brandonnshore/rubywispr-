@@ -166,6 +166,127 @@ evidence.
 | MAC-086 | Manual copy recovery | Copy from an approved local recovery surface or Recent Wisprs. | User-requested copy works locally and does not call transcription or backend again. | Recovery action category and backend-call category. | `Not Run` |
 | MAC-087 | Fallback privacy | Inspect logs or diagnostics after fallback paths. | Logs contain only categorical/numeric metadata and no clipboard contents, prior clipboard snapshot, target text, or final text. | Search command/result summary or logger assertion. | `Not Run` |
 
+#### No-Focused-Field Clipboard Recovery Script
+
+Use this script for the RW-069E/RW-069F human evidence run after the Mac app
+build, approved non-production account, approved backend/provider path,
+microphone permission, and Accessibility permission are available. This is a
+manual QA path only; do not mark these checks `Pass` from source review.
+
+Target categories to cover with neutral, non-private surfaces:
+
+| Category | Example safe surface | Required outcome to classify |
+| --- | --- | --- |
+| Unfocused desktop | Finder desktop or empty neutral folder window with no text field active. | Conservative `insertion_unavailable` state with recovery available. |
+| Browser page body | Local/staging page body where no text input is focused. | Conservative no-focused-field recovery without reading page text or URL details. |
+| Read-only surface | Neutral read-only document, label, or static local page. | No false insertion success; fallback or local recovery is visible. |
+| Secure or unsupported field | Password field, secure input, or known automation-blocked neutral field. | Expected limitation if the app blocks insertion while exposing local recovery. |
+| Messaging/email draft surface without focus | Neutral draft composer window opened but body field deliberately unfocused. | No accidental send, no private thread evidence, and recovery state is categorical. |
+
+Preparation:
+
+1. Confirm all prerequisites in `Manual Run Prerequisites` are `Pass`.
+2. Use a neutral test phrase created for the run, but never record the phrase in
+   Linear, PRs, screenshots, logs, or this document.
+3. Put a neutral, tester-owned value on the clipboard before each run, then
+   record only the previous clipboard category, such as `plain_text_supported`,
+   `rich_text_unsupported`, `image_unsupported`, or `changed_by_user`.
+4. Open an approved log or diagnostics view only if it can be inspected without
+   exposing request bodies, transcripts, clipboard payloads, or private env
+   values.
+
+Per-target steps:
+
+1. Activate the target category while ensuring no acceptable text field is
+   focused.
+2. Start one RubyWhisper recording through the approved hotkey or island
+   control, speak the neutral test phrase, and stop normally.
+3. Observe the island state path. Expected recovery state is
+   `insertion_unavailable` or the product-approved no-focused-field copy
+   recovery state; the island must not display transcript or cleaned text.
+4. Observe the fallback/copy affordance. Expected action is `Copy Whisper`,
+   `Copy Transcript`, `paste_manually`, or equivalent approved copy recovery.
+   Evidence records only the action label/category and whether it was visible,
+   enabled, and successful.
+5. Open Recent Wisprs or the approved local recovery surface. Expected result is
+   one local `insertion_failed` recovery entry when final text exists, with no
+   retranscription or backend retry. Evidence records only count, insertion
+   status, retention timestamp category, and copy-action availability.
+6. Trigger manual copy from the recovery surface. Expected result is
+   `manual_copy_recovery`; it may intentionally replace the current pasteboard
+   because the user requested copy. Evidence records only copy success/failure
+   category and backend-call category.
+7. Observe previous clipboard restoration behavior after fallback copy where the
+   implementation offers it. Expected result is either `clipboard_restored` for
+   supported data while RubyWhisper still owns the fallback pasteboard entry, or
+   `clipboard_restore_skipped` for unsupported, stale, changed, unreadable, or
+   unsafe restore conditions. Evidence must never include previous clipboard
+   contents.
+8. Inspect approved logs/requests. Expected result is no clipboard content,
+   previous clipboard snapshot, focused-field text, selected text, raw
+   transcript, cleaned text, Recent Wisprs content, audio, provider payload,
+   request body, or response body. Evidence records only command names, log
+   source names, allowed metadata categories, and pass/fail state.
+
+Outcome classification:
+
+| Classification | Use when | Required follow-up |
+| --- | --- | --- |
+| `pass` | The target reaches the expected no-focused-field island/recovery state, copy recovery works locally, Recent Wisprs recovery is available when final text exists, restoration behavior is correctly restored or skipped, and privacy checks pass. | Record sanitized evidence in the manual QA ticket or PR. |
+| `expected_limitation` | The target app or macOS blocks insertion, restoration, or automation in a way allowed by the clipboard fallback contract, and RubyWhisper clearly offers local recovery without claiming insertion success. | Record limitation category and affected target category; create follow-up only if product copy or recovery is unclear. |
+| `blocker` | RubyWhisper claims insertion success without evidence, hides/loses recovery, exposes transcript/clipboard/private data in island/logs/evidence, retranscribes for local recovery, fails to create a recovery entry when final text exists, or cannot run because prerequisites are missing. | Create or update a `needs-human`/`manual-qa` Linear ticket with the missing prerequisite or failure category; do not attach private content. |
+
+Focused evidence checklist:
+
+```text
+## RW-069E No-Focused-Field Clipboard Recovery Evidence
+
+Run owner:
+Run date:
+Issue:
+Build/app version:
+Build/channel:
+Git commit or artifact ID:
+macOS version:
+Architecture:
+Backend environment category:
+Provider category:
+Account category:
+
+### Target Coverage
+| Target category | Row IDs | Status | Classification | Island state path | Recovery action category | Recent Wisprs status/count | Restoration result | Backend/log privacy result | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| unfocused_desktop | MAC-081/MAC-083/MAC-084/MAC-086/MAC-087/MAC-101 | Not Run |  |  |  |  |  |  |  |
+| browser_body_no_input | MAC-081/MAC-083/MAC-084/MAC-086/MAC-087/MAC-101 | Not Run |  |  |  |  |  |  |  |
+| read_only_surface | MAC-081/MAC-082/MAC-083/MAC-085/MAC-086/MAC-087/MAC-101 | Not Run |  |  |  |  |  |  |  |
+| secure_or_unsupported_field | MAC-082/MAC-083/MAC-085/MAC-086/MAC-087/MAC-101 | Not Run |  |  |  |  |  |  |  |
+| messaging_or_email_unfocused | MAC-081/MAC-083/MAC-084/MAC-086/MAC-087/MAC-101 | Not Run |  |  |  |  |  |  |  |
+
+### Required Observations
+- [ ] Island reached `insertion_unavailable` or approved no-focused-field
+      recovery without showing transcript/cleaned text.
+- [ ] Copy recovery action was visible, accurately labeled, and did not claim
+      target insertion success.
+- [ ] Recent Wisprs or approved local recovery entry was available with
+      `insertion_failed` when final text existed.
+- [ ] Manual copy from recovery mapped to `manual_copy_recovery` and did not
+      call transcription/backend again.
+- [ ] Previous clipboard restoration was recorded only as
+      `clipboard_restored`, `clipboard_restore_skipped`, or `not_offered`.
+- [ ] Backend logs/requests contained no clipboard content, previous clipboard
+      snapshot, focused-field text, selected text, raw transcript, cleaned text,
+      Recent Wisprs content, audio, provider payload, request body, or response
+      body.
+- [ ] Evidence includes only commands, app names/categories, row IDs, status,
+      classification, state names, counts, timestamps, timing buckets, request
+      IDs if support-safe, and pass/fail summaries.
+
+### Follow-Ups
+| Target category | Classification | Needs-human/manual QA issue | Reason |
+| --- | --- | --- | --- |
+|  | blocker / expected_limitation / pass |  |  |
+```
+
 ### 6. Recent Wisprs, Dictionary, Settings, And Account Surfaces
 
 | ID | Scenario | Steps | Expected result | Evidence | Status |
