@@ -18,10 +18,17 @@ Deployment target:
 - CI baseline: `.github/workflows/web-ci.yml` runs `npm ci`, `npm run lint`,
   `npm run typecheck`, `npm run test`, and `npm run build`.
 
-Vercel project settings should use the repository root as the project root and
-`npm run build` as the build command unless a future Vercel project import
-requires an explicit workspace setting. The root command delegates to
-`@rubywhisper/web`.
+The active `rubywhisper-web` Vercel project currently uses `apps/web` as its
+Root Directory. The repository also has a root `vercel.json` so a repo-root
+Vercel import can build the same app without failing output-directory
+validation: it pins the framework to Next.js, keeps `outputDirectory` at
+`.next`, and copies `apps/web/.next` to root `.next` only when the deployment
+is running from the repository root.
+
+Future Vercel imports should prefer the active `apps/web` Root Directory unless
+the release owner intentionally chooses a repo-root import. Do not change live
+Vercel Root Directory, build command, output directory, production env vars,
+domains, or DNS without the human gates below.
 
 ## Hard Gates
 

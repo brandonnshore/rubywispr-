@@ -12,11 +12,10 @@ or live provider traffic.
 
 ## Source State
 
-- Base `origin/main` for this pass: `d21ffd1` (`Fix RC readiness source head
-  (#205)`).
-- Landed PRs in the RC stack before the source-side Vercel fix: `#200`, `#201`,
-  `#202`, `#203`, `#192`, `#204`, and `#205`.
-- Remaining open GitHub PRs checked before the source-side Vercel fix: none.
+- `origin/main`: `4439c91` (`Fix duplicate Vercel output handling (#206)`).
+- Landed PRs in the RC stack: `#200`, `#201`, `#202`, `#203`, `#192`, `#204`,
+  `#205`, and `#206`.
+- Remaining open GitHub PRs checked after the source-side Vercel fix: none.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
   superseded. Current `main` already uses `SUPABASE_SECRET_KEY` and
   `SUPABASE_PUBLISHABLE_KEY` in templates/server config, with legacy Supabase
@@ -58,6 +57,16 @@ Commands run against the current source tree:
 | macOS clean build | `make -C apps/macos clean all CODESIGN_IDENTITY=-` | Passed. |
 | macOS ad hoc signature | `codesign --verify --deep --strict --verbose=2 apps/macos/build/RubyWhisper.app` | Passed. |
 
+## Deployed Web/Backend Smoke
+
+Post-`#206` smoke against `https://rubywhisper-web.vercel.app`:
+
+| Surface | Result |
+| --- | --- |
+| `/`, `/pricing`, `/download`, `/privacy`, `/terms`, `/support` | HTTP `200`; RubyWhisper/Next content present. |
+| `/sign-in`, `/sign-up` | HTTP `200`; auth pages render with private no-store cache headers. |
+| `/api/status` | HTTP `200`; JSON status payload reports `status: "ok"` and `Cache-Control: no-store`. |
+
 ## Local App Runtime Evidence
 
 Ad hoc local app validation, not a release artifact:
@@ -98,6 +107,7 @@ These are not proved by the automated checks above:
 - Apple Developer ID signing, DMG packaging, notarization, stapling, checksum,
   public download/update feed, and clean-Mac quarantine-preserving install/open
   QA.
+
 ## Beta Readiness Conclusion
 
 The source tree is in a validated RC-candidate state for further human/live

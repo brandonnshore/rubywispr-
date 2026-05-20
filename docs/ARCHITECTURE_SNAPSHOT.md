@@ -158,9 +158,16 @@ Two manually-synced sources of truth:
 ## Build + deploy
 
 ### Web
-- `cd apps/web && npm install` (deps live at `apps/web/node_modules` — Next.js doesn't hoist out of the box here).
-- `npm run build` — Next.js 16, validates types + bundles.
-- Deploy: Vercel auto-deploy on push to `main`. Project `rubywhisper-web` under org `ruby-advisory`. Vercel root directory is `apps/web` (set up in commit `4063938`).
+- `npm ci` from the repository root installs the npm workspace lockfile.
+- `npm run build` from the repository root delegates to `@rubywhisper/web`;
+  `cd apps/web && npm run build` runs the app build directly. Both paths run
+  Next.js 16, validate types, and bundle the app.
+- Deploy: Vercel auto-deploy on push to `main`. Project `rubywhisper-web`
+  under org `ruby-advisory` uses Root Directory `apps/web` (set up in commit
+  `4063938`).
+- Repo-root Vercel imports are supported by root `vercel.json`, which keeps
+  `outputDirectory` at `.next` and copies `apps/web/.next` to root `.next` only
+  when the deployment is running from the repository root.
 - Runtime URL: `https://rubywhisper-web.vercel.app`.
 
 ### Mac
