@@ -12,10 +12,11 @@ or live provider traffic.
 
 ## Source State
 
-- `origin/main`: `d21ffd1` (`Fix RC readiness source head (#205)`).
-- Landed PRs in the RC stack: `#200`, `#201`, `#202`, `#203`, `#192`, `#204`,
-  and `#205`.
-- Remaining open GitHub PRs checked during this pass: none.
+- Base `origin/main` for this pass: `d21ffd1` (`Fix RC readiness source head
+  (#205)`).
+- Landed PRs in the RC stack before the source-side Vercel fix: `#200`, `#201`,
+  `#202`, `#203`, `#192`, `#204`, and `#205`.
+- Remaining open GitHub PRs checked before the source-side Vercel fix: none.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
   superseded. Current `main` already uses `SUPABASE_SECRET_KEY` and
   `SUPABASE_PUBLISHABLE_KEY` in templates/server config, with legacy Supabase
@@ -28,13 +29,15 @@ or live provider traffic.
   `Vercel - rubywhisper-web` deployment passed; the duplicate legacy
   `Vercel - rubywispr-` project built Next successfully and then failed because
   its project setting expects an output directory named `public`.
-- PR `#206` is testing a source-side `vercel.json` override for the duplicate
-  legacy project. The first `framework: nextjs` / default-output attempt reached
-  the legacy project but still looked for root `.next`; the workspace-output
-  attempt fixed the legacy project but broke the active app-root project by
-  resolving `apps/web/.next` relative to `apps/web`. The current attempt keeps
-  `outputDirectory` at `.next` for both projects and copies `apps/web/.next` to
-  root `.next` only when the build is running from the repository root.
+- PR `#206` (`Test source Vercel output defaults`) adds a source-side
+  `vercel.json` override that keeps `outputDirectory` at `.next` for both the
+  active app-root Vercel project and the duplicate legacy repo-root project. The
+  build command copies `apps/web/.next` to root `.next` only when the deployment
+  runs from the repository root.
+- PR `#206` check diagnosis: `npm validation`, `GitGuardian Security Checks`,
+  `Vercel Preview Comments`, `Vercel - rubywhisper-web`, and the duplicate
+  legacy `Vercel - rubywispr-` check all passed. The duplicate legacy Vercel
+  check is no longer a remaining release gate.
 
 ## Automated Validation
 
@@ -95,12 +98,6 @@ These are not proved by the automated checks above:
 - Apple Developer ID signing, DMG packaging, notarization, stapling, checksum,
   public download/update feed, and clean-Mac quarantine-preserving install/open
   QA.
-- Cleanup or disconnection of the duplicate legacy Vercel `rubywispr-` project
-  check, which is configured for the wrong output directory and should not be a
-  release signal for the active `rubywhisper-web` project. A source-side
-  `vercel.json` cross-root output override is being tested in PR `#206`; if
-  both Vercel projects pass there, this gate can be removed.
-
 ## Beta Readiness Conclusion
 
 The source tree is in a validated RC-candidate state for further human/live
