@@ -12,9 +12,9 @@ or live provider traffic.
 
 ## Source State
 
-- `origin/main`: `5c69918` (`Update RC readiness after PR cleanup (#204)`).
-- Landed PRs in the RC stack: `#200`, `#201`, `#202`, `#203`, `#192`, and
-  `#204`.
+- `origin/main`: `d21ffd1` (`Fix RC readiness source head (#205)`).
+- Landed PRs in the RC stack: `#200`, `#201`, `#202`, `#203`, `#192`, `#204`,
+  and `#205`.
 - Remaining open GitHub PRs checked during this pass: none.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
   superseded. Current `main` already uses `SUPABASE_SECRET_KEY` and
@@ -24,10 +24,15 @@ or live provider traffic.
   refreshed onto current `main`, revalidated, and merged. It records
   source-safe Groq benchmark evidence and updates ADR-006 with official Groq
   pricing/docs rechecked on 2026-05-20.
-- PR `#203`, `#192`, and `#204` check diagnosis: the real
+- Pre-`#206` check diagnosis: the real
   `Vercel - rubywhisper-web` deployment passed; the duplicate legacy
   `Vercel - rubywispr-` project built Next successfully and then failed because
   its project setting expects an output directory named `public`.
+- PR `#206` is testing a source-side `vercel.json` override for the duplicate
+  legacy project. The first `framework: nextjs` / default-output attempt reached
+  the legacy project but still looked for root `.next`; the current attempt pins
+  `outputDirectory` to `apps/web/.next`, where the workspace build writes Next
+  output.
 
 ## Automated Validation
 
@@ -91,8 +96,8 @@ These are not proved by the automated checks above:
 - Cleanup or disconnection of the duplicate legacy Vercel `rubywispr-` project
   check, which is configured for the wrong output directory and should not be a
   release signal for the active `rubywhisper-web` project. A source-side
-  `vercel.json` framework/default-output override is being tested in PR `#206`;
-  if both Vercel projects pass there, this gate can be removed.
+  `vercel.json` framework/workspace-output override is being tested in PR
+  `#206`; if both Vercel projects pass there, this gate can be removed.
 
 ## Beta Readiness Conclusion
 
