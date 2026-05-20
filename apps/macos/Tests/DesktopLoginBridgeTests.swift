@@ -239,6 +239,7 @@ private final class LoginBridgeFixture {
         owner = DesktopAuthStateOwner(
             sessionStore: sessionStore,
             initialSnapshot: initialSnapshot,
+            initialStoredSessionState: initialSession == nil ? .missing : .present,
             accountSnapshotLoader: { accountSnapshot }
         )
         bridge = DesktopLoginBridge(

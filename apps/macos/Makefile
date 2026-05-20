@@ -67,6 +67,11 @@ endif
 	@plutil -replace CFBundleDisplayName -string "$(APP_NAME)" "$(CONTENTS)/Info.plist"
 	@plutil -replace CFBundleExecutable -string "$(APP_NAME)" "$(CONTENTS)/Info.plist"
 	@plutil -replace CFBundleIdentifier -string "$(BUNDLE_ID)" "$(CONTENTS)/Info.plist"
+	@if [[ "$(BUNDLE_ID)" == *.local || "$(APP_NAME)" == "RubyWhisper Dev" ]]; then \
+		plutil -replace LSUIElement -bool false "$(CONTENTS)/Info.plist"; \
+	else \
+		plutil -replace LSUIElement -bool true "$(CONTENTS)/Info.plist"; \
+	fi
 	@plutil -replace RubyWhisperUpdateChannelEnabled -bool "$(UPDATE_CHANNEL_ENABLED)" "$(CONTENTS)/Info.plist"
 	@plutil -replace RubyWhisperUpdateReleasesURL -string "$(UPDATE_RELEASES_URL)" "$(CONTENTS)/Info.plist"
 	@plutil -replace RubyWhisperBackendBaseURL -string "$(RUBYWHISPER_BACKEND_BASE_URL)" "$(CONTENTS)/Info.plist"
