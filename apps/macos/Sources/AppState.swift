@@ -160,6 +160,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private let contextModelStorageKey = "context_model"
     private let cleanupEnabledStorageKey = "cleanup_enabled"
     private let contextAwareCleanupEnabledStorageKey = "context_aware_cleanup_enabled"
+    private let realtimeTranscriptionEnabledStorageKey = "realtime_transcription_enabled"
     private let holdShortcutStorageKey = "hold_shortcut"
     private let toggleShortcutStorageKey = "toggle_shortcut"
     private let savedHoldCustomShortcutStorageKey = "saved_hold_custom_shortcut"
@@ -280,6 +281,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
     @Published var contextAwareCleanupEnabled: Bool {
         didSet {
             UserDefaults.standard.set(contextAwareCleanupEnabled, forKey: contextAwareCleanupEnabledStorageKey)
+        }
+    }
+
+    @Published var realtimeTranscriptionEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(realtimeTranscriptionEnabled, forKey: realtimeTranscriptionEnabledStorageKey)
         }
     }
 
@@ -549,6 +556,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var automaticTerminationDisabled = false
     private var activeAudioInterruption: ActiveAudioInterruption?
     private var activeTransientRecordingArtifact: TransientRecordingArtifact?
+    private var activeRealtimeTranscriptionSession: OpenAIRealtimeTranscriptionSession?
     private var pendingOverlayDismissToken: UUID?
     private var shouldMonitorHotkeys = false
     private var isCapturingShortcut = false
@@ -592,6 +600,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let contextAwareCleanupEnabled = UserDefaults.standard.object(forKey: contextAwareCleanupEnabledStorageKey) == nil
             ? true
             : UserDefaults.standard.bool(forKey: contextAwareCleanupEnabledStorageKey)
+        let realtimeTranscriptionEnabled = UserDefaults.standard.object(forKey: realtimeTranscriptionEnabledStorageKey) == nil
+            ? false
+            : UserDefaults.standard.bool(forKey: realtimeTranscriptionEnabledStorageKey)
         let shortcuts = Self.loadShortcutConfiguration(
             holdKey: holdShortcutStorageKey,
             toggleKey: toggleShortcutStorageKey
@@ -702,6 +713,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         self.contextModel = contextModel
         self.cleanupEnabled = cleanupEnabled
         self.contextAwareCleanupEnabled = contextAwareCleanupEnabled
+        self.realtimeTranscriptionEnabled = realtimeTranscriptionEnabled
         self.holdShortcut = shortcuts.hold
         self.toggleShortcut = shortcuts.toggle
         self.savedHoldCustomShortcut = savedHoldCustomShortcut.binding
@@ -899,6 +911,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 guard let self else { return }
                 self.authCoordinatorState = state
                 self.refreshFirstRunOnboardingState()
+                _ = self.completeSetupIfReadyFromExistingState()
                 self.handleAccountRegressionForActiveHotkeyIfNeeded(state)
             }
             .store(in: &authStateCancellables)
@@ -937,6 +950,35 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     func markFirstRunTestWhisperCompleted() {
         refreshFirstRunOnboardingState(testWhisperStatus: .succeeded)
+    }
+
+    @discardableResult
+    func completeSetupIfReadyFromExistingState(notify: Bool = true) -> Bool {
+        guard !hasCompletedSetup else { return false }
+
+        let microphoneStatus = Self.firstRunMicrophonePermissionCategory(
+            from: AVCaptureDevice.authorizationStatus(for: .audio),
+            hasInputDevice: !AudioDevice.availableInputDevices().isEmpty
+        )
+        _ = refreshAccessibilityTrustStatus()
+
+        guard authCoordinatorState.dictationAccountGateDecision == .allowed,
+              microphoneStatus == .granted,
+              firstRunAccessibilityPermissionStatus == .granted else {
+            refreshFirstRunOnboardingState(microphoneStatus: microphoneStatus)
+            return false
+        }
+
+        refreshFirstRunOnboardingState(
+            microphoneStatus: microphoneStatus,
+            testWhisperStatus: .succeeded
+        )
+        hasCompletedSetup = true
+        debugStatusMessage = "Setup completed from existing permissions"
+        if notify {
+            NotificationCenter.default.post(name: .setupCompletedFromExistingState, object: nil)
+        }
+        return true
     }
 
     var canCompleteFirstRunSetup: Bool {
@@ -1108,6 +1150,58 @@ final class AppState: ObservableObject, @unchecked Sendable {
             cleanupEnabled: cleanupEnabled,
             contextAwareCleanupEnabled: contextAwareCleanupEnabled
         )
+    }
+
+    private var shouldUseRealtimeTranscriptionForCurrentSession: Bool {
+        guard realtimeTranscriptionEnabled,
+              desktopBackendClient != nil else {
+            return false
+        }
+
+        switch currentSessionIntent {
+        case .dictation:
+            return true
+        case .command:
+            return false
+        }
+    }
+
+    private func prepareRealtimeTranscriptionForRecordingIfNeeded() {
+        audioRecorder.onPCM16Samples = nil
+        activeRealtimeTranscriptionSession = nil
+
+        guard shouldUseRealtimeTranscriptionForCurrentSession,
+              let desktopBackendClient else {
+            return
+        }
+
+        let session = OpenAIRealtimeTranscriptionSession(
+            backendClient: desktopBackendClient,
+            language: transcriptionLanguage
+        )
+        activeRealtimeTranscriptionSession = session
+        Task {
+            await session.start()
+        }
+        audioRecorder.onPCM16Samples = { chunk in
+            Task {
+                await session.appendPCM16(chunk)
+            }
+        }
+    }
+
+    private func takeActiveRealtimeTranscriptionSession() -> OpenAIRealtimeTranscriptionSession? {
+        let session = activeRealtimeTranscriptionSession
+        activeRealtimeTranscriptionSession = nil
+        audioRecorder.onPCM16Samples = nil
+        return session
+    }
+
+    private func cancelActiveRealtimeTranscriptionSession() {
+        guard let session = takeActiveRealtimeTranscriptionSession() else { return }
+        Task {
+            await session.cancel()
+        }
     }
 
     func transcribeTransientRecordingArtifact(
@@ -2520,6 +2614,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         activeRecordingTriggerMode = nil
         audioRecorder.onRecordingReady = nil
         audioRecorder.onRecordingFailure = nil
+        cancelActiveRealtimeTranscriptionSession()
         audioLevelCancellable?.cancel()
         audioLevelCancellable = nil
         cancelRecordingInitializationTimer()
@@ -2553,6 +2648,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         activeRecordingTriggerMode = nil
         audioRecorder.onRecordingReady = nil
         audioRecorder.onRecordingFailure = nil
+        cancelActiveRealtimeTranscriptionSession()
         audioLevelCancellable?.cancel()
         audioLevelCancellable = nil
         cancelRecordingInitializationTimer()
@@ -2580,6 +2676,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         transcriptionTask?.cancel()
         transcriptionTask = nil
+        cancelActiveRealtimeTranscriptionSession()
         contextCaptureTask?.cancel()
         contextCaptureTask = nil
         capturedContext = nil
@@ -2926,6 +3023,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         cancelRecordingInitializationTimer()
         audioRecorder.onRecordingReady = nil
         audioRecorder.onRecordingFailure = nil
+        cancelActiveRealtimeTranscriptionSession()
         audioLevelCancellable?.cancel()
         audioLevelCancellable = nil
         overlayManager.dismiss()
@@ -3025,6 +3123,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 self.handleRecordingFailure(error)
             }
         }
+
+        prepareRealtimeTranscriptionForRecordingIfNeeded()
 
         // Start engine on background thread so UI isn't blocked
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -3311,6 +3411,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         currentSessionIntent = .dictation
         audioRecorder.onRecordingReady = nil
         audioRecorder.onRecordingFailure = nil
+        let realtimeSession = takeActiveRealtimeTranscriptionSession()
         audioLevelCancellable?.cancel()
         audioLevelCancellable = nil
         stopRecordingDurationTimer()
@@ -3339,6 +3440,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
             guard let self else { return }
             self.markDictationTiming { $0.markArtifactReady() }
             guard let artifact else {
+                if let realtimeSession {
+                    Task {
+                        await realtimeSession.cancel()
+                    }
+                }
                 self.isTranscribing = false
                 self.audioRecorder.cleanup()
                 self.endCriticalDictationActivity()
@@ -3351,6 +3457,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
             }
 
             guard self.isTranscribing else {
+                if let realtimeSession {
+                    Task {
+                        await realtimeSession.cancel()
+                    }
+                }
                 artifact.delete()
                 self.refreshAvailableMicrophonesIfNeeded()
                 return
@@ -3361,6 +3472,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
             self.debugStatusMessage = "Uploading audio"
             self.transcriptionTask?.cancel()
             guard self.isTranscribing else {
+                if let realtimeSession {
+                    Task {
+                        await realtimeSession.cancel()
+                    }
+                }
                 artifact.delete()
                 if self.activeTransientRecordingArtifact === artifact {
                     self.activeTransientRecordingArtifact = nil
@@ -3374,39 +3490,99 @@ final class AppState: ObservableObject, @unchecked Sendable {
                     artifact.delete()
                 }
                 do {
-                    let appContext: AppContext?
-                    if shouldUploadSessionContext {
-                        await MainActor.run {
-                            self.markDictationTiming { $0.markContextWaitStarted() }
-                        }
-                        appContext = await self.uploadContext(
-                            sessionContext: sessionContext,
-                            inFlightContextTask: inFlightContextTask,
-                            shouldAllowContext: true
-                        )
-                        await MainActor.run {
-                            self.markDictationTiming {
-                                $0.markContextWaitFinished(status: appContext == nil ? "unavailable" : "ready")
+                    func batchTranscription(
+                        processingStatus: String = "RubyWhisper upload succeeded"
+                    ) async throws -> (
+                        success: RubyWhisperDesktopTranscriptionSuccess,
+                        context: AppContext?,
+                        processingStatus: String
+                    ) {
+                        let appContext: AppContext?
+                        if shouldUploadSessionContext {
+                            await MainActor.run {
+                                self.markDictationTiming { $0.markContextWaitStarted() }
+                            }
+                            appContext = await self.uploadContext(
+                                sessionContext: sessionContext,
+                                inFlightContextTask: inFlightContextTask,
+                                shouldAllowContext: true
+                            )
+                            await MainActor.run {
+                                self.markDictationTiming {
+                                    $0.markContextWaitFinished(status: appContext == nil ? "unavailable" : "ready")
+                                }
+                            }
+                        } else {
+                            inFlightContextTask?.cancel()
+                            appContext = nil
+                            await MainActor.run {
+                                self.markDictationTiming { $0.markContextSkipped(reason: "fast_dictation") }
                             }
                         }
-                    } else {
-                        inFlightContextTask?.cancel()
-                        appContext = nil
+                        try Task.checkCancellation()
                         await MainActor.run {
-                            self.markDictationTiming { $0.markContextSkipped(reason: "fast_dictation") }
+                            self.markDictationTiming { $0.markUploadStarted() }
+                            self.debugStatusMessage = "Uploading audio"
                         }
+                        let uploadSuccess = try await self.transcribeTransientRecordingArtifact(
+                            artifact,
+                            context: appContext
+                        )
+                        await MainActor.run {
+                            self.markDictationTiming { $0.markBackendResponse() }
+                        }
+                        return (
+                            success: uploadSuccess,
+                            context: appContext,
+                            processingStatus: processingStatus
+                        )
                     }
-                    try Task.checkCancellation()
-                    await MainActor.run {
-                        self.markDictationTiming { $0.markUploadStarted() }
-                    }
-                    let uploadSuccess = try await self.transcribeTransientRecordingArtifact(
-                        artifact,
-                        context: appContext
+
+                    let transcriptionResult: (
+                        success: RubyWhisperDesktopTranscriptionSuccess,
+                        context: AppContext?,
+                        processingStatus: String
                     )
-                    await MainActor.run {
-                        self.markDictationTiming { $0.markBackendResponse() }
+                    if let realtimeSession {
+                        do {
+                            inFlightContextTask?.cancel()
+                            await MainActor.run {
+                                self.markDictationTiming { $0.markContextSkipped(reason: "openai_realtime") }
+                                self.markDictationTiming { $0.markUploadStarted() }
+                                self.debugStatusMessage = "Finalizing live transcription"
+                            }
+                            let realtimeSuccess = try await realtimeSession.finish(
+                                audioDurationMs: artifact.metadata.durationMs
+                            )
+                            try Task.checkCancellation()
+                            await MainActor.run {
+                                self.authStateOwner.applyTranscriptionUsageMetadata(realtimeSuccess.usageMetadata)
+                                self.markDictationTiming { $0.markBackendResponse() }
+                            }
+                            transcriptionResult = (
+                                success: realtimeSuccess,
+                                context: nil,
+                                processingStatus: "OpenAI live transcription succeeded"
+                            )
+                        } catch {
+                            await realtimeSession.cancel()
+                            guard OpenAIRealtimeTranscriptionRecoveryDecision.evaluate(error: error) == .batchFallback else {
+                                throw CancellationError()
+                            }
+                            await MainActor.run {
+                                self.debugStatusMessage = "Live transcription failed; uploading audio"
+                            }
+                            transcriptionResult = try await batchTranscription(
+                                processingStatus: "OpenAI live failed; RubyWhisper upload succeeded"
+                            )
+                        }
+                    } else {
+                        transcriptionResult = try await batchTranscription()
                     }
+
+                    let appContext = transcriptionResult.context
+                    let uploadSuccess = transcriptionResult.success
+                    let processingStatus = transcriptionResult.processingStatus
                     let uploadTerminalState = RubyWhisperDesktopUploadTerminalState.success(uploadSuccess)
                     guard let insertionInput = uploadTerminalState.insertionInput else {
                         throw CancellationError()
@@ -3421,7 +3597,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
                         guard self.isTranscribing else { return }
                         self.clearUploadContextState()
                         let trimmedFinalTranscript = parsedTranscript.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let processingStatus = "RubyWhisper upload succeeded"
                         self.lastPostProcessingPrompt = ""
                         self.lastRawTranscript = ""
                         self.lastPostProcessedTranscript = trimmedFinalTranscript
@@ -3575,6 +3750,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         currentSessionIntent = .dictation
         audioRecorder.onRecordingReady = nil
         audioRecorder.onRecordingFailure = nil
+        cancelActiveRealtimeTranscriptionSession()
         audioLevelCancellable?.cancel()
         audioLevelCancellable = nil
         stopRecordingDurationTimer()
@@ -3612,6 +3788,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
         currentSessionIntent = .dictation
         audioRecorder.onRecordingReady = nil
         audioRecorder.onRecordingFailure = nil
+        cancelActiveRealtimeTranscriptionSession()
         audioLevelCancellable?.cancel()
         audioLevelCancellable = nil
         contextCaptureTask?.cancel()

@@ -19,21 +19,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .showSettings,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSetupCompletedFromExistingState),
+            name: .setupCompletedFromExistingState,
+            object: nil
+        )
 
         appState.startHotkeyMonitoring()
+        _ = appState.completeSetupIfReadyFromExistingState(notify: false)
 
         if !appState.hasCompletedSetup {
             showSetupWindow()
         } else {
             restoreIdleActivationPolicy()
-            appState.startAccessibilityPolling()
-            Task { @MainActor in
-                UpdateManager.shared.startPeriodicChecks()
-            }
-
-            if !AXIsProcessTrusted() {
-                appState.showAccessibilityAlert()
-            }
+            startReadyRuntimeServices()
         }
 
     }
@@ -98,6 +98,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleShowSettings() {
         showSettingsWindow()
+    }
+
+    @objc private func handleSetupCompletedFromExistingState() {
+        setupWindow?.close()
+        setupWindow = nil
+        restoreIdleActivationPolicy()
+        startReadyRuntimeServices()
+    }
+
+    private func startReadyRuntimeServices() {
+        appState.startAccessibilityPolling()
+        Task { @MainActor in
+            UpdateManager.shared.startPeriodicChecks()
+        }
+
+        if !AXIsProcessTrusted() {
+            appState.showAccessibilityAlert()
+        }
     }
 
     private func showSettingsWindow() {
@@ -190,14 +208,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupWindow = nil
         restoreIdleActivationPolicy()
         appState.startHotkeyMonitoring()
-        appState.startAccessibilityPolling()
-        Task { @MainActor in
-            UpdateManager.shared.startPeriodicChecks()
-        }
-
-        if !AXIsProcessTrusted() {
-            appState.showAccessibilityAlert()
-        }
+        startReadyRuntimeServices()
     }
 
     private func ensureReachableMenuBarIcon() {

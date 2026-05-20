@@ -10,6 +10,7 @@ export async function GET(request: Request) {
   }
   const keys = [
     "GROQ_API_KEY",
+    "OPENAI_API_KEY",
     "DESKTOP_TOKEN_SECRET",
     "CLERK_SECRET_KEY",
     "SUPABASE_URL",

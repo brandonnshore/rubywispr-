@@ -291,7 +291,11 @@ function normalizeOptionalLatencyMs(value: unknown) {
 }
 
 function normalizeProvider(value: RubyWhisperProviderName | null | undefined) {
-  return value === "groq" || value === "mock_provider" ? value : undefined;
+  return value === "groq" ||
+    value === "mock_provider" ||
+    value === "openai_realtime"
+    ? value
+    : undefined;
 }
 
 function normalizeStatus(

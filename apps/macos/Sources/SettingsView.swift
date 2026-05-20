@@ -543,6 +543,18 @@ struct AdvancedSettingsView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
+                Toggle("Use live OpenAI transcription", isOn: $appState.realtimeTranscriptionEnabled)
+                    .accessibilityHint("Uses an experimental low-latency transcription path when available.")
+
+                Text("Experimental. Falls back to standard upload if unavailable.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
                 Toggle(isOn: Binding(
                     get: { appState.isRecentWisprsHistoryEnabled },
                     set: { appState.setRecentWisprsHistoryEnabled($0) }
@@ -828,6 +840,9 @@ struct GeneralSettingsView: View {
                 SettingsCard("Output Language", icon: "globe") {
                     outputLanguageSection
                 }
+                SettingsCard("Live Transcription", icon: "bolt.fill") {
+                    liveTranscriptionSection
+                }
                 SettingsCard("Dictation Shortcuts", icon: "keyboard.fill") {
                     hotkeySection
                 }
@@ -1023,6 +1038,19 @@ struct GeneralSettingsView: View {
                 .background(Color.blue.opacity(0.1))
                 .cornerRadius(6)
             }
+        }
+    }
+
+    // MARK: Live Transcription
+
+    private var liveTranscriptionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("Use live OpenAI transcription", isOn: $appState.realtimeTranscriptionEnabled)
+
+            Text("Streams audio during recording for lower latency. If it cannot connect or finish, RubyWhisper falls back to the standard upload path.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

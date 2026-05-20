@@ -64,6 +64,7 @@ test("provider contract exposes a stable server error matrix", async () => {
   assert.deepEqual(providerClient.rubyWhisperProviderNames, [
     "groq",
     "mock_provider",
+    "openai_realtime",
   ]);
   assert.deepEqual(providerClient.rubyWhisperProviderOperations, [
     "cleanup",
@@ -213,7 +214,7 @@ test("provider contract is server-only and config-free", async () => {
   assert.doesNotMatch(source, /\bfetch\s*\(/);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
   assert.doesNotMatch(source, /\bprocess\.env\b|\bserverEnv\b/);
-  assert.doesNotMatch(source, /GROQ_API_KEY|CLERK_SECRET_KEY|SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|DESKTOP_TOKEN_SECRET|STRIPE_SECRET_KEY/);
+  assert.doesNotMatch(source, /GROQ_API_KEY|OPENAI_API_KEY|CLERK_SECRET_KEY|SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|DESKTOP_TOKEN_SECRET|STRIPE_SECRET_KEY/);
   assert.doesNotMatch(source, /\bJSON\.stringify\s*\(/);
 });
 

@@ -585,7 +585,9 @@ function createRequestMetadataInput(
       : {}),
     planState: input.entitlement.planState,
     provider:
-      result.provider === "groq" || result.provider === "mock_provider"
+      result.provider === "groq" ||
+      result.provider === "mock_provider" ||
+      result.provider === "openai_realtime"
         ? result.provider
         : "mock_provider",
     ...(isFiniteLatencyMs(result.providerLatencyMs)

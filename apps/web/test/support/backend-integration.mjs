@@ -8,6 +8,7 @@ const liveNetworkHostPatterns = [
   /(?:^|\.)stripe\.com$/i,
   /(?:^|\.)supabase\.(?:co|com)$/i,
   /(?:^|\.)groq\.com$/i,
+  /(?:^|\.)openai\.com$/i,
   /(?:^|\.)sentry\.io$/i,
 ];
 const guardedEnvNames = [
@@ -19,6 +20,7 @@ const guardedEnvNames = [
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
   "GROQ_API_KEY",
+  "OPENAI_API_KEY",
   "SENTRY_AUTH_TOKEN",
 ];
 const credentialLikePatterns = [

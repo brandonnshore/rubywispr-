@@ -2,7 +2,11 @@ import "server-only";
 
 import type { RubyWhisperApiErrorCode } from "@/lib/api/errors";
 
-export const rubyWhisperProviderNames = ["groq", "mock_provider"] as const;
+export const rubyWhisperProviderNames = [
+  "groq",
+  "mock_provider",
+  "openai_realtime",
+] as const;
 
 export type RubyWhisperProviderName = (typeof rubyWhisperProviderNames)[number];
 

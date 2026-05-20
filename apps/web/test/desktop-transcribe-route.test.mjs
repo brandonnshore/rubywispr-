@@ -960,7 +960,7 @@ test("desktop transcribe route stays server-only and provider-safe", async () =>
   assert.match(source, /rubyWhisperApiErrorResponse\(["']signed_out["']\)/);
   assert.match(source, /rubyWhisperApiErrorResponse\(["']terms_required["']\)/);
   assert.match(source, /rubyWhisperApiErrorResponse\(["']rate_limited["']/);
-  assert.doesNotMatch(source, /\bGROQ_API_KEY\b|\bCLERK_SECRET_KEY\b|\bSUPABASE_SECRET_KEY\b|\bSUPABASE_SERVICE_ROLE_KEY\b|\bDESKTOP_TOKEN_SECRET\b/);
+  assert.doesNotMatch(source, /\bGROQ_API_KEY\b|\bOPENAI_API_KEY\b|\bCLERK_SECRET_KEY\b|\bSUPABASE_SECRET_KEY\b|\bSUPABASE_SERVICE_ROLE_KEY\b|\bDESKTOP_TOKEN_SECRET\b/);
   assert.doesNotMatch(source, /\bprocess\.env\b|\bserverEnv\b/);
   assert.doesNotMatch(source, /\bconsole\.(?:debug|error|info|log|warn)\s*\(/);
   assert.doesNotMatch(source, /\bfetch\s*\(/);

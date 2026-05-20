@@ -31,7 +31,7 @@ ICON_SOURCE = Resources/AppIcon-Source.png
 ICON_ICNS = Resources/AppIcon.icns
 endif
 
-.PHONY: all clean run dev run-dev print-signing reset-tcc reset-tcc-local reset-tcc-dev icon dmg local-dmg-preflight codesign-dmg release-signing-preflight notarize notarize-preflight test test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-dictation-timing-run test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-update-manager test-secret-guardrails
+.PHONY: all clean run dev run-dev print-signing reset-tcc reset-tcc-local reset-tcc-dev icon dmg local-dmg-preflight codesign-dmg release-signing-preflight notarize notarize-preflight test test-session-store test-backend-client test-openai-realtime-transcription-session test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-island-visual-harness test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-dictation-timing-run test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-update-manager test-secret-guardrails
 
 all: $(APP_EXECUTABLE_TARGET)
 
@@ -243,6 +243,19 @@ test-backend-client:
 		Sources/RubyWhisperBackendAPIClient.swift \
 		Tests/RubyWhisperBackendAPIClientTests.swift
 	$(BUILD_DIR)/tests/RubyWhisperBackendAPIClientTests
+
+test-openai-realtime-transcription-session:
+	@mkdir -p $(BUILD_DIR)/tests
+	swiftc \
+		-o $(BUILD_DIR)/tests/OpenAIRealtimeTranscriptionSessionTests \
+		-sdk $(shell xcrun --show-sdk-path) \
+		-target $(ARCH)-apple-macosx13.0 \
+		Sources/DesktopSessionStore.swift \
+		Sources/PrivacySettingsPresentation.swift \
+		Sources/RubyWhisperBackendAPIClient.swift \
+		Sources/OpenAIRealtimeTranscriptionSession.swift \
+		Tests/OpenAIRealtimeTranscriptionSessionTests.swift
+	$(BUILD_DIR)/tests/OpenAIRealtimeTranscriptionSessionTests
 
 test-auth-state-owner:
 	@mkdir -p $(BUILD_DIR)/tests
@@ -547,4 +560,4 @@ test-secret-guardrails:
 		Tests/SourceGuardrailTests.swift
 	$(BUILD_DIR)/tests/SourceGuardrailTests
 
-test: test-session-store test-backend-client test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-dictation-timing-run test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-update-manager test-secret-guardrails
+test: test-session-store test-backend-client test-openai-realtime-transcription-session test-auth-state-owner test-account-settings-presenter test-login-bridge test-onboarding-coordinator test-hotkey-manager test-hotkey-recording-gate test-recording-island-state-machine test-recording-duration-timer test-recording-duration-upload-gate test-live-audio-level-normalizer test-transient-recording-artifact test-dictation-timing-run test-pipeline-history-privacy test-personal-dictionary-store test-personal-dictionary-settings-flow test-privacy-settings-presentation test-appearance-settings-presentation test-recent-wispr-store test-recent-wisprs-history-menu-state test-recent-wispr-recovery-controller test-direct-insertion-coordinator test-clipboard-fallback-manager test-update-manager test-secret-guardrails

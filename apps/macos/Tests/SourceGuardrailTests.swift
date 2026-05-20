@@ -103,6 +103,7 @@ private struct SourceGuardrailTests {
             "C" + "LERK_SECRET",
             "C" + "LERK_SECRET_KEY",
             "C" + "LERK_WEBHOOK_SECRET",
+            "O" + "PENAI_API_KEY",
         ]
         return lineMatches(in: text, path: path) { line in
             providerNames.contains { line.contains($0) }

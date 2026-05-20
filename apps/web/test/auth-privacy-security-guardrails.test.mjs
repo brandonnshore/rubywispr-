@@ -34,6 +34,7 @@ const serverSecretNames = [
   "DESKTOP_TOKEN_SECRET",
   "SENTRY_AUTH_TOKEN",
   "APP_DOWNLOAD_SIGNING_KEY_OR_TOKEN",
+  "OPENAI_API_KEY",
 ];
 const serverConfigHelpers = [
   {
@@ -104,6 +105,10 @@ const serverProviderHelpers = [
   {
     moduleSpecifier: "@/lib/providers/groq",
     path: path.join(srcRoot, "lib", "providers", "groq.ts"),
+  },
+  {
+    moduleSpecifier: "@/lib/providers/openai-realtime",
+    path: path.join(srcRoot, "lib", "providers", "openai-realtime.ts"),
   },
 ];
 const serverBillingHelpers = [

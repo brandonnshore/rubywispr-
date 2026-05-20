@@ -196,6 +196,45 @@ final class RubyWhisperBackendAPIClient: DesktopLoginHandoffExchanging {
         try await transcribe(transcriptionRequest).desktopSuccess()
     }
 
+    func createRealtimeTranscriptionSession(
+        language: String?
+    ) async throws -> RubyWhisperDesktopRealtimeTranscriptionSession {
+        let body = try JSONEncoder().encode(RubyWhisperDesktopRealtimeTranscriptionSessionRequest(
+            language: language
+        ))
+        var request = try authenticatedRequest(
+            path: "/api/desktop/realtime-transcription/session",
+            method: "POST"
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await send(request, body: body)
+        return try decodeResponse(
+            data,
+            response: response,
+            as: RubyWhisperDesktopRealtimeTranscriptionSession.self
+        )
+    }
+
+    func completeRealtimeTranscription(
+        _ completionRequest: RubyWhisperDesktopRealtimeTranscriptionCompletionRequest
+    ) async throws -> RubyWhisperDesktopRealtimeTranscriptionCompletion {
+        let metadata = transcriptionRequestMetadata()
+        let body = try JSONEncoder().encode(completionRequest.withMetadata(metadata))
+        var request = try authenticatedRequest(
+            path: "/api/desktop/realtime-transcription/complete",
+            method: "POST"
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await send(request, body: body)
+        return try decodeResponse(
+            data,
+            response: response,
+            as: RubyWhisperDesktopRealtimeTranscriptionCompletion.self
+        )
+    }
+
     private func transcriptionRequestMetadata() -> RubyWhisperDesktopTranscriptionRequestMetadata {
         RubyWhisperDesktopTranscriptionRequestMetadata(
             appVersion: configuration.appVersion,
@@ -615,6 +654,95 @@ struct RubyWhisperDesktopTranscriptionResponse: Decodable, Equatable {
                 planState: planState,
                 audioDurationMs: audioDurationMs
             )
+        )
+    }
+}
+
+struct RubyWhisperDesktopRealtimeTranscriptionSessionRequest: Encodable, Equatable {
+    var language: String?
+
+    enum CodingKeys: String, CodingKey {
+        case language
+    }
+
+    init(language: String?) {
+        self.language = language?.nilIfBlank
+    }
+}
+
+struct RubyWhisperDesktopRealtimeTranscriptionSession: Decodable, Equatable {
+    var ok: Bool
+    var requestId: String
+    var provider: String
+    var clientSecret: String
+    var expiresAt: Int
+    var webSocketURL: String
+    var trialWordsRemaining: Int?
+    var trialWordsUsed: Int?
+    var trialWordsLimit: Int?
+    var planState: RubyWhisperDesktopPlanState?
+    var providerLatencyMs: Int?
+
+    func redactedDiagnosticSummary() -> [String: String] {
+        [
+            "route": "POST /api/desktop/realtime-transcription/session",
+            "provider": provider,
+            "requestId": requestId,
+            "clientSecret": "<redacted>",
+            "webSocketURL": webSocketURL,
+            "expiresAt": String(expiresAt),
+            "providerLatencyMs": providerLatencyMs.map(String.init) ?? "",
+        ]
+    }
+}
+
+struct RubyWhisperDesktopRealtimeTranscriptionCompletionRequest: Equatable {
+    var requestId: String
+    var audioDurationMs: Int
+    var cleanedWordCount: Int
+    var providerLatencyMs: Int?
+
+    func withMetadata(
+        _ metadata: RubyWhisperDesktopTranscriptionRequestMetadata
+    ) -> RubyWhisperDesktopRealtimeTranscriptionCompletionPayload {
+        RubyWhisperDesktopRealtimeTranscriptionCompletionPayload(
+            requestId: requestId,
+            audioDurationMs: audioDurationMs,
+            cleanedWordCount: cleanedWordCount,
+            appVersion: metadata.appVersion,
+            osVersion: metadata.osVersion,
+            providerLatencyMs: providerLatencyMs
+        )
+    }
+}
+
+struct RubyWhisperDesktopRealtimeTranscriptionCompletionPayload: Encodable, Equatable {
+    var requestId: String
+    var audioDurationMs: Int
+    var cleanedWordCount: Int
+    var appVersion: String?
+    var osVersion: String?
+    var providerLatencyMs: Int?
+}
+
+struct RubyWhisperDesktopRealtimeTranscriptionCompletion: Decodable, Equatable {
+    var ok: Bool
+    var requestId: String
+    var cleanedWordCount: Int
+    var trialWordsRemaining: Int?
+    var trialWordsUsed: Int?
+    var trialWordsLimit: Int?
+    var planState: RubyWhisperDesktopPlanState?
+    var audioDurationMs: Int?
+
+    var usageMetadata: RubyWhisperDesktopTranscriptionUsageMetadata {
+        RubyWhisperDesktopTranscriptionUsageMetadata(
+            cleanedWordCount: cleanedWordCount,
+            trialWordsRemaining: trialWordsRemaining,
+            trialWordsUsed: trialWordsUsed,
+            trialWordsLimit: trialWordsLimit,
+            planState: planState,
+            audioDurationMs: audioDurationMs
         )
     }
 }
