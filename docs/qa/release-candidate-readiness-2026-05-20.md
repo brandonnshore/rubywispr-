@@ -61,6 +61,7 @@ Commands run against the validated source/config tree:
 | macOS tests | `make -C apps/macos test CODESIGN_IDENTITY=-` | Passed. |
 | macOS clean build | `make -C apps/macos clean all CODESIGN_IDENTITY=-` | Passed. |
 | macOS ad hoc signature | `codesign --verify --deep --strict --verbose=2 apps/macos/build/RubyWhisper.app` | Passed. |
+| Local DMG packaging shape | `make -C apps/macos clean dmg CODESIGN_IDENTITY=-`; `hdiutil attach`; verify `RubyWhisper.app` and `Applications` symlink; detach | Passed; local/ad hoc artifact only, not Developer ID signed, notarized, stapled, uploaded, or release-approved. |
 
 ## Deployed Web/Backend Smoke
 
@@ -111,7 +112,8 @@ These are not proved by the automated checks above:
   inspection.
 - Apple Developer ID signing, DMG packaging, notarization, stapling, checksum,
   public download/update feed, and clean-Mac quarantine-preserving install/open
-  QA.
+  QA. Source-safe local DMG shape validation has passed, but release DMG
+  signing/notarization/publication remains human-gated.
 
 ## Beta Readiness Conclusion
 

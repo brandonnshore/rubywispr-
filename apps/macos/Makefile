@@ -108,28 +108,20 @@ dmg: local-dmg-preflight all
 	@rm -rf $(BUILD_DIR)/dmg-staging
 	@mkdir -p $(BUILD_DIR)/dmg-staging
 	@cp -R "$(APP_BUNDLE)" $(BUILD_DIR)/dmg-staging/
-	@osascript -e 'tell application "Finder" to make alias file to POSIX file "/Applications" at POSIX file "'"$$(cd $(BUILD_DIR)/dmg-staging && pwd)"'"'
-	@ALIAS=$$(find $(BUILD_DIR)/dmg-staging -maxdepth 1 -not -name '*.app' -not -name '.DS_Store' -type f | head -1) && mv "$$ALIAS" "$(BUILD_DIR)/dmg-staging/Applications"
-	@fileicon set "$(BUILD_DIR)/dmg-staging/Applications" /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ApplicationsFolderIcon.icns
+	@ln -s /Applications "$(BUILD_DIR)/dmg-staging/Applications"
 	@echo "Creating DMG..."
-	@create-dmg \
-		--volname "$(APP_NAME)" \
-		--volicon "$(ICON_ICNS)" \
-		--window-pos 200 120 \
-		--window-size 660 400 \
-		--icon-size 128 \
-		--icon "$(APP_NAME).app" 180 170 \
-		--hide-extension "$(APP_NAME).app" \
-		--icon "Applications" 480 170 \
-		--no-internet-enable \
-		"$(BUILD_DIR)/$(APP_NAME).dmg" \
-		"$(BUILD_DIR)/dmg-staging"
+	@hdiutil create \
+		-volname "$(APP_NAME)" \
+		-srcfolder "$(BUILD_DIR)/dmg-staging" \
+		-ov \
+		-format UDZO \
+		"$(BUILD_DIR)/$(APP_NAME).dmg" >/dev/null
 	@rm -rf $(BUILD_DIR)/dmg-staging
 	@echo "Created $(BUILD_DIR)/$(APP_NAME).dmg"
 
 local-dmg-preflight:
 	@missing=""; \
-	for tool in create-dmg fileicon; do \
+	for tool in hdiutil; do \
 		if ! command -v "$$tool" >/dev/null 2>&1; then \
 			missing="$$missing $$tool"; \
 		fi; \

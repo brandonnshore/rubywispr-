@@ -1,6 +1,12 @@
 name: macOS CI
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - apps/macos/**
+      - .github/workflows/macos-ci.yml
   workflow_dispatch:
 
 permissions:
@@ -36,3 +42,20 @@ jobs:
           test "$(plutil -extract CFBundleIdentifier raw "apps/macos/build/RubyWhisper.app/Contents/Info.plist")" = "com.rubyadvisory.rubywhisper.local"
           codesign -dv "apps/macos/build/RubyWhisper.app" 2>&1 | tee /tmp/rubywhisper-codesign.txt
           grep -q "Signature=adhoc" /tmp/rubywhisper-codesign.txt
+
+      - name: Package and verify local DMG shape
+        run: |
+          make -C apps/macos dmg CODESIGN_IDENTITY=-
+          mountpoint="$(mktemp -d)"
+          cleanup() {
+            hdiutil detach "$mountpoint" >/dev/null 2>&1 || true
+            rmdir "$mountpoint" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          hdiutil attach apps/macos/build/RubyWhisper.dmg -nobrowse -readonly -mountpoint "$mountpoint"
+          test -d "$mountpoint/RubyWhisper.app"
+          test -L "$mountpoint/Applications"
+          test "$(readlink "$mountpoint/Applications")" = "/Applications"
+          test "$(plutil -extract CFBundleIdentifier raw "$mountpoint/RubyWhisper.app/Contents/Info.plist")" = "com.rubyadvisory.rubywhisper.local"
+          codesign --verify --deep --strict --verbose=2 "$mountpoint/RubyWhisper.app"
+          hdiutil verify apps/macos/build/RubyWhisper.dmg

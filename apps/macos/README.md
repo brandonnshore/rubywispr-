@@ -110,7 +110,7 @@ make -C apps/macos dmg
 ```
 
 It builds the same local app bundle, stages `RubyWhisper.app` with an
-`Applications` alias, and writes:
+`Applications` symlink, and writes:
 
 ```text
 apps/macos/build/RubyWhisper.dmg
@@ -120,13 +120,13 @@ This artifact is not Developer ID signed, notarized, stapled, uploaded,
 published, or suitable for paid beta distribution. It exists only to inspect
 the local drag-install DMG shape.
 
-The target checks for the non-secret local tools it needs before building:
+The target uses the macOS built-in `hdiutil` command. Its preflight checks for
+that non-secret local tool before building; if it is missing, the Makefile stops
+with a sanitized prerequisite message and does not print local private values.
 
-- `create-dmg`
-- `fileicon`
-
-If either tool is missing, the Makefile stops with a sanitized prerequisite
-message and does not print local private values.
+The local DMG helper does not customize Finder window layout or icon placement.
+Release-owner visual polish can be added later without changing the source-safe
+artifact shape.
 
 ## Release Signing And Notarization Guardrails
 
@@ -173,8 +173,10 @@ exits 66 in this directory.
 
 ## CI Validation
 
-`.github/workflows/macos-ci.yml` runs an explicit ad hoc command on
-GitHub-hosted `macos-latest` for macOS source changes:
+`.github/workflows/macos-ci.yml` runs on pull requests that touch
+`apps/macos/**` or the workflow itself, and can also be started manually with
+`workflow_dispatch`. It uses GitHub-hosted `macos-latest` and an explicit ad hoc
+command for macOS source changes:
 
 ```bash
 make -C apps/macos clean all CODESIGN_IDENTITY=-
@@ -182,8 +184,10 @@ make -C apps/macos clean all CODESIGN_IDENTITY=-
 
 The workflow verifies that `apps/macos/build/RubyWhisper.app` exists, keeps the
 local bundle identifier `com.rubyadvisory.rubywhisper.local`, and is signed with
-an ad hoc signature. It is only a non-release build gate and should not be used
-as the interactive app for local TCC permission testing.
+an ad hoc signature. It also runs `make -C apps/macos dmg CODESIGN_IDENTITY=-`,
+mounts the local DMG, verifies `RubyWhisper.app`, verifies the `Applications`
+symlink, and runs `hdiutil verify`. It is only a non-release build/package gate
+and should not be used as the interactive app for local TCC permission testing.
 
 Release packaging, DMG creation, Apple Developer ID signing, notarization,
 provider keys, production secrets, and private env files are intentionally out

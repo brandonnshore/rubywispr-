@@ -13,7 +13,7 @@ Linear, PRs, release notes, or command output.
 
 - Target distribution: direct download from the RubyWhisper website.
 - Target artifact: Developer ID signed and notarized `.dmg` containing
-  `RubyWhisper.app` and an `/Applications` symlink.
+  `RubyWhisper.app` and an `Applications` symlink to `/Applications`.
 - Update channel: RUB-104A source-level direct-download feed config first;
   Sparkle 2 appcast metadata remains a future release-channel option until a
   later ticket replaces or extends the current contract.
@@ -43,8 +43,10 @@ owner must perform or approve every step marked `Human gate`.
 - Public direct-download update channel is not configured yet.
 - Apple Developer credentials and certificate private keys are human-held.
 - Notarization submission and stapling have not been run for RubyWhisper.
-- Artifact checksum and version notes cannot be finalized until an artifact
-  exists.
+- Release artifact checksum and version notes cannot be finalized until a
+  human-approved, Developer ID signed and notarized artifact exists. The local
+  `make -C apps/macos dmg CODESIGN_IDENTITY=-` helper can validate the DMG
+  shape without producing a release artifact.
 - Clean-Mac install/open QA remains manual and cannot be completed from this
   docs-only ticket.
 
