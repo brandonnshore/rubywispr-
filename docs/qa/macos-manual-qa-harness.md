@@ -53,7 +53,7 @@ clipboard text, or screenshots containing sensitive content.
 
 | ID | Prerequisite | Required evidence | Current status |
 | --- | --- | --- | --- |
-| PRE-01 | Mac app source is present and the tester can identify the runnable app or build artifact. | Source/build identifier, app version, build/channel. | `Blocked` |
+| PRE-01 | Tester can identify the approved runnable app or build artifact for the human QA run. | Source/build identifier, app version, build/channel. | `Blocked` |
 | PRE-02 | Tester has an approved non-production RubyWhisper account for auth, Terms, quota, and billing-gate checks. | Account category only, such as `trial_active_test` or `paid_active_test`. | `Blocked` |
 | PRE-03 | Approved non-production backend/provider path is configured. | Environment label, provider category, and route availability only. | `Blocked` |
 | PRE-04 | Tester has a macOS machine or clean profile with microphone and Accessibility permission control. | macOS major/minor version, architecture, permission reset method. | `Blocked` |
@@ -62,7 +62,8 @@ clipboard text, or screenshots containing sensitive content.
 
 Current prerequisite blocker reasons:
 
-- PRE-01: Mac source/build is not present in this repo.
+- PRE-01: Approved runnable Mac QA build or artifact has not been selected for
+  a human evidence run.
 - PRE-02: Approved non-production test account is human-held.
 - PRE-03: Approved backend/provider service setup is human-held.
 - PRE-04: Microphone and Accessibility checks require a human-controlled Mac.
@@ -88,6 +89,35 @@ screens visible.
 Do not include private app/window titles, document names, URLs with sensitive
 query strings, selected text, focused-field text, clipboard contents, or
 screenshots of private applications in evidence.
+
+## Recent Wisprs Evidence Rules
+
+Recent Wisprs checks must record the evidence source for every row:
+
+- `real_mac`: a human executed the row against an approved runnable Mac build
+  and a neutral target surface.
+- `test_seam`: a deterministic store, clock, settings, backend/API spy, or
+  clipboard seam proved the behavior without a live Mac run.
+
+Use `real_mac` evidence for successful insertion, failed insertion recovery,
+manual copy recovery, clear history, and disabled local history once the Mac
+build and human-held test prerequisites exist. Use `test_seam` evidence for
+retention/expiry proof and backend no-sync checks when waiting 7 days or
+inspecting live service storage would be unsafe or impractical.
+
+If a required `real_mac` row cannot run because a build, account, credential,
+permission reset, target app, or evidence location is missing, mark that row
+`Blocked` and record the missing prerequisite category only. Do not mark it
+`Pass` from source review, unit tests, or synthetic seam output.
+
+Allowed Recent Wisprs evidence is limited to row ID, status, evidence source,
+target app category, insertion status, recovery action, local store count,
+created/expiry timestamp metadata, settings state, backend-call category, and
+pass/fail summary. Forbidden evidence includes dictated text, final text,
+Recent Wispr content, raw transcript, clipboard contents, focused-field text,
+selected text, destination app text, screenshots containing user content,
+audio, provider payloads, request/response bodies, tokens, and private env
+values.
 
 ## Manual QA Matrix
 
@@ -170,16 +200,20 @@ evidence.
 
 | ID | Scenario | Steps | Expected result | Evidence | Status |
 | --- | --- | --- | --- | --- | --- |
-| MAC-100 | Recent Wispr after insertion | Complete a successful dictation with local history enabled. | A local Recent Wispr is created only after final text exists, with status `inserted` and 7-day default expiry. | Count, insertion status, created/expires timestamps. | `Not Run` |
-| MAC-101 | Recent Wispr after insertion failure | Force insertion failure after final text exists. | A local Recent Wispr or recovery item is available with `insertion_failed`; no retranscription is required. | Count and insertion status only. | `Not Run` |
-| MAC-102 | No Recent Wispr for no-final-text failures | Trigger signed-out, permission, duration, provider, invalid-audio, and canceled paths. | No Recent Wispr is created when final text does not exist. | Failure category and local history count. | `Not Run` |
-| MAC-103 | Recent Wisprs retention | Use an approved clock/test seam or manual inspection to verify expiry. | Entries expire after 7 days by default and cleanup runs at required triggers. | Timestamp metadata and cleanup count. | `Not Run` |
-| MAC-104 | Clear and disable history | Clear history, then disable local history and complete another dictation. | Clear deletes local entries; disabled history prevents future persistent writes; no backend call occurs. | Counts, setting category, backend-call category. | `Not Run` |
-| MAC-105 | Dictionary add/edit/delete | Add, edit, duplicate-reject, disable, and delete synthetic terms. | Terms are local-only, validated, never Keychain/server-backed, and deletion removes them from future payloads. | Counts and validation outcome categories only. | `Not Run` |
-| MAC-106 | Dictionary payload gating | Dictate with cleanup enabled/disabled and dictionary support enabled/disabled. | `dictionaryTerms` is sent only when Terms accepted, cleanup enabled, dictionary enabled, and valid active terms exist; otherwise omitted. | Payload-shape category from redacted instrumentation. | `Not Run` |
-| MAC-107 | Settings surfaces | Open settings for account, hotkeys, cleanup, history, dictionary, provider/privacy. | Settings show current metadata/status without exposing secrets, transcript content, clipboard content, or unsupported customization. | Surface names and status categories. | `Not Run` |
-| MAC-108 | Account surface | Open account or billing-related surface for trial, paid, Friend, exhausted, payment failed, and blocked states where available. | Account state maps to canonical plan states and recovery actions; no card details or auth material appear in evidence. | Plan-state category and recovery action. | `Not Run` |
-| MAC-109 | Provider/settings secrets boundary | Inspect app bundle/settings/logs for provider-secret exposure where the implementation provides a safe check. | Desktop app does not contain Groq, Stripe, Supabase service-role, Clerk secret, signing, or private env values. | Search/check summary only; no values. | `Not Run` |
+| MAC-100 | Recent Wispr after successful insertion | With local history enabled, complete a successful dictation into a neutral target field on an approved Mac build. | A local Recent Wispr is created only after final text exists, with status `inserted` and 7-day default expiry metadata. | Evidence source `real_mac`; target category, count delta, insertion status, created/expires timestamp metadata. | `Not Run` |
+| MAC-101 | Recent Wispr after failed insertion | Force insertion failure after final text exists, such as no focused text field or unsupported neutral target. | A local Recent Wispr or recovery item is available with status `insertion_failed`; no retranscription is required. | Evidence source `real_mac`; target category, count delta, insertion status, recovery state only. | `Not Run` |
+| MAC-102 | Copy recovery from Recent Wisprs | From the Recent Wisprs surface, copy a synthetic saved item created by MAC-100 or MAC-101. | Copy succeeds locally, does not call transcription/backend again, and does not log previous clipboard contents. | Evidence source `real_mac`; recovery action category, backend-call category, pasteboard ownership category. | `Not Run` |
+| MAC-103 | Clear Recent Wisprs | Use the clear history control when entries exist, then reopen the Recent Wisprs surface. | All local Recent Wisprs are removed immediately; the empty state appears; clear is idempotent; no backend/Supabase call occurs. | Evidence source `real_mac`; before/after counts, empty-state category, backend-call category. | `Not Run` |
+| MAC-104 | Disabled local history | Disable local history, then complete another successful or failed-insertion dictation with synthetic text. | Existing entries remain copy recoverable until cleared, but disabled history prevents new persistent Recent Wisprs writes. | Evidence source `real_mac`; setting category, before/after counts, insertion status, backend-call category. | `Not Run` |
+| MAC-105 | Retention and expiry proof | Use the clock/store cleanup seam or approved manual inspection to advance an entry past the 7-day default retention window. | Expired entries are excluded or removed at the documented cleanup trigger, while unexpired entries remain. | Evidence source `test_seam` unless a real elapsed-time run is approved; timestamp metadata, cleanup trigger, before/after counts. | `Not Run` |
+| MAC-106 | No Recent Wispr for no-final-text failures | Trigger signed-out, permission, duration, provider, invalid-audio, and canceled paths through approved seams or a human run. | No Recent Wispr is created when final text does not exist. | Evidence source `test_seam` or `real_mac`; failure category, final-text-absent category, local history count. | `Not Run` |
+| MAC-107 | Recent Wisprs no-sync boundary | Inspect backend/Supabase/API spies after create, copy, clear, disable, cleanup, and retry-from-history paths. | Recent Wisprs operations do not create backend/Supabase rows, request bodies, logs, or local-history sync calls. | Evidence source `test_seam`; command/check names, backend-call category, row/log count summary only. | `Not Run` |
+| MAC-108 | Recent Wisprs evidence packet review | Review all Recent Wisprs notes, attachments, screenshots, recordings, and command output before posting. | Evidence contains only metadata and sanitized UI; any human-required gaps are listed as `Blocked`, not inferred as `Pass`. | Evidence source review category, forbidden-content checklist result, blocked row IDs. | `Not Run` |
+| MAC-109 | Dictionary add/edit/delete | Add, edit, duplicate-reject, disable, and delete synthetic terms. | Terms are local-only, validated, never Keychain/server-backed, and deletion removes them from future payloads. | Counts and validation outcome categories only. | `Not Run` |
+| MAC-110 | Dictionary payload gating | Dictate with cleanup enabled/disabled and dictionary support enabled/disabled. | `dictionaryTerms` is sent only when Terms accepted, cleanup enabled, dictionary enabled, and valid active terms exist; otherwise omitted. | Payload-shape category from redacted instrumentation. | `Not Run` |
+| MAC-111 | Settings surfaces | Open settings for account, hotkeys, cleanup, history, dictionary, provider/privacy. | Settings show current metadata/status without exposing secrets, transcript content, clipboard content, or unsupported customization. | Surface names and status categories. | `Not Run` |
+| MAC-112 | Account surface | Open account or billing-related surface for trial, paid, Friend, exhausted, payment failed, and blocked states where available. | Account state maps to canonical plan states and recovery actions; no card details or auth material appear in evidence. | Plan-state category and recovery action. | `Not Run` |
+| MAC-113 | Provider/settings secrets boundary | Inspect app bundle/settings/logs for provider-secret exposure where the implementation provides a safe check. | Desktop app does not contain Groq, Stripe, Supabase service-role, Clerk secret, signing, or private env values. | Search/check summary only; no values. | `Not Run` |
 
 ### 7. Privacy Storage, Logging, And Evidence Review
 
@@ -193,8 +227,8 @@ evidence.
 
 ## Runnable-Now Documentation Checks
 
-These checks can run before the Mac source exists. They validate the harness
-document only and do not execute manual QA.
+These checks can run before all manual Mac QA prerequisites exist. They validate
+the harness document only and do not execute manual QA.
 
 | ID | Check | Command or method | Expected result | Status |
 | --- | --- | --- | --- | --- |
@@ -202,6 +236,7 @@ document only and do not execute manual QA.
 | DOC-002 | Secret/private-content search | Targeted `rg` over changed docs for forbidden tokens and content categories. | Matches are only policy references or placeholder names, not values/private content. | `Not Run` |
 | DOC-003 | False-pass search | Search changed docs for `Pass` usage and manual result claims. | No manual QA row is marked `Pass`; all default manual rows are `Not Run` or `Blocked`. | `Not Run` |
 | DOC-004 | Source/test scope confirmation | `git diff --name-only` | Docs-only change; no source/test command required. | `Not Run` |
+| DOC-005 | Recent Wisprs evidence-source coverage | Review MAC-100 through MAC-108. | Every Recent Wisprs row names `real_mac`, `test_seam`, or both as the allowed evidence source. | `Not Run` |
 
 ## Blocked Manual Checks
 
@@ -210,12 +245,13 @@ Safe Linear handoff language:
 ```text
 RUB-64/RW-073 produced the repo-owned macOS manual QA harness and sanitized
 evidence template only. Manual macOS QA was not executed. Remaining blockers:
-Mac app source/build is not present in this repo, approved test accounts and
-non-production service credentials are human-held, microphone and Accessibility
-permission checks require a human-controlled Mac, and live provider/backend
-validation requires approved service setup. Downstream RW-100, RW-102, RW-107,
-and paid-beta launch gates remain blocked/not-run until a human completes the
-manual matrix and records sanitized evidence.
+An approved runnable Mac QA build or artifact must be selected for the human
+evidence run, approved test accounts and non-production service credentials are
+human-held, microphone and Accessibility permission checks require a
+human-controlled Mac, and live provider/backend validation requires approved
+service setup. Downstream RW-100, RW-102, RW-107, and paid-beta launch gates
+remain blocked/not-run until a human completes the manual matrix and records
+sanitized evidence.
 ```
 
 ## Sanitized Evidence Template
@@ -254,9 +290,9 @@ Target app categories:
 - N/A:
 
 ### Row Evidence
-| Row ID | Status | Target category | State/error categories | Recovery action | Allowed metadata | Notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| MAC-___ | Not Run |  |  |  |  |  |
+| Row ID | Status | Evidence source | Target category | State/error categories | Recovery action | Allowed metadata | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| MAC-___ | Not Run | real_mac / test_seam |  |  |  |  |  |
 
 ### Privacy Review
 - [ ] No audio files, audio snippets, waveform histories, or real speech
@@ -280,6 +316,7 @@ Target app categories:
 - recordingMode:
 - target app category:
 - insertionStatus / fallback state:
+- Recent Wisprs evidence source (`real_mac` or `test_seam`):
 - duration bucket or numeric duration metadata:
 - warning/cap timer profile:
 - retryable / retryAfter bucket:
