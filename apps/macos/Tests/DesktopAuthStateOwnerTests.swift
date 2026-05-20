@@ -12,6 +12,7 @@ private func expect(_ condition: @autoclosure () -> Bool, _ message: String) -> 
 
 private final class MemorySessionStore: DesktopSessionStoring {
     private var session: DesktopSessionMaterial?
+    private(set) var readCount = 0
     private(set) var deleteCount = 0
     private(set) var replaceCount = 0
 
@@ -20,7 +21,8 @@ private final class MemorySessionStore: DesktopSessionStoring {
     }
 
     func read() -> DesktopSessionMaterial? {
-        session
+        readCount += 1
+        return session
     }
 
     func save(_ session: DesktopSessionMaterial) throws {
@@ -79,6 +81,7 @@ private final class AccountSnapshotLoader {
 @main
 private struct DesktopAuthStateOwnerTests {
     static func main() async {
+        await testInitializationDoesNotReadDurableSessionStore()
         await testLogoutClearsSessionAndInMemoryAccountState()
         await testMissingSessionFailsClosedWithoutTransport()
         await testSignedOutRefreshClearsLocalSession()
@@ -93,11 +96,30 @@ private struct DesktopAuthStateOwnerTests {
         print("DesktopAuthStateOwnerTests passed")
     }
 
+    private static func testInitializationDoesNotReadDurableSessionStore() async {
+        let store = MemorySessionStore(session: nil)
+        let loader = AccountSnapshotLoader(nextSnapshot: activeSnapshot)
+        let owner = DesktopAuthStateOwner(
+            sessionStore: store,
+            accountSnapshotLoader: { await loader.load() }
+        )
+
+        expect(store.readCount == 0, "initialization must not synchronously read durable session material")
+        expect(owner.coordinatorState == .accountRefreshing, "unknown durable session state should publish account_refreshing")
+
+        let snapshot = await owner.refreshAccountSnapshot()
+
+        expect(store.readCount == 1, "explicit refresh should read durable session material")
+        expect(snapshot.state == .signedOut, "missing session should still fail closed after refresh")
+        expect(loader.callCount == 0, "missing session refresh should not call account transport")
+    }
+
     private static func testLogoutClearsSessionAndInMemoryAccountState() async {
         let store = MemorySessionStore(session: sessionMaterial(token: "session_placeholder_redacted_logout"))
         let loader = AccountSnapshotLoader(nextSnapshot: activeSnapshot)
         let owner = DesktopAuthStateOwner(
             sessionStore: store,
+            initialStoredSessionState: .present,
             accountSnapshotLoader: { await loader.load() }
         )
 
@@ -124,6 +146,7 @@ private struct DesktopAuthStateOwnerTests {
         let loader = AccountSnapshotLoader(nextSnapshot: activeSnapshot)
         let owner = DesktopAuthStateOwner(
             sessionStore: store,
+            initialStoredSessionState: .missing,
             accountSnapshotLoader: { await loader.load() }
         )
 
@@ -213,6 +236,7 @@ private struct DesktopAuthStateOwnerTests {
         let loader = AccountSnapshotLoader(nextSnapshot: activeSnapshot)
         let owner = DesktopAuthStateOwner(
             sessionStore: store,
+            initialStoredSessionState: .missing,
             accountSnapshotLoader: { await loader.load() }
         )
 

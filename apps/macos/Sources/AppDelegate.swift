@@ -1,3 +1,4 @@
+import Carbon
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -25,6 +26,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .setupCompletedFromExistingState,
             object: nil
         )
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
 
         appState.startHotkeyMonitoring()
         _ = appState.completeSetupIfReadyFromExistingState(notify: false)
@@ -34,6 +41,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             restoreIdleActivationPolicy()
             startReadyRuntimeServices()
+            if AppBuild.keepsDockIconVisibleWhenIdle {
+                showSettingsWindow()
+            }
         }
 
     }
@@ -52,12 +62,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            _ = appState.handleDesktopLoginCallback(url: url)
+            handleIncomingURL(url)
         }
     }
 
     func applicationDidResignActive(_ notification: Notification) {
         appState.handleAppDeactivationForHotkeySafety()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard AppBuild.keepsDockIconVisibleWhenIdle,
+              appState.hasCompletedSetup,
+              setupWindow == nil,
+              settingsWindow?.isVisible != true else {
+            return
+        }
+        showSettingsWindow()
     }
 
     @objc func handleShowSetup() {
@@ -100,6 +120,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         showSettingsWindow()
     }
 
+    @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+        guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: urlString) else {
+            return
+        }
+        handleIncomingURL(url)
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        if handleLocalAppURL(url) {
+            return
+        }
+        _ = appState.handleDesktopLoginCallback(url: url)
+    }
+
+    private func handleLocalAppURL(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "rubywhisper" else { return false }
+
+        switch (url.host?.lowercased(), url.path.lowercased()) {
+        case ("settings", _), (_, "/settings"):
+            showSettingsWindow()
+            return true
+        case ("run-log", _), (_, "/run-log"):
+            appState.selectedSettingsTab = .runLog
+            showSettingsWindow()
+            return true
+        default:
+            return false
+        }
+    }
+
     @objc private func handleSetupCompletedFromExistingState() {
         setupWindow?.close()
         setupWindow = nil
@@ -114,7 +165,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if !AXIsProcessTrusted() {
-            appState.showAccessibilityAlert()
+            appState.markAccessibilityRecoveryIfStillMissing()
         }
     }
 
@@ -148,9 +199,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = AppName.displayName
         window.contentView = hostingView
+        window.sharingType = .readWrite
         window.isReleasedWhenClosed = false
         window.center()
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
 
         settingsWindow = window
@@ -186,9 +239,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.contentView = NSHostingView(rootView: setupView)
+        window.sharingType = .readWrite
         window.minSize = NSSize(width: 520, height: 680)
         window.center()
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
         window.isReleasedWhenClosed = false
 
         self.setupWindow = window

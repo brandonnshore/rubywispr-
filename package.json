@@ -15,7 +15,9 @@
     "build": "npm run build --workspace @rubywhisper/web"
   },
   "overrides": {
-    "postcss": "8.5.10"
+    "next": "16.2.6",
+    "postcss": "8.5.10",
+    "ws": "8.20.1"
   },
   "engines": {
     "node": ">=20"

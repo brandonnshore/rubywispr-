@@ -224,6 +224,12 @@ enum DesktopDictationAccountGateDecision: Equatable, Hashable {
     }
 }
 
+enum DesktopStoredSessionState: Equatable {
+    case unknown
+    case present
+    case missing
+}
+
 extension DesktopAuthCoordinatorState {
     var dictationAccountGateDecision: DesktopDictationAccountGateDecision {
         switch self {
@@ -304,17 +310,24 @@ final class DesktopAuthStateOwner: ObservableObject, @unchecked Sendable {
     init(
         sessionStore: DesktopSessionStoring = DesktopSessionKeychainStore(),
         initialSnapshot: RubyWhisperDesktopAccountSnapshot = .signedOut,
+        initialStoredSessionState: DesktopStoredSessionState = .unknown,
         accountSnapshotLoader: @escaping () async -> RubyWhisperDesktopAccountSnapshot
     ) {
         self.sessionStore = sessionStore
-        let hasSession = sessionStore.read() != nil
-        self.accountSnapshot = hasSession ? initialSnapshot : .signedOut
-        if hasSession {
+        switch initialStoredSessionState {
+        case .present:
+            self.accountSnapshot = initialSnapshot
             self.coordinatorState = initialSnapshot.isSignedOutAuthFailure
                 ? .accountRefreshing
                 : DesktopAuthCoordinatorState.accountState(for: initialSnapshot)
-        } else {
+        case .missing:
+            self.accountSnapshot = .signedOut
             self.coordinatorState = .signedOut
+        case .unknown:
+            self.accountSnapshot = initialSnapshot.isSignedOutAuthFailure ? .signedOut : initialSnapshot
+            self.coordinatorState = initialSnapshot.isSignedOutAuthFailure
+                ? .accountRefreshing
+                : DesktopAuthCoordinatorState.accountState(for: initialSnapshot)
         }
         self.accountSnapshotLoader = accountSnapshotLoader
     }
