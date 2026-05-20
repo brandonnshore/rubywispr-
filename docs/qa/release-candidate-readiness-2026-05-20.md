@@ -90,7 +90,9 @@ These are not proved by the automated checks above:
   QA.
 - Cleanup or disconnection of the duplicate legacy Vercel `rubywispr-` project
   check, which is configured for the wrong output directory and should not be a
-  release signal for the active `rubywhisper-web` project.
+  release signal for the active `rubywhisper-web` project. A source-side
+  `vercel.json` framework/default-output override is being tested in PR `#206`;
+  if both Vercel projects pass there, this gate can be removed.
 
 ## Beta Readiness Conclusion
 
