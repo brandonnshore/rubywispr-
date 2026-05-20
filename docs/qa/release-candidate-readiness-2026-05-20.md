@@ -12,10 +12,15 @@ or live provider traffic.
 
 ## Source State
 
-- `origin/main`: `4439c91` (`Fix duplicate Vercel output handling (#206)`).
-- Landed PRs in the RC stack: `#200`, `#201`, `#202`, `#203`, `#192`, `#204`,
-  `#205`, and `#206`.
-- Remaining open GitHub PRs checked after the source-side Vercel fix: none.
+- Validated app source/config head for this evidence pass: `4439c91` (`Fix
+  duplicate Vercel output handling (#206)`).
+- Landed PRs in the app source/config RC stack: `#200`, `#201`, `#202`, `#203`,
+  `#192`, `#204`, `#205`, and `#206`.
+- PR `#207` refreshed deployment/runbook evidence after the source-side Vercel
+  fix and did not change app runtime source, macOS source, backend source, or
+  deployment config.
+- Check open GitHub PR state directly before release; it is intentionally not
+  treated as durable evidence in this note.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
   superseded. Current `main` already uses `SUPABASE_SECRET_KEY` and
   `SUPABASE_PUBLISHABLE_KEY` in templates/server config, with legacy Supabase
@@ -40,7 +45,7 @@ or live provider traffic.
 
 ## Automated Validation
 
-Commands run against the current source tree:
+Commands run against the validated source/config tree:
 
 | Surface | Command | Result |
 | --- | --- | --- |
