@@ -85,7 +85,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // willClose observer and breaks the bail-restore.
         if let existing = setupWindow, existing.isVisible {
             existing.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            activateAppForWindowPresentation()
             return
         }
 
@@ -174,7 +174,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let settingsWindow, settingsWindow.isVisible {
             settingsWindow.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            activateAppForWindowPresentation()
             return
         }
 
@@ -182,7 +182,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             presentSettingsWindow()
         } else {
             settingsWindow?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            activateAppForWindowPresentation()
         }
     }
 
@@ -204,7 +204,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
-        NSApp.activate(ignoringOtherApps: true)
+        activateAppForWindowPresentation()
 
         settingsWindow = window
 
@@ -247,7 +247,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.isReleasedWhenClosed = false
 
         self.setupWindow = window
-        NSApp.activate(ignoringOtherApps: true)
+        activateAppForWindowPresentation()
     }
 
     func completeSetup() {
@@ -273,5 +273,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func restoreIdleActivationPolicy() {
         NSApp.setActivationPolicy(AppBuild.keepsDockIconVisibleWhenIdle ? .regular : .accessory)
+    }
+
+    private func activateAppForWindowPresentation() {
+        if #available(macOS 14.0, *) {
+            NSApp.activate()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 }
