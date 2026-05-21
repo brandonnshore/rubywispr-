@@ -155,6 +155,7 @@ npm run typecheck
 npm run test
 npm run test:auth-privacy
 npm run qa:release-gate -- --allow-blocked
+npm run qa:browser-smoke
 npm run docs:check
 npm run build
 git diff --check
@@ -172,6 +173,13 @@ does not approve release. Use `--skip-network` for offline source-only checks.
 Use `--include-live` only after an approved human has explicitly loaded the
 needed env names into the shell and set `RUBYWHISPER_ALLOW_LIVE_RELEASE_SMOKES=1`;
 the script checks presence only and never prints secret values.
+
+`npm run qa:browser-smoke` is a source-safe deployed browser render smoke. It
+requires local Chrome or Chromium, renders public and auth entry routes at
+desktop and mobile viewport sizes, and records sanitized route, viewport, PNG
+dimension, and byte-size evidence only. It does not source private env files,
+click live auth/billing/provider flows, or approve release. Set `CHROME_BIN` or
+pass `-- --chrome-bin <path>` if Chrome is not in a known system location.
 
 For docs-only runbook changes, run `npm run docs:check`. It validates local
 Markdown links only; external URLs, mailto links, web app routes, and heading
