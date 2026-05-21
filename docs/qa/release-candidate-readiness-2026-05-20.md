@@ -86,7 +86,8 @@ Commands run against the validated source/config tree:
 | Release gate preflight, deployed smoke | `npm run qa:release-gate -- --allow-blocked` | Passed; validates release env placeholders, public deployed routes, `/api/status`, and records live/manual release gates as deferred. |
 | Release gate preflight, blocking mode | `npm run qa:release-gate` | Exits `2` by design after source-safe checks pass because live/manual release gates remain deferred. |
 | Deployed browser render smoke | `npm run qa:browser-smoke` | Passed; Chrome rendered `/`, `/pricing`, `/download`, `/privacy`, `/terms`, `/support`, `/sign-in`, and `/sign-up` at `1365x900` desktop and `390x844` mobile viewport sizes with non-empty PNG screenshots. |
-| Documentation local-link check | `npm run docs:check` | Passed; validates local Markdown file and directory links across repo docs. |
+| macOS manual QA harness guard | `npm run qa:macos-manual-harness` | Passed; validates that the source-owned manual QA template has not been falsely marked complete and that MAC-100 through MAC-108 name approved Recent Wisprs evidence sources. |
+| Documentation checks | `npm run docs:check` | Passed; validates local Markdown file and directory links across repo docs plus the macOS manual QA harness guard. |
 
 ## Deployed Web/Backend Smoke
 
