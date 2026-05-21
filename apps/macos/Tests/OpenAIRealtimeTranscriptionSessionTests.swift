@@ -15,6 +15,8 @@ private struct OpenAIRealtimeTranscriptionSessionTests {
     static func main() {
         testEventParsing()
         testBillableWordCount()
+        testCompletionTimeoutScalesForLongAudio()
+        testRealtimeFinalizationBudgetIsBounded()
         testRecoveryDecision()
         testRealtimeSessionDiagnosticsRedactClientSecret()
         print("OpenAIRealtimeTranscriptionSessionTests passed")
@@ -58,6 +60,32 @@ private struct OpenAIRealtimeTranscriptionSessionTests {
         expect(
             OpenAIRealtimeTranscriptionSession.billableWordCount(in: "   ") == 0,
             "blank transcripts should not count words"
+        )
+    }
+
+    private static func testCompletionTimeoutScalesForLongAudio() {
+        expect(
+            OpenAIRealtimeTranscriptionSession.completionTimeoutNanoseconds(audioDurationMs: 0) == 3_000_000_000,
+            "short realtime recordings should keep the fast completion timeout"
+        )
+        expect(
+            OpenAIRealtimeTranscriptionSession.completionTimeoutNanoseconds(audioDurationMs: 600_000) == 18_000_000_000,
+            "ten-minute realtime recordings should get a longer finalization window"
+        )
+        expect(
+            OpenAIRealtimeTranscriptionSession.completionTimeoutNanoseconds(audioDurationMs: 900_000) == 18_000_000_000,
+            "timeout scaling should clamp above the supported recording cap"
+        )
+    }
+
+    private static func testRealtimeFinalizationBudgetIsBounded() {
+        expect(
+            OpenAIRealtimeTranscriptionSession.realtimeFinalizationBudgetNanoseconds(audioDurationMs: 0) == 16_000_000_000,
+            "short realtime recordings should have a bounded connection, commit, and completion budget"
+        )
+        expect(
+            OpenAIRealtimeTranscriptionSession.realtimeFinalizationBudgetNanoseconds(audioDurationMs: 600_000) == 31_000_000_000,
+            "ten-minute realtime recordings should remain bounded before batch fallback"
         )
     }
 

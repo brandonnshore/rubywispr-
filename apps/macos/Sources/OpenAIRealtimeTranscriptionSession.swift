@@ -71,7 +71,10 @@ struct OpenAIRealtimeTranscriptionEvent: Equatable {
 
 actor OpenAIRealtimeTranscriptionSession {
     private static let maxBufferedPCMBytes = 32 * 1024 * 1024
-    private static let completionTimeoutNanoseconds: UInt64 = 3_000_000_000
+    private static let connectionTimeoutNanoseconds: UInt64 = 8_000_000_000
+    private static let commitTimeoutNanoseconds: UInt64 = 5_000_000_000
+    private static let baseCompletionTimeoutNanoseconds: UInt64 = 3_000_000_000
+    private static let maxCompletionTimeoutNanoseconds: UInt64 = 20_000_000_000
 
     private let backendClient: RubyWhisperBackendAPIClient
     private let language: String?
@@ -127,7 +130,7 @@ actor OpenAIRealtimeTranscriptionSession {
         }
 
         start()
-        try await connectionTask?.value
+        try await waitForConnectionWithTimeout()
 
         if let terminalError {
             throw terminalError
@@ -140,8 +143,10 @@ actor OpenAIRealtimeTranscriptionSession {
             throw OpenAIRealtimeTranscriptionError.connectionUnavailable
         }
 
-        try await sendCommit(webSocketTask: webSocketTask)
-        let transcript = try await waitForCompletedTranscriptWithTimeout()
+        try await sendCommitWithTimeout(webSocketTask: webSocketTask)
+        let transcript = try await waitForCompletedTranscriptWithTimeout(
+            audioDurationMs: audioDurationMs
+        )
         let cleanedText = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedText.isEmpty else {
             throw OpenAIRealtimeTranscriptionError.emptyTranscript
@@ -218,6 +223,31 @@ actor OpenAIRealtimeTranscriptionSession {
         try await flushBufferedPCM(webSocketTask: task)
     }
 
+    private func waitForConnectionWithTimeout() async throws {
+        guard let connectionTask else {
+            throw OpenAIRealtimeTranscriptionError.connectionUnavailable
+        }
+
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    try await connectionTask.value
+                }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: Self.connectionTimeoutNanoseconds)
+                    throw OpenAIRealtimeTranscriptionError.timedOut
+                }
+
+                _ = try await group.next()
+                group.cancelAll()
+            }
+        } catch {
+            connectionTask.cancel()
+            webSocketTask?.cancel(with: .goingAway, reason: nil)
+            throw error
+        }
+    }
+
     private func bufferPCMChunk(_ chunk: Data) {
         guard bufferedPCMByteCount + chunk.count <= Self.maxBufferedPCMBytes else {
             terminalError = OpenAIRealtimeTranscriptionError.connectionUnavailable
@@ -287,13 +317,13 @@ actor OpenAIRealtimeTranscriptionSession {
         completionContinuation = nil
     }
 
-    private func waitForCompletedTranscriptWithTimeout() async throws -> String {
+    private func waitForCompletedTranscriptWithTimeout(audioDurationMs: Int) async throws -> String {
         try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
                 try await self.waitForCompletedTranscript()
             }
             group.addTask {
-                try await Task.sleep(nanoseconds: Self.completionTimeoutNanoseconds)
+                try await Task.sleep(nanoseconds: Self.completionTimeoutNanoseconds(audioDurationMs: audioDurationMs))
                 throw OpenAIRealtimeTranscriptionError.timedOut
             }
 
@@ -313,8 +343,39 @@ actor OpenAIRealtimeTranscriptionSession {
             return completedTranscript
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            completionContinuation = continuation
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                completionContinuation = continuation
+            }
+        } onCancel: {
+            Task {
+                await self.cancelCompletionWait()
+            }
+        }
+    }
+
+    private func cancelCompletionWait() {
+        completionContinuation?.resume(throwing: CancellationError())
+        completionContinuation = nil
+    }
+
+    private func sendCommitWithTimeout(webSocketTask: URLSessionWebSocketTask) async throws {
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    try await self.sendCommit(webSocketTask: webSocketTask)
+                }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: Self.commitTimeoutNanoseconds)
+                    throw OpenAIRealtimeTranscriptionError.timedOut
+                }
+
+                _ = try await group.next()
+                group.cancelAll()
+            }
+        } catch {
+            webSocketTask.cancel(with: .goingAway, reason: nil)
+            throw error
         }
     }
 
@@ -394,6 +455,21 @@ actor OpenAIRealtimeTranscriptionSession {
         let regex = try? NSRegularExpression(pattern: pattern)
         let range = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
         return regex?.numberOfMatches(in: normalized, range: range) ?? 0
+    }
+
+    static func completionTimeoutNanoseconds(audioDurationMs: Int) -> UInt64 {
+        let clampedDurationMs = min(max(audioDurationMs, 0), 600_000)
+        let durationAllowance = UInt64(clampedDurationMs) * 25_000
+        return min(
+            baseCompletionTimeoutNanoseconds + durationAllowance,
+            maxCompletionTimeoutNanoseconds
+        )
+    }
+
+    static func realtimeFinalizationBudgetNanoseconds(audioDurationMs: Int) -> UInt64 {
+        connectionTimeoutNanoseconds
+            + commitTimeoutNanoseconds
+            + completionTimeoutNanoseconds(audioDurationMs: audioDurationMs)
     }
 
     private static func normalizedLanguage(_ language: String?) -> String? {

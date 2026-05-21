@@ -253,6 +253,18 @@ final class FirstRunOnboardingCoordinator: ObservableObject {
             snapshot.accessibilityStatus == .granted
     }
 
+    static func effectiveTestWhisperStatus(
+        hasCompletedSetup: Bool,
+        metadataCompleted: Bool,
+        explicitStatus: FirstRunOnboardingTestWhisperStatus? = nil
+    ) -> FirstRunOnboardingTestWhisperStatus {
+        if let explicitStatus {
+            return explicitStatus
+        }
+
+        return hasCompletedSetup || metadataCompleted ? .succeeded : .notStarted
+    }
+
     static func resolveStep(for snapshot: FirstRunOnboardingGateSnapshot) -> FirstRunOnboardingStep {
         switch snapshot.authState {
         case .signedOut, .canceled:

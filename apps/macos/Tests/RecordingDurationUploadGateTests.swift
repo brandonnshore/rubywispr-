@@ -47,7 +47,7 @@ private func testUnderLimitArtifactCanProceedWithoutCleanup() throws {
     expect(FileManager.default.fileExists(atPath: artifact.fileURL.path), "under-limit artifact should not be deleted by the gate")
 }
 
-private func testLimitReachedArtifactIsRejectedAndDeleted() throws {
+private func testLimitReachedArtifactCanProceedWithGrace() throws {
     let scratch = try makeScratchDirectory()
     defer { try? FileManager.default.removeItem(at: scratch) }
     let artifact = try makeArtifact(durationMs: 1_000, scratch: scratch, name: "limit.wav")
@@ -57,21 +57,21 @@ private func testLimitReachedArtifactIsRejectedAndDeleted() throws {
         policy: .shortenedUnitTimer
     )
 
-    expect(rejection?.audioDurationMs == 1_000, "rejection should carry numeric audio duration metadata")
-    expect(rejection?.durationLimitMs == 1_000, "rejection should carry numeric duration limit metadata")
-    expect(rejection?.policyCategory == .shortenedUnitTimer, "rejection should carry metadata-only test policy category")
-    expect(rejection?.cleanupSucceeded == true, "rejection should report successful cleanup")
+    expect(rejection == nil, "limit-reached artifact should be eligible during the grace window")
     expect(
-        rejection?.cleanupResult == RecordingArtifactCleanupResult(attemptedCount: 1, deletedCount: 1, failedCount: 0),
-        "rejection should delete the transient audio artifact"
+        FileManager.default.fileExists(atPath: artifact.fileURL.path),
+        "limit-reached artifact should not be deleted during the grace window"
     )
-    expect(!FileManager.default.fileExists(atPath: artifact.fileURL.path), "limit-reached artifact should be removed")
 }
 
 private func testOverLimitArtifactCleanupIsIdempotent() throws {
     let scratch = try makeScratchDirectory()
     defer { try? FileManager.default.removeItem(at: scratch) }
-    let artifact = try makeArtifact(durationMs: 1_001, scratch: scratch, name: "over.wav")
+    let artifact = try makeArtifact(
+        durationMs: 1_000 + RecordingDurationUploadGate.durationLimitGraceMs + 1,
+        scratch: scratch,
+        name: "over.wav"
+    )
 
     let first = RecordingDurationUploadGate.rejectIfDurationLimitReached(
         artifact,
@@ -92,7 +92,7 @@ private struct RecordingDurationUploadGateTests {
     static func main() {
         do {
             try testUnderLimitArtifactCanProceedWithoutCleanup()
-            try testLimitReachedArtifactIsRejectedAndDeleted()
+            try testLimitReachedArtifactCanProceedWithGrace()
             try testOverLimitArtifactCleanupIsIdempotent()
             print("RecordingDurationUploadGateTests passed")
         } catch {

@@ -670,8 +670,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
             from: AVCaptureDevice.authorizationStatus(for: .audio),
             hasInputDevice: !AudioDevice.availableInputDevices().isEmpty
         )
-        let initialTestWhisperStatus: FirstRunOnboardingTestWhisperStatus =
-            firstRunOnboardingCoordinator.metadata.testWhisperCompleted ? .succeeded : .notStarted
+        let initialTestWhisperStatus = FirstRunOnboardingCoordinator.effectiveTestWhisperStatus(
+            hasCompletedSetup: hasCompletedSetup,
+            metadataCompleted: firstRunOnboardingCoordinator.metadata.testWhisperCompleted
+        )
         let initialFirstRunStep = firstRunOnboardingCoordinator.update(with: FirstRunOnboardingGateSnapshot(
             authState: authStateOwner.coordinatorState,
             microphoneStatus: initialMicrophoneStatus,
@@ -699,7 +701,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
         let savedRecentWisprs = recentWisprStore.listItems()
         let isRecentWisprsHistoryEnabled = recentWisprStore.isHistoryEnabled
 
-        let selectedMicrophoneID = UserDefaults.standard.string(forKey: selectedMicrophoneStorageKey) ?? "default"
+        let selectedMicrophoneID = UserDefaults.standard.string(forKey: selectedMicrophoneStorageKey)
+            ?? MicrophoneSelection.defaultID
 
         self.contextService = Self.makeAppContextService(
             customContextPrompt: customContextPrompt,
@@ -928,8 +931,11 @@ final class AppState: ObservableObject, @unchecked Sendable {
         microphoneStatus explicitMicrophoneStatus: FirstRunOnboardingPermissionCategory? = nil,
         testWhisperStatus explicitTestWhisperStatus: FirstRunOnboardingTestWhisperStatus? = nil
     ) {
-        let testWhisperStatus = explicitTestWhisperStatus ??
-            (firstRunOnboardingCoordinator.metadata.testWhisperCompleted ? .succeeded : .notStarted)
+        let testWhisperStatus = FirstRunOnboardingCoordinator.effectiveTestWhisperStatus(
+            hasCompletedSetup: hasCompletedSetup,
+            metadataCompleted: firstRunOnboardingCoordinator.metadata.testWhisperCompleted,
+            explicitStatus: explicitTestWhisperStatus
+        )
         firstRunOnboardingStep = firstRunOnboardingCoordinator.update(with: FirstRunOnboardingGateSnapshot(
             authState: authCoordinatorState,
             microphoneStatus: explicitMicrophoneStatus ?? Self.firstRunMicrophonePermissionCategory(
@@ -1838,6 +1844,10 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
         needsMicrophoneRefreshAfterRecording = false
         availableMicrophones = AudioDevice.availableInputDevices()
+        selectedMicrophoneID = MicrophoneSelection.normalizedSelectedID(
+            selectedMicrophoneID,
+            availableDeviceIDs: availableMicrophones.map(\.uid)
+        )
     }
 
     private func refreshAvailableMicrophonesIfNeeded() {
@@ -3440,19 +3450,12 @@ final class AppState: ObservableObject, @unchecked Sendable {
             guard let self else { return }
             self.markDictationTiming { $0.markArtifactReady() }
             guard let artifact else {
-                if let realtimeSession {
-                    Task {
-                        await realtimeSession.cancel()
-                    }
-                }
-                self.isTranscribing = false
-                self.audioRecorder.cleanup()
-                self.endCriticalDictationActivity()
-                self.errorMessage = "No audio recorded"
-                self.statusText = "Error"
-                self.markDictationTiming { $0.markTerminalStatus("no_audio") }
-                self.overlayManager.dismiss()
-                self.refreshAvailableMicrophonesIfNeeded()
+                self.finishNoSpeechDetected(
+                    realtimeSession: realtimeSession,
+                    inFlightContextTask: inFlightContextTask,
+                    terminalStatus: "no_audio",
+                    debugStatus: "No audio recorded"
+                )
                 return
             }
 
@@ -3464,6 +3467,16 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 }
                 artifact.delete()
                 self.refreshAvailableMicrophonesIfNeeded()
+                return
+            }
+
+            if let rejection = RecordingArtifactReadinessGate.rejectIfTooShort(artifact) {
+                self.finishNoSpeechDetected(
+                    realtimeSession: realtimeSession,
+                    inFlightContextTask: inFlightContextTask,
+                    terminalStatus: "audio_too_short",
+                    debugStatus: "No speech detected duration_ms=\(rejection.audioDurationMs)"
+                )
                 return
             }
 
@@ -3742,6 +3755,33 @@ final class AppState: ObservableObject, @unchecked Sendable {
         }
     }
 
+    private func finishNoSpeechDetected(
+        realtimeSession: OpenAIRealtimeTranscriptionSession?,
+        inFlightContextTask: Task<AppContext?, Never>?,
+        terminalStatus: String,
+        debugStatus: String
+    ) {
+        if let realtimeSession {
+            Task {
+                await realtimeSession.cancel()
+            }
+        }
+        inFlightContextTask?.cancel()
+        transcriptionTask?.cancel()
+        transcriptionTask = nil
+        activeTransientRecordingArtifact = nil
+        isTranscribing = false
+        audioRecorder.cleanup()
+        endCriticalDictationActivity()
+        errorMessage = nil
+        statusText = "No speech detected"
+        debugStatusMessage = debugStatus
+        markDictationTiming { $0.markTerminalStatus(terminalStatus) }
+        overlayManager.dismiss()
+        refreshAvailableMicrophonesIfNeeded()
+        scheduleReadyStatusReset(after: 2, matching: ["No speech detected"])
+    }
+
     private func stopRecordingWithoutTranscribing(for decision: DesktopDictationAccountGateDecision) {
         cancelPendingShortcutStart()
         cancelRecordingInitializationTimer()
@@ -3781,40 +3821,9 @@ final class AppState: ObservableObject, @unchecked Sendable {
     }
 
     private func stopRecordingForDurationLimitReached() {
-        cancelPendingShortcutStart()
-        cancelRecordingInitializationTimer()
-        shortcutSessionController.reset()
-        activeRecordingTriggerMode = nil
-        currentSessionIntent = .dictation
-        audioRecorder.onRecordingReady = nil
-        audioRecorder.onRecordingFailure = nil
-        cancelActiveRealtimeTranscriptionSession()
-        audioLevelCancellable?.cancel()
-        audioLevelCancellable = nil
-        contextCaptureTask?.cancel()
-        contextCaptureTask = nil
-        capturedContext = nil
-        restoreAudioInterruptionIfNeeded()
-        isRecording = false
-        isTranscribing = false
-        transcriptionTask?.cancel()
-        transcriptionTask = nil
-        activeTransientRecordingArtifact?.delete()
-        activeTransientRecordingArtifact = nil
-        stopRecordingDurationTimer()
-        endCriticalDictationActivity()
-        statusText = "Duration limit"
-        debugStatusMessage = "Hotkey blocked: \(HotkeyRecordingGateBlockReason.durationLimitReached.rawValue)"
-        errorMessage = "Recordings are limited to 10 minutes. Start a new whisper."
-        overlayManager.showDurationLimitReached()
-        playAlertSound(named: "Basso")
-
-        audioRecorder.stopRecording { [weak self] artifact in
-            guard let self else { return }
-            artifact?.delete()
-            self.audioRecorder.cleanup()
-            self.refreshAvailableMicrophonesIfNeeded()
-        }
+        debugStatusMessage = "Auto-stopping at 10 minute limit"
+        statusText = "Finalizing..."
+        stopAndTranscribe()
     }
 
     private func startRecordingDurationTimer(mode: RecordingTriggerMode) {

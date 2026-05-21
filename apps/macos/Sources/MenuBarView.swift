@@ -358,9 +358,9 @@ struct MenuBarView: View {
 
             Menu("Microphone") {
                 Button {
-                    appState.selectedMicrophoneID = "default"
+                    appState.selectedMicrophoneID = MicrophoneSelection.defaultID
                 } label: {
-                    if appState.selectedMicrophoneID == "default" || appState.selectedMicrophoneID.isEmpty {
+                    if appState.selectedMicrophoneID == MicrophoneSelection.defaultID || appState.selectedMicrophoneID.isEmpty {
                         Text("✓ System Default")
                     } else {
                         Text("  System Default")
