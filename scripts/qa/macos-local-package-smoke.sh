@@ -26,6 +26,17 @@ plist_value() {
   plutil -extract "$key" raw "$plist_path"
 }
 
+assert_adhoc_signature() {
+  local target_path="$1"
+  local signature_details
+
+  signature_details="$(codesign -dv "$target_path" 2>&1)"
+  if [[ "$signature_details" != *"Signature=adhoc"* ]]; then
+    echo "FAIL ad hoc signature missing for $target_path" >&2
+    exit 1
+  fi
+}
+
 echo "RubyWhisper macOS local package smoke"
 echo "App name: $app_name"
 echo "Bundle ID: $bundle_id"
@@ -56,7 +67,7 @@ assert_eq "$(plist_value LSUIElement "$app_path/Contents/Info.plist")" "false" "
 assert_eq "$(plist_value RubyWhisperUpdateChannelEnabled "$app_path/Contents/Info.plist")" "false" "RubyWhisperUpdateChannelEnabled"
 assert_eq "$(plist_value RubyWhisperBackendBaseURL "$app_path/Contents/Info.plist")" "https://rubywhisper-web.vercel.app" "RubyWhisperBackendBaseURL"
 
-codesign -dv "$app_path" 2>&1 | grep -q "Signature=adhoc"
+assert_adhoc_signature "$app_path"
 codesign --verify --deep --strict --verbose=2 "$app_path"
 hdiutil verify "$dmg_path" >/dev/null
 
