@@ -155,6 +155,7 @@ npm run typecheck
 npm run test
 npm run test:auth-privacy
 npm run qa:release-gate -- --allow-blocked
+npm run docs:check
 npm run build
 git diff --check
 ```
@@ -172,9 +173,9 @@ Use `--include-live` only after an approved human has explicitly loaded the
 needed env names into the shell and set `RUBYWHISPER_ALLOW_LIVE_RELEASE_SMOKES=1`;
 the script checks presence only and never prints secret values.
 
-For docs-only runbook changes, run the docs checks that exist at the time of the
-change. If no Markdown link checker exists, verify local file references with
-`rg --files` and record that no dedicated docs checker exists.
+For docs-only runbook changes, run `npm run docs:check`. It validates local
+Markdown links only; external URLs, mailto links, web app routes, and heading
+anchors still need reviewer judgment when those surfaces change.
 
 ## Preview Or Staging Validation
 

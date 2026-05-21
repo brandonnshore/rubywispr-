@@ -32,6 +32,8 @@ or live provider traffic.
   `npm run qa:release-gate` as a repeatable source-safe check for env
   placeholders, public deployment smoke, `/api/status`, and explicitly deferred
   live/manual beta gates.
+- PR `#213` adds `npm run docs:check` and wires the local Markdown link check
+  into Web CI.
 - Check open GitHub PR state directly before release; it is intentionally not
   treated as durable evidence in this note.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
@@ -80,6 +82,7 @@ Commands run against the validated source/config tree:
 | Release gate preflight, source-only | `npm run qa:release-gate -- --skip-network --allow-blocked` | Passed; validates release env placeholders and records live/manual release gates as deferred. |
 | Release gate preflight, deployed smoke | `npm run qa:release-gate -- --allow-blocked` | Passed; validates release env placeholders, public deployed routes, `/api/status`, and records live/manual release gates as deferred. |
 | Release gate preflight, blocking mode | `npm run qa:release-gate` | Exits `2` by design after source-safe checks pass because live/manual release gates remain deferred. |
+| Documentation local-link check | `npm run docs:check` | Passed; validates local Markdown file and directory links across repo docs. |
 
 ## Deployed Web/Backend Smoke
 
