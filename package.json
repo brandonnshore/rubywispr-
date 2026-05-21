@@ -12,6 +12,7 @@
     "test": "npm run test --workspace @rubywhisper/web",
     "test:auth-privacy": "npm run test:auth-privacy --workspace @rubywhisper/web",
     "test:schema-privacy": "npm run test:schema-privacy --workspace @rubywhisper/web",
+    "qa:release-gate": "node scripts/qa/release-gate-preflight.mjs",
     "build": "npm run build --workspace @rubywhisper/web"
   },
   "overrides": {
