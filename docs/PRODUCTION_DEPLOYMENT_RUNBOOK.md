@@ -168,9 +168,10 @@ Do not source, print, inspect, summarize, or attach `.env.local` or any private
 env source while collecting validation evidence.
 
 `npm run qa:release-gate` is a source-safe preflight for release evidence. By
-default it verifies the placeholder env names in `.env.example` and
-`apps/web/.env.example`, smokes the public web deployment and `/api/status`, and
-then exits blocked while live/manual gates remain deferred. Use
+default it verifies that `.env.example` and `apps/web/.env.example` include the
+required placeholder env names with blank values, smokes the public web
+deployment and `/api/status`, and then exits blocked while live/manual gates
+remain deferred. Use
 `--allow-blocked` only when intentionally recording source-safe evidence that
 does not approve release. Use `--skip-network` for offline source-only checks.
 Use `--include-live` only after an approved human has explicitly loaded the

@@ -175,34 +175,46 @@ const normalizeBaseUrl = (rawUrl) => {
   }
 };
 
-const readEnvTemplateNames = async (envFilePath) => {
+const readEnvTemplateAssignments = async (envFilePath) => {
   const content = await readFile(envFilePath, "utf8");
-  const names = new Set();
+  const assignments = new Map();
+  const lines = content.split(/\r?\n/);
 
-  for (const line of content.split(/\r?\n/)) {
+  lines.forEach((line, index) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) {
-      continue;
+      return;
     }
 
-    const match = /^([A-Z0-9_]+)=/.exec(trimmed);
+    const match = /^([A-Z0-9_]+)=(.*)$/.exec(trimmed);
     if (match) {
-      names.add(match[1]);
+      assignments.set(match[1], {
+        lineNumber: index + 1,
+        value: match[2],
+      });
     }
-  }
+  });
 
-  return names;
+  return assignments;
 };
 
 const checkEnvTemplates = async () => {
   const failures = [];
 
   for (const envFile of sourceEnvFiles) {
-    const names = await readEnvTemplateNames(envFile.path);
+    const assignments = await readEnvTemplateAssignments(envFile.path);
 
     for (const requiredName of requiredEnvNames) {
-      if (!names.has(requiredName)) {
+      if (!assignments.has(requiredName)) {
         failures.push(`${envFile.label} is missing ${requiredName}`);
+      }
+    }
+
+    for (const [name, assignment] of assignments) {
+      if (assignment.value.trim() !== "") {
+        failures.push(
+          `${envFile.label} has non-blank placeholder ${name} on line ${assignment.lineNumber}`,
+        );
       }
     }
 
@@ -372,7 +384,7 @@ const main = async () => {
 
   const envTemplateFailures = await checkEnvTemplates();
   if (envTemplateFailures.length === 0) {
-    console.log("OK env templates include the release gate placeholder names");
+    console.log("OK env templates include blank release gate placeholders");
   } else {
     failures.push(...envTemplateFailures);
   }
