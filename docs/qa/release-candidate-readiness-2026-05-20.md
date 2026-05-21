@@ -1,8 +1,8 @@
 # RubyWhisper Release Candidate Readiness Evidence
 
 Date: 2026-05-20.
-Updated: 2026-05-21 for source-safe release-gate, package, browser, docs, and
-manual-harness guard evidence.
+Updated: 2026-05-21 for landed `#219`, source-safe release-gate, package,
+browser, docs, privacy, schema, build, audit, and manual-harness guard evidence.
 
 Status: source-side release-candidate hardening is validated, but paid beta
 release remains blocked by live/manual Mac, provider, billing, production, and
@@ -15,12 +15,12 @@ or live provider traffic.
 ## Source State
 
 - Last validated app/package/CI source/config head for this evidence pass:
-  `034fe06` (`qa: guard macOS manual QA harness (#216)`).
-- Docs-only evidence refreshes after that point do not change the app,
-  backend, macOS runtime, package, or CI validation claim.
+  `c4ba69f` (`qa: stabilize macOS package signature check (#219)`).
+- PR `#217` refreshed docs-only RC evidence after `#216` and did not change the
+  app, backend, macOS runtime, package, or CI validation claim.
 - Landed PRs in the source/config RC stack: `#200`, `#201`, `#202`, `#203`,
   `#192`, `#204`, `#205`, `#206`, `#209`, `#210`, `#211`, `#212`, `#213`,
-  `#214`, `#215`, and `#216`.
+  `#214`, `#215`, `#216`, `#218`, and `#219`.
 - PR `#207` refreshed deployment/runbook evidence after the source-side Vercel
   fix and did not change app runtime source, macOS source, backend source, or
   deployment config.
@@ -47,6 +47,9 @@ or live provider traffic.
   being falsely marked complete before human evidence exists.
 - PR `#218` strengthens `npm run qa:release-gate` so the checked-in env
   templates must keep required release placeholders present and blank.
+- PR `#219` stabilizes `npm run qa:macos-package` by avoiding a
+  `pipefail`/SIGPIPE false failure in the local ad hoc signature assertion; it
+  does not Developer ID sign, notarize, staple, upload, or approve an artifact.
 - Check open GitHub PR state directly before release; it is intentionally not
   treated as durable evidence in this note.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
@@ -73,7 +76,8 @@ or live provider traffic.
 
 ## Automated Validation
 
-Commands run against the validated source/config tree:
+Latest commands run against `c4ba69f` unless a row explicitly names older
+historical CI evidence:
 
 | Surface | Command | Result |
 | --- | --- | --- |
@@ -83,6 +87,7 @@ Commands run against the validated source/config tree:
 | Web/backend typecheck | `npm run typecheck` | Passed. |
 | Web/backend tests | `npm test` | Passed, `414/414`. |
 | Auth/privacy tests | `npm run test:auth-privacy` | Passed, `178/178`. |
+| Schema/privacy tests | `npm run test:schema-privacy` | Passed, `4/4`. |
 | Web/backend build | `npm run build` | Passed with `next@16.2.6`. |
 | Dependency audit | `npm audit` | Passed, `0` vulnerabilities. |
 | Groq benchmark script syntax | `node --check scripts/benchmarks/groq-latency-cost.mjs` | Passed. |
@@ -91,7 +96,7 @@ Commands run against the validated source/config tree:
 | macOS ad hoc signature | `codesign --verify --deep --strict --verbose=2 apps/macos/build/RubyWhisper.app` | Passed. |
 | Local DMG packaging shape | `make -C apps/macos clean dmg CODESIGN_IDENTITY=-`; `hdiutil attach`; verify `RubyWhisper.app` and `Applications` symlink; detach | Passed; local/ad hoc artifact only, not Developer ID signed, notarized, stapled, uploaded, or release-approved. |
 | Local macOS package smoke | `npm run qa:macos-package` | Passed; wraps the local/ad hoc app and DMG build, verifies bundle metadata, bundled notices, ad hoc signatures, mounted DMG contents, `/Applications` symlink, and `hdiutil verify`. |
-| macOS CI PR build/package gate | PR `#209` and PR `#210` `Debug ad hoc build` checks | Passed; builds the ad hoc app, verifies bundle/signature, packages local DMG, mounts it, verifies contents/symlink, and runs `hdiutil verify`. |
+| macOS CI PR build/package gate | PR `#209`, PR `#210`, and PR `#219` `Debug ad hoc build` checks | Passed; builds the ad hoc app, verifies bundle/signature, packages local DMG, mounts it, verifies contents/symlink, and runs `hdiutil verify`. |
 | macOS CI main dispatch | `gh workflow run macos-ci.yml --ref main` at commit `90e1f30` | Passed; post-merge check after PR `#209` verified the app build and local DMG shape on GitHub-hosted macOS. |
 | Release gate preflight, source-only | `npm run qa:release-gate -- --skip-network --allow-blocked` | Passed; validates release env placeholders are present and blank, then records live/manual release gates as deferred. |
 | Release gate preflight, deployed smoke | `npm run qa:release-gate -- --allow-blocked` | Passed; validates release env placeholders are present and blank, public deployed routes, `/api/status`, and records live/manual release gates as deferred. |
@@ -102,7 +107,7 @@ Commands run against the validated source/config tree:
 
 ## Deployed Web/Backend Smoke
 
-Post-`#206` smoke against `https://rubywhisper-web.vercel.app`:
+Post-`#219` smoke against `https://rubywhisper-web.vercel.app`:
 
 | Surface | Result |
 | --- | --- |
