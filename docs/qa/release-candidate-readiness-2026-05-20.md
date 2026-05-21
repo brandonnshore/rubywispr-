@@ -1,6 +1,7 @@
 # RubyWhisper Release Candidate Readiness Evidence
 
 Date: 2026-05-20.
+Updated: 2026-05-21 for source-safe release-gate preflight evidence.
 
 Status: source-side release-candidate hardening is validated, but paid beta
 release remains blocked by live/manual Mac, provider, billing, production, and
@@ -15,7 +16,7 @@ or live provider traffic.
 - Validated app/package/CI source/config head for this evidence pass:
   `f241977` (`Update GitHub Actions runtime versions (#210)`).
 - Landed PRs in the source/config RC stack: `#200`, `#201`, `#202`, `#203`,
-  `#192`, `#204`, `#205`, `#206`, `#209`, and `#210`.
+  `#192`, `#204`, `#205`, `#206`, `#209`, `#210`, and `#211`.
 - PR `#207` refreshed deployment/runbook evidence after the source-side Vercel
   fix and did not change app runtime source, macOS source, backend source, or
   deployment config.
@@ -26,6 +27,11 @@ or live provider traffic.
   verification for the local app-plus-Applications DMG shape.
 - PR `#210` updated GitHub Actions runtime versions after the macOS CI
   Node 20 action-runtime deprecation warning; web and macOS PR checks passed.
+- PR `#211` refreshed docs-only Mac packaging evidence after PR `#210` merged.
+- PR `#212` adds
+  `npm run qa:release-gate` as a repeatable source-safe check for env
+  placeholders, public deployment smoke, `/api/status`, and explicitly deferred
+  live/manual beta gates.
 - Check open GitHub PR state directly before release; it is intentionally not
   treated as durable evidence in this note.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
@@ -71,6 +77,9 @@ Commands run against the validated source/config tree:
 | Local DMG packaging shape | `make -C apps/macos clean dmg CODESIGN_IDENTITY=-`; `hdiutil attach`; verify `RubyWhisper.app` and `Applications` symlink; detach | Passed; local/ad hoc artifact only, not Developer ID signed, notarized, stapled, uploaded, or release-approved. |
 | macOS CI PR build/package gate | PR `#209` and PR `#210` `Debug ad hoc build` checks | Passed; builds the ad hoc app, verifies bundle/signature, packages local DMG, mounts it, verifies contents/symlink, and runs `hdiutil verify`. |
 | macOS CI main dispatch | `gh workflow run macos-ci.yml --ref main` at commit `90e1f30` | Passed; post-merge check after PR `#209` verified the app build and local DMG shape on GitHub-hosted macOS. |
+| Release gate preflight, source-only | `npm run qa:release-gate -- --skip-network --allow-blocked` | Passed; validates release env placeholders and records live/manual release gates as deferred. |
+| Release gate preflight, deployed smoke | `npm run qa:release-gate -- --allow-blocked` | Passed; validates release env placeholders, public deployed routes, `/api/status`, and records live/manual release gates as deferred. |
+| Release gate preflight, blocking mode | `npm run qa:release-gate` | Exits `2` by design after source-safe checks pass because live/manual release gates remain deferred. |
 
 ## Deployed Web/Backend Smoke
 

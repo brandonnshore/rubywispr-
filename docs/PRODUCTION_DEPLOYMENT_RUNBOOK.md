@@ -154,12 +154,23 @@ npm run lint
 npm run typecheck
 npm run test
 npm run test:auth-privacy
+npm run qa:release-gate -- --allow-blocked
 npm run build
 git diff --check
 ```
 
 Do not source, print, inspect, summarize, or attach `.env.local` or any private
 env source while collecting validation evidence.
+
+`npm run qa:release-gate` is a source-safe preflight for release evidence. By
+default it verifies the placeholder env names in `.env.example` and
+`apps/web/.env.example`, smokes the public web deployment and `/api/status`, and
+then exits blocked while live/manual gates remain deferred. Use
+`--allow-blocked` only when intentionally recording source-safe evidence that
+does not approve release. Use `--skip-network` for offline source-only checks.
+Use `--include-live` only after an approved human has explicitly loaded the
+needed env names into the shell and set `RUBYWHISPER_ALLOW_LIVE_RELEASE_SMOKES=1`;
+the script checks presence only and never prints secret values.
 
 For docs-only runbook changes, run the docs checks that exist at the time of the
 change. If no Markdown link checker exists, verify local file references with
