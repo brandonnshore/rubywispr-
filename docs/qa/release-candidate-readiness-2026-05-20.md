@@ -1,7 +1,8 @@
 # RubyWhisper Release Candidate Readiness Evidence
 
 Date: 2026-05-20.
-Updated: 2026-05-21 for source-safe release-gate preflight evidence.
+Updated: 2026-05-21 for source-safe release-gate, package, browser, docs, and
+manual-harness guard evidence.
 
 Status: source-side release-candidate hardening is validated, but paid beta
 release remains blocked by live/manual Mac, provider, billing, production, and
@@ -13,10 +14,13 @@ or live provider traffic.
 
 ## Source State
 
-- Validated app/package/CI source/config head for this evidence pass:
-  `f241977` (`Update GitHub Actions runtime versions (#210)`).
+- Last validated app/package/CI source/config head for this evidence pass:
+  `034fe06` (`qa: guard macOS manual QA harness (#216)`).
+- Docs-only evidence refreshes after that point do not change the app,
+  backend, macOS runtime, package, or CI validation claim.
 - Landed PRs in the source/config RC stack: `#200`, `#201`, `#202`, `#203`,
-  `#192`, `#204`, `#205`, `#206`, `#209`, `#210`, and `#211`.
+  `#192`, `#204`, `#205`, `#206`, `#209`, `#210`, `#211`, `#212`, `#213`,
+  `#214`, `#215`, and `#216`.
 - PR `#207` refreshed deployment/runbook evidence after the source-side Vercel
   fix and did not change app runtime source, macOS source, backend source, or
   deployment config.
@@ -36,6 +40,11 @@ or live provider traffic.
   into Web CI.
 - PR `#214` adds `npm run qa:browser-smoke` for source-safe deployed Chrome
   render evidence across public and auth entry routes.
+- PR `#215` adds `npm run qa:macos-package`, a shared local/ad hoc macOS app
+  and DMG smoke used by local validation and macOS CI.
+- PR `#216` adds `npm run qa:macos-manual-harness`, wires it into
+  `npm run docs:check`, and keeps the source-owned manual QA template from
+  being falsely marked complete before human evidence exists.
 - Check open GitHub PR state directly before release; it is intentionally not
   treated as durable evidence in this note.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
