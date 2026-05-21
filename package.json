@@ -14,6 +14,7 @@
     "test:schema-privacy": "npm run test:schema-privacy --workspace @rubywhisper/web",
     "qa:release-gate": "node scripts/qa/release-gate-preflight.mjs",
     "qa:browser-smoke": "node scripts/qa/browser-render-smoke.mjs",
+    "qa:macos-package": "bash scripts/qa/macos-local-package-smoke.sh",
     "docs:check": "node scripts/qa/docs-local-links.mjs",
     "build": "npm run build --workspace @rubywhisper/web"
   },

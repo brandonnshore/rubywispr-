@@ -79,6 +79,7 @@ Commands run against the validated source/config tree:
 | macOS clean build | `make -C apps/macos clean all CODESIGN_IDENTITY=-` | Passed. |
 | macOS ad hoc signature | `codesign --verify --deep --strict --verbose=2 apps/macos/build/RubyWhisper.app` | Passed. |
 | Local DMG packaging shape | `make -C apps/macos clean dmg CODESIGN_IDENTITY=-`; `hdiutil attach`; verify `RubyWhisper.app` and `Applications` symlink; detach | Passed; local/ad hoc artifact only, not Developer ID signed, notarized, stapled, uploaded, or release-approved. |
+| Local macOS package smoke | `npm run qa:macos-package` | Passed; wraps the local/ad hoc app and DMG build, verifies bundle metadata, bundled notices, ad hoc signatures, mounted DMG contents, `/Applications` symlink, and `hdiutil verify`. |
 | macOS CI PR build/package gate | PR `#209` and PR `#210` `Debug ad hoc build` checks | Passed; builds the ad hoc app, verifies bundle/signature, packages local DMG, mounts it, verifies contents/symlink, and runs `hdiutil verify`. |
 | macOS CI main dispatch | `gh workflow run macos-ci.yml --ref main` at commit `90e1f30` | Passed; post-merge check after PR `#209` verified the app build and local DMG shape on GitHub-hosted macOS. |
 | Release gate preflight, source-only | `npm run qa:release-gate -- --skip-network --allow-blocked` | Passed; validates release env placeholders and records live/manual release gates as deferred. |

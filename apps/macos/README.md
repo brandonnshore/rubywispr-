@@ -128,6 +128,17 @@ The local DMG helper does not customize Finder window layout or icon placement.
 Release-owner visual polish can be added later without changing the source-safe
 artifact shape.
 
+From the repository root, the source-safe package smoke wraps the same local
+ad hoc build/DMG path and verifies the bundle metadata, bundled notices, ad hoc
+signature, mounted DMG contents, `Applications` symlink, and `hdiutil verify`:
+
+```bash
+npm run qa:macos-package
+```
+
+This command is still local/ad hoc only. It does not Developer ID sign,
+notarize, staple, upload, publish, or approve a release artifact.
+
 ## Release Signing And Notarization Guardrails
 
 `codesign-dmg` and `notarize` are release-sensitive targets. They are guarded
@@ -174,9 +185,10 @@ exits 66 in this directory.
 ## CI Validation
 
 `.github/workflows/macos-ci.yml` runs on pull requests that touch
-`apps/macos/**` or the workflow itself, and can also be started manually with
-`workflow_dispatch`. It uses GitHub-hosted `macos-latest` and an explicit ad hoc
-command for macOS source changes:
+`apps/macos/**`, `scripts/qa/macos-local-package-smoke.sh`, or the workflow
+itself, and can also be started manually with `workflow_dispatch`. It uses
+GitHub-hosted `macos-latest` and an explicit ad hoc command for macOS source
+changes:
 
 ```bash
 make -C apps/macos clean all CODESIGN_IDENTITY=-
@@ -184,10 +196,12 @@ make -C apps/macos clean all CODESIGN_IDENTITY=-
 
 The workflow verifies that `apps/macos/build/RubyWhisper.app` exists, keeps the
 local bundle identifier `com.rubyadvisory.rubywhisper.local`, and is signed with
-an ad hoc signature. It also runs `make -C apps/macos dmg CODESIGN_IDENTITY=-`,
-mounts the local DMG, verifies `RubyWhisper.app`, verifies the `Applications`
-symlink, and runs `hdiutil verify`. It is only a non-release build/package gate
-and should not be used as the interactive app for local TCC permission testing.
+an ad hoc signature. It also runs `npm run qa:macos-package`, which rebuilds the
+local ad hoc DMG, mounts it, verifies `RubyWhisper.app`, verifies the
+`Applications` symlink, checks bundled notices and source-safe Info.plist
+metadata, and runs `hdiutil verify`. It is only a non-release build/package
+gate and should not be used as the interactive app for local TCC permission
+testing.
 
 Release packaging, DMG creation, Apple Developer ID signing, notarization,
 provider keys, production secrets, and private env files are intentionally out
