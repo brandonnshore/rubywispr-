@@ -47,6 +47,9 @@ owner must perform or approve every step marked `Human gate`.
   human-approved, Developer ID signed and notarized artifact exists. The local
   `make -C apps/macos dmg CODESIGN_IDENTITY=-` helper can validate the DMG
   shape without producing a release artifact.
+- `npm run qa:macos-package` wraps the same local/ad hoc package path and
+  verifies source-safe app bundle metadata, bundled notices, ad hoc signatures,
+  mounted DMG contents, the `/Applications` symlink, and `hdiutil verify`.
 - Clean-Mac install/open QA remains manual and cannot be completed from this
   docs-only ticket.
 
@@ -273,8 +276,13 @@ make -C apps/macos dmg CODESIGN_IDENTITY=-
 ```
 
 That helper is for source-side drag-install shape checks only. It preflights
-the non-secret `create-dmg` and `fileicon` tools, packages an ad hoc app, and
-must not be treated as a release artifact.
+the non-secret macOS `hdiutil` tool, packages an ad hoc app, and must not be
+treated as a release artifact. The root source-safe wrapper verifies that same
+path:
+
+```bash
+npm run qa:macos-package
+```
 
 Placeholder-only Xcode-style release flow, not a current local development
 command:

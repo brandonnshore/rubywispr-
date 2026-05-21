@@ -156,6 +156,7 @@ npm run test
 npm run test:auth-privacy
 npm run qa:release-gate -- --allow-blocked
 npm run qa:browser-smoke
+npm run qa:macos-package
 npm run docs:check
 npm run build
 git diff --check
@@ -180,6 +181,12 @@ desktop and mobile viewport sizes, and records sanitized route, viewport, PNG
 dimension, and byte-size evidence only. It does not source private env files,
 click live auth/billing/provider flows, or approve release. Set `CHROME_BIN` or
 pass `-- --chrome-bin <path>` if Chrome is not in a known system location.
+
+`npm run qa:macos-package` is a source-safe local macOS package smoke. It uses
+the local/ad hoc Makefile build and DMG helper, verifies app bundle metadata,
+bundled notices, ad hoc signatures, mounted DMG contents, the `/Applications`
+symlink, and `hdiutil verify`. It does not Developer ID sign, notarize, staple,
+upload, publish, or approve a release artifact.
 
 For docs-only runbook changes, run `npm run docs:check`. It validates local
 Markdown links only; external URLs, mailto links, web app routes, and heading
