@@ -45,6 +45,8 @@ or live provider traffic.
 - PR `#216` adds `npm run qa:macos-manual-harness`, wires it into
   `npm run docs:check`, and keeps the source-owned manual QA template from
   being falsely marked complete before human evidence exists.
+- PR `#218` strengthens `npm run qa:release-gate` so the checked-in env
+  templates must keep required release placeholders present and blank.
 - Check open GitHub PR state directly before release; it is intentionally not
   treated as durable evidence in this note.
 - PR `#191` (`Use Supabase modern API key env names`) was closed as
@@ -91,8 +93,8 @@ Commands run against the validated source/config tree:
 | Local macOS package smoke | `npm run qa:macos-package` | Passed; wraps the local/ad hoc app and DMG build, verifies bundle metadata, bundled notices, ad hoc signatures, mounted DMG contents, `/Applications` symlink, and `hdiutil verify`. |
 | macOS CI PR build/package gate | PR `#209` and PR `#210` `Debug ad hoc build` checks | Passed; builds the ad hoc app, verifies bundle/signature, packages local DMG, mounts it, verifies contents/symlink, and runs `hdiutil verify`. |
 | macOS CI main dispatch | `gh workflow run macos-ci.yml --ref main` at commit `90e1f30` | Passed; post-merge check after PR `#209` verified the app build and local DMG shape on GitHub-hosted macOS. |
-| Release gate preflight, source-only | `npm run qa:release-gate -- --skip-network --allow-blocked` | Passed; validates release env placeholders and records live/manual release gates as deferred. |
-| Release gate preflight, deployed smoke | `npm run qa:release-gate -- --allow-blocked` | Passed; validates release env placeholders, public deployed routes, `/api/status`, and records live/manual release gates as deferred. |
+| Release gate preflight, source-only | `npm run qa:release-gate -- --skip-network --allow-blocked` | Passed; validates release env placeholders are present and blank, then records live/manual release gates as deferred. |
+| Release gate preflight, deployed smoke | `npm run qa:release-gate -- --allow-blocked` | Passed; validates release env placeholders are present and blank, public deployed routes, `/api/status`, and records live/manual release gates as deferred. |
 | Release gate preflight, blocking mode | `npm run qa:release-gate` | Exits `2` by design after source-safe checks pass because live/manual release gates remain deferred. |
 | Deployed browser render smoke | `npm run qa:browser-smoke` | Passed; Chrome rendered `/`, `/pricing`, `/download`, `/privacy`, `/terms`, `/support`, `/sign-in`, and `/sign-up` at `1365x900` desktop and `390x844` mobile viewport sizes with non-empty PNG screenshots. |
 | macOS manual QA harness guard | `npm run qa:macos-manual-harness` | Passed; validates that the source-owned manual QA template has not been falsely marked complete and that MAC-100 through MAC-108 name approved Recent Wisprs evidence sources. |
