@@ -191,6 +191,12 @@ bundled notices, ad hoc signatures, mounted DMG contents, the `/Applications`
 symlink, and `hdiutil verify`. It does not Developer ID sign, notarize, staple,
 upload, publish, or approve a release artifact.
 
+`npm run qa:macos-release-guardrails` verifies the source-safe fail-closed paths
+for release-sensitive macOS Makefile targets. It checks ad hoc, blank,
+placeholder, missing-identity, missing-profile, unavailable-tool, and
+missing-artifact categories without reading private env files, using Apple
+credentials, submitting to notary service, stapling, uploading, or publishing.
+
 For docs-only runbook changes, run `npm run docs:check`. It validates local
 Markdown links and the macOS manual QA harness guardrails; external URLs,
 mailto links, web app routes, and heading anchors still need reviewer judgment
