@@ -16,7 +16,8 @@ Deployment target:
   transcription API, and `/api/status`.
 - Package manager: npm with the repository root workspace lockfile.
 - CI baseline: `.github/workflows/web-ci.yml` runs `npm ci`, `npm run lint`,
-  `npm run typecheck`, `npm run test`, and `npm run build`.
+  `npm run typecheck`, `npm run test`, `npm run docs:check`, and
+  `npm run build`.
 
 The active `rubywhisper-web` Vercel project currently uses `apps/web` as its
 Root Directory. The repository also has a root `vercel.json` so a repo-root
