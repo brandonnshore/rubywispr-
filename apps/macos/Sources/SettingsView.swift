@@ -1233,8 +1233,8 @@ struct GeneralSettingsView: View {
             VStack(spacing: 6) {
                 MicrophoneOptionRow(
                     name: "System Default",
-                    isSelected: appState.selectedMicrophoneID == "default" || appState.selectedMicrophoneID.isEmpty,
-                    action: { appState.selectedMicrophoneID = "default" }
+                    isSelected: appState.selectedMicrophoneID == MicrophoneSelection.defaultID || appState.selectedMicrophoneID.isEmpty,
+                    action: { appState.selectedMicrophoneID = MicrophoneSelection.defaultID }
                 )
                 ForEach(appState.availableMicrophones) { device in
                     MicrophoneOptionRow(

@@ -43,6 +43,7 @@ private struct FirstRunOnboardingCoordinatorTests {
         testAccountGatePresentationMapsAuthAndRecoveryStates()
         testMicrophonePermissionGatePresentsRecoveryWithoutPrivateData()
         testStoredMetadataUsesOnlySanitizedCategories()
+        testCompletedSetupCountsAsCompletedTestWhisper()
         print("FirstRunOnboardingCoordinatorTests passed")
     }
 
@@ -326,6 +327,31 @@ private struct FirstRunOnboardingCoordinatorTests {
         for fragment in forbiddenFragments {
             expect(!serialized.contains(fragment), "permission evidence should not contain private fragment \(fragment)")
         }
+    }
+
+    private static func testCompletedSetupCountsAsCompletedTestWhisper() {
+        expect(
+            FirstRunOnboardingCoordinator.effectiveTestWhisperStatus(
+                hasCompletedSetup: true,
+                metadataCompleted: false
+            ) == .succeeded,
+            "previously completed setup should not force users back through test whisper"
+        )
+        expect(
+            FirstRunOnboardingCoordinator.effectiveTestWhisperStatus(
+                hasCompletedSetup: false,
+                metadataCompleted: true
+            ) == .succeeded,
+            "stored onboarding metadata should still count"
+        )
+        expect(
+            FirstRunOnboardingCoordinator.effectiveTestWhisperStatus(
+                hasCompletedSetup: true,
+                metadataCompleted: true,
+                explicitStatus: .failed
+            ) == .failed,
+            "active first-run test status should win during an explicit setup run"
+        )
     }
 
     private static func makeCoordinator(
