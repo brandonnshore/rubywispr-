@@ -329,7 +329,7 @@ Account category:
 | MAC-105 | Retention and expiry proof | Use the clock/store cleanup seam or approved manual inspection to advance an entry past the 7-day default retention window. | Expired entries are excluded or removed at the documented cleanup trigger, while unexpired entries remain. | Evidence source `test_seam` unless a real elapsed-time run is approved; timestamp metadata, cleanup trigger, before/after counts. | `Not Run` |
 | MAC-106 | No Recent Wispr for no-final-text failures | Trigger signed-out, permission, duration, provider, invalid-audio, and canceled paths through approved seams or a human run. | No Recent Wispr is created when final text does not exist. | Evidence source `test_seam` or `real_mac`; failure category, final-text-absent category, local history count. | `Not Run` |
 | MAC-107 | Recent Wisprs no-sync boundary | Inspect backend/Supabase/API spies after create, copy, clear, disable, cleanup, and retry-from-history paths. | Recent Wisprs operations do not create backend/Supabase rows, request bodies, logs, or local-history sync calls. | Evidence source `test_seam`; command/check names, backend-call category, row/log count summary only. | `Not Run` |
-| MAC-108 | Recent Wisprs evidence packet review | Review all Recent Wisprs notes, attachments, screenshots, recordings, and command output before posting. | Evidence contains only metadata and sanitized UI; any human-required gaps are listed as `Blocked`, not inferred as `Pass`. | Evidence source review category, forbidden-content checklist result, blocked row IDs. | `Not Run` |
+| MAC-108 | Recent Wisprs evidence packet review | Review all Recent Wisprs notes, attachments, screenshots, recordings, and command output before posting. | Evidence contains only metadata and sanitized UI; any human-required gaps are listed as `Blocked`, not inferred as `Pass`. | Evidence source `real_mac` or `test_seam` review category, forbidden-content checklist result, blocked row IDs. | `Not Run` |
 | MAC-109 | Dictionary add/edit/delete | Add, edit, duplicate-reject, disable, and delete synthetic terms. | Terms are local-only, validated, never Keychain/server-backed, and deletion removes them from future payloads. | Counts and validation outcome categories only. | `Not Run` |
 | MAC-110 | Dictionary payload gating | Dictate with cleanup enabled/disabled and dictionary support enabled/disabled. | `dictionaryTerms` is sent only when Terms accepted, cleanup enabled, dictionary enabled, and valid active terms exist; otherwise omitted. | Payload-shape category from redacted instrumentation. | `Not Run` |
 | MAC-111 | Settings surfaces | Open settings for account, hotkeys, cleanup, history, dictionary, provider/privacy. | Settings show current metadata/status without exposing secrets, transcript content, clipboard content, or unsupported customization. | Surface names and status categories. | `Not Run` |
@@ -351,13 +351,19 @@ Account category:
 These checks can run before all manual Mac QA prerequisites exist. They validate
 the harness document only and do not execute manual QA.
 
+The automated source-safe guard runs with:
+
+```bash
+npm run qa:macos-manual-harness
+```
+
 | ID | Check | Command or method | Expected result | Status |
 | --- | --- | --- | --- | --- |
 | DOC-001 | Markdown diff whitespace | `git diff --check` | No whitespace errors. | `Not Run` |
 | DOC-002 | Secret/private-content search | Targeted `rg` over changed docs for forbidden tokens and content categories. | Matches are only policy references or placeholder names, not values/private content. | `Not Run` |
-| DOC-003 | False-pass search | Search changed docs for `Pass` usage and manual result claims. | No manual QA row is marked `Pass`; all default manual rows are `Not Run` or `Blocked`. | `Not Run` |
+| DOC-003 | False-pass search | `npm run qa:macos-manual-harness` | No manual QA row is marked `Pass`; all default manual rows are `Not Run` or `Blocked`. | `Not Run` |
 | DOC-004 | Source/test scope confirmation | `git diff --name-only` | Docs-only change; no source/test command required. | `Not Run` |
-| DOC-005 | Recent Wisprs evidence-source coverage | Review MAC-100 through MAC-108. | Every Recent Wisprs row names `real_mac`, `test_seam`, or both as the allowed evidence source. | `Not Run` |
+| DOC-005 | Recent Wisprs evidence-source coverage | `npm run qa:macos-manual-harness` | Every Recent Wisprs row names `real_mac`, `test_seam`, or both as the allowed evidence source. | `Not Run` |
 
 ## Blocked Manual Checks
 

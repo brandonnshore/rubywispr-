@@ -15,7 +15,8 @@
     "qa:release-gate": "node scripts/qa/release-gate-preflight.mjs",
     "qa:browser-smoke": "node scripts/qa/browser-render-smoke.mjs",
     "qa:macos-package": "bash scripts/qa/macos-local-package-smoke.sh",
-    "docs:check": "node scripts/qa/docs-local-links.mjs",
+    "qa:macos-manual-harness": "node scripts/qa/macos-manual-harness-check.mjs",
+    "docs:check": "node scripts/qa/docs-local-links.mjs && node scripts/qa/macos-manual-harness-check.mjs",
     "build": "npm run build --workspace @rubywhisper/web"
   },
   "overrides": {

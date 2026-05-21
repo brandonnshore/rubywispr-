@@ -157,6 +157,7 @@ npm run test:auth-privacy
 npm run qa:release-gate -- --allow-blocked
 npm run qa:browser-smoke
 npm run qa:macos-package
+npm run qa:macos-manual-harness
 npm run docs:check
 npm run build
 git diff --check
@@ -189,8 +190,14 @@ symlink, and `hdiutil verify`. It does not Developer ID sign, notarize, staple,
 upload, publish, or approve a release artifact.
 
 For docs-only runbook changes, run `npm run docs:check`. It validates local
-Markdown links only; external URLs, mailto links, web app routes, and heading
-anchors still need reviewer judgment when those surfaces change.
+Markdown links and the macOS manual QA harness guardrails; external URLs,
+mailto links, web app routes, and heading anchors still need reviewer judgment
+when those surfaces change.
+
+`npm run qa:macos-manual-harness` validates the source-owned manual QA template
+without executing manual QA. It keeps prerequisite rows blocked, keeps manual
+MAC rows at `Not Run`, and confirms MAC-100 through MAC-108 name `real_mac`,
+`test_seam`, or both as allowed Recent Wisprs evidence sources.
 
 ## Preview Or Staging Validation
 
