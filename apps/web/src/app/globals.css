@@ -1338,16 +1338,27 @@ h1 {
 }
 
 .auth-shell {
-  place-items: start center;
+  place-items: center;
+  padding-top: var(--rw-space-8);
+  padding-bottom: var(--rw-space-8);
 }
 
 .auth-panel {
-  width: min(100%, 760px);
+  width: min(100%, 680px);
+}
+
+.auth-panel h1 {
+  max-width: 11ch;
+  font-size: clamp(2.4rem, 8vw, 4.4rem);
+}
+
+.auth-panel .surface-copy {
+  max-width: 48ch;
 }
 
 .auth-card {
   margin-top: var(--rw-space-8);
-  max-width: 420px;
+  width: min(100%, 420px);
 }
 
 .email-auth-form {
@@ -1379,7 +1390,22 @@ h1 {
 }
 
 .clerk-card {
-  box-shadow: none;
+  background: #ffffff;
+  color: #17171b;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 60%) inset,
+    0 16px 42px rgb(0 0 0 / 36%);
+}
+
+.clerk-card :is(h1, h2, h3, p, label, span, button) {
+  color: inherit;
+}
+
+.clerk-card input {
+  color: #17171b;
+}
+
+.clerk-card input::placeholder {
+  color: rgb(23 23 27 / 48%);
 }
 
 .account-panel {
