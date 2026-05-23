@@ -68,6 +68,22 @@ test("auth route shell gates Clerk components behind blank-env safe public confi
   assert.match(source, /data-clerk-configured/);
 });
 
+test("auth route shell keeps Clerk card legible on the dark RubyWhisper surface", async () => {
+  const [source, globalStyles] = await Promise.all([
+    readFile(authShellRoute, "utf8"),
+    readFile(path.join("src", "app", "globals.css"), "utf8"),
+  ]);
+
+  assert.match(source, /colorBackground:\s*["']#ffffff["']/);
+  assert.match(source, /colorText:\s*["']#17171b["']/);
+  assert.match(source, /colorInputBackground:\s*["']#ffffff["']/);
+  assert.match(source, /colorInputText:\s*["']#17171b["']/);
+  assert.match(globalStyles, /\.auth-panel h1\s*\{/);
+  assert.match(globalStyles, /\.auth-card\s*\{[\s\S]*width:\s*min\(100%, 420px\);/);
+  assert.match(globalStyles, /\.clerk-card\s*\{[\s\S]*background:\s*#ffffff;/);
+  assert.match(globalStyles, /\.clerk-card\s*\{[\s\S]*color:\s*#17171b;/);
+});
+
 test("auth source avoids logging or fixture storage of auth link and session material", async () => {
   const violations = [];
 
