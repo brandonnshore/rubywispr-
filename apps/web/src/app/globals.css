@@ -2534,14 +2534,12 @@ h1 span {
     0 24px 70px rgb(0 0 0 / 42%);
 }
 
-.clerk-card .clerk-auth-header,
-.clerk-card .cl-header {
+.clerk-card .clerk-auth-header {
   width: 100% !important;
   align-items: flex-start !important;
 }
 
-.clerk-card .clerk-auth-title,
-.clerk-card .cl-headerTitle {
+.clerk-card .clerk-auth-title {
   max-width: 100% !important;
   color: #17171b !important;
   font-size: clamp(2.15rem, 4vw, 3.2rem) !important;
@@ -2551,19 +2549,13 @@ h1 span {
   word-break: normal;
 }
 
-.clerk-card .cl-main,
-.clerk-card .cl-form,
-.clerk-card .cl-formField,
-.clerk-card .cl-formFieldRow,
-.clerk-card .cl-formFieldInputGroup,
-.clerk-card .cl-formButtonPrimary {
+.clerk-card .clerk-auth-main,
+.clerk-card .clerk-auth-form,
+.clerk-card .clerk-auth-field,
+.clerk-card .clerk-auth-field-row,
+.clerk-card .clerk-auth-input-group,
+.clerk-card .clerk-auth-button {
   width: 100% !important;
-}
-
-.clerk-card .cl-dividerRow,
-.clerk-card .cl-socialButtonsRoot,
-.clerk-card .cl-socialButtons {
-  display: none !important;
 }
 
 .clerk-auth-hidden {
