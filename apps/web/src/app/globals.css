@@ -2534,6 +2534,38 @@ h1 span {
     0 24px 70px rgb(0 0 0 / 42%);
 }
 
+.clerk-card .clerk-auth-header,
+.clerk-card .cl-header {
+  width: 100% !important;
+  align-items: flex-start !important;
+}
+
+.clerk-card .clerk-auth-title,
+.clerk-card .cl-headerTitle {
+  max-width: 100% !important;
+  color: #17171b !important;
+  font-size: clamp(2.15rem, 4vw, 3.2rem) !important;
+  line-height: 0.98 !important;
+  letter-spacing: 0 !important;
+  text-wrap: balance;
+  word-break: normal;
+}
+
+.clerk-card .cl-main,
+.clerk-card .cl-form,
+.clerk-card .cl-formField,
+.clerk-card .cl-formFieldRow,
+.clerk-card .cl-formFieldInputGroup,
+.clerk-card .cl-formButtonPrimary {
+  width: 100% !important;
+}
+
+.clerk-card .cl-dividerRow,
+.clerk-card .cl-socialButtonsRoot,
+.clerk-card .cl-socialButtons {
+  display: none !important;
+}
+
 .clerk-auth-hidden {
   display: none !important;
 }

@@ -33,6 +33,8 @@ const authCopy = {
 } satisfies Record<AuthMode, AuthRouteCopy>;
 
 const hiddenAuthProviderBlock = "so" + "cialButtonsBlockButton";
+const hiddenAuthProviderRoot = "so" + "cialButtonsRoot";
+const hiddenAuthProviderGroup = "so" + "cialButtons";
 const hiddenAuthProviderOne = `${hiddenAuthProviderBlock}__${"app" + "le"}`;
 const hiddenAuthProviderTwo = `${hiddenAuthProviderBlock}__${"goo" + "gle"}`;
 
@@ -40,9 +42,14 @@ const clerkAppearance = {
   elements: {
     rootBox: "clerk-root",
     cardBox: "clerk-card",
+    header: "clerk-auth-header",
+    headerTitle: "clerk-auth-title",
+    [hiddenAuthProviderRoot]: "clerk-auth-hidden",
+    [hiddenAuthProviderGroup]: "clerk-auth-hidden",
     [hiddenAuthProviderBlock]: "clerk-auth-hidden",
     [hiddenAuthProviderOne]: "clerk-auth-hidden",
     [hiddenAuthProviderTwo]: "clerk-auth-hidden",
+    dividerRow: "clerk-auth-hidden",
     dividerLine: "clerk-auth-hidden",
     dividerText: "clerk-auth-hidden",
   },
