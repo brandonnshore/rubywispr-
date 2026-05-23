@@ -1,26 +1,53 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const supportEmail = "brandon@rubyadvisory.com";
 
 const howItWorksSteps = [
   {
-    title: "Place your cursor",
+    title: "Put the cursor where the text should land.",
     copy: "Start in Notes, Mail, a browser, an editor, or any app where you were already writing.",
   },
   {
-    title: "Hold the hotkey",
-    copy: "RubyWhisper shows a compact recording island with live voice pickup, then transcribes when you stop.",
+    title: "Hold Fn and speak naturally.",
+    copy: "RubyWhisper keeps the recording island compact, visible, and focused on the current state.",
   },
   {
-    title: "Keep writing",
-    copy: "The cleaned text lands in the active app, with Recent Wisprs kept locally on your Mac for recovery.",
+    title: "Keep writing when the text appears.",
+    copy: "Cleaned text lands in the active app, with Recent Wisprs kept locally on your Mac for recovery.",
   },
 ];
 
-const proofMetrics = [
-  ["Input", "Fn hold"],
-  ["State", "Recording"],
-  ["Output", "Cleaned text"],
+const featureCards = [
+  {
+    accent: "ruby",
+    label: "Push to talk",
+    title: "Hold Fn, talk, release.",
+    copy: "A fast recording loop for the tiny bursts of writing you do all day.",
+  },
+  {
+    accent: "amber",
+    label: "Local recovery",
+    title: "Recent Wisprs stay on the Mac.",
+    copy: "If insertion needs backup, recovery happens locally instead of exposing private dictation in admin tools.",
+  },
+  {
+    accent: "blue",
+    label: "Conservative cleanup",
+    title: "Polished text, not rewritten personality.",
+    copy: "RubyWhisper cleans dictation lightly so the result still sounds like you.",
+  },
+];
+
+const integrationTargets = [
+  "Notes",
+  "Mail",
+  "Messages",
+  "Chrome",
+  "Cursor",
+  "Slack",
+  "Linear",
+  "Docs",
 ];
 
 const routeAreas = [
@@ -50,14 +77,14 @@ const routeAreas = [
     owner: "Manage terms, billing actions, support, and download readiness.",
   },
   {
-    href: "/terms",
-    label: "Terms",
-    owner: "Review beta usage, limits, and account acceptance language.",
-  },
-  {
     href: "/privacy",
     label: "Privacy",
     owner: "Understand metadata-only server records and local Recent Wisprs.",
+  },
+  {
+    href: "/terms",
+    label: "Terms",
+    owner: "Review beta usage, limits, and account acceptance language.",
   },
   {
     href: "/support",
@@ -78,44 +105,69 @@ export default function PublicHome() {
         className="surface-panel public-panel marketing-home-panel rw-reveal"
         aria-labelledby="public-heading"
       >
-        <header className="route-header marketing-home-header">
-          <Link className="route-brand" href="/" aria-label="RubyWhisper home">
-            RubyWhisper
-          </Link>
-          <nav className="route-nav" aria-label="Primary routes">
-            <Link href="/download">Download</Link>
-            <Link href="/pricing">Pricing</Link>
-            <Link href="/sign-up">Sign up</Link>
-            <Link href="/sign-in">Sign in</Link>
-            <Link href="/account">Account</Link>
-            <Link href="/support">Support</Link>
-          </nav>
-        </header>
+        <MarketingNav />
 
         <section className="marketing-hero" aria-label="RubyWhisper overview">
           <div className="marketing-hero-copy rw-reveal">
             <p className="surface-kicker">Mac dictation</p>
-            <h1 id="public-heading">RubyWhisper</h1>
+            <h1 id="public-heading">
+              Just speak.
+              <span>Write faster.</span>
+            </h1>
             <p className="surface-offer marketing-offer">
-              Fast Mac dictation that works anywhere you can type.
+              Turn your voice into polished text.
             </p>
             <p className="surface-copy public-copy">
-              Hold a hotkey, speak, and keep writing. RubyWhisper is being
-              shaped as a native-feeling Mac utility for quick dictation,
-              conservative cleanup, and recovery when insertion needs a backup.
+              RubyWhisper works anywhere you can type. Hold a hotkey, speak,
+              and keep writing while clean text lands where your cursor was
+              already waiting.
             </p>
 
             <div className="cta-row" aria-label="RubyWhisper actions">
-              <Link className="rw-button" href="/download">
-                Check beta download
+              <Link
+                aria-label="Check beta download"
+                className="rw-button"
+                href="/download"
+              >
+                <span>Download for Mac</span>
+                <span aria-hidden="true" className="rw-button-icon">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M6 1v8m0 0 3-3m-3 3L3 6"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                    />
+                  </svg>
+                </span>
               </Link>
               <Link className="rw-button rw-button-secondary" href="/pricing">
                 View pricing
               </Link>
             </div>
+
+            <p className="hero-footnote">
+              5,000 trial words. Metadata-only server records. Mac-only beta.
+            </p>
           </div>
 
           <ProductProof />
+        </section>
+
+        <section
+          className="marketing-section marketing-logos rw-scroll-reveal"
+          aria-labelledby="used-heading"
+        >
+          <div className="marketing-section-heading">
+            <p className="surface-kicker">Built for motion</p>
+            <h2 id="used-heading">For people who write while moving fast.</h2>
+          </div>
+          <div className="trust-grid" aria-label="RubyWhisper workflow targets">
+            {integrationTargets.map((target) => (
+              <span key={target}>{target}</span>
+            ))}
+          </div>
         </section>
 
         <section
@@ -138,6 +190,28 @@ export default function PublicHome() {
         </section>
 
         <section
+          className="marketing-feature-stack rw-scroll-reveal"
+          aria-labelledby="inside-heading"
+        >
+          <div className="marketing-section-heading">
+            <p className="surface-kicker">What is inside</p>
+            <h2 id="inside-heading">Powerful features, quietly integrated.</h2>
+          </div>
+          <div className="feature-card-grid">
+            {featureCards.map((feature) => (
+              <article
+                className={`feature-card feature-card-${feature.accent}`}
+                key={feature.title}
+              >
+                <p>{feature.label}</p>
+                <h3>{feature.title}</h3>
+                <span>{feature.copy}</span>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section
           className="marketing-proof-band rw-scroll-reveal"
           aria-labelledby="proof-heading"
         >
@@ -146,10 +220,9 @@ export default function PublicHome() {
             <h2 id="proof-heading">Built around the recording island.</h2>
           </div>
           <p>
-            The signature surface is compact, visible, and focused on the
-            state that matters: listening, processing, success, or recovery.
-            The finished text appears where the cursor was already waiting.
-            It is product proof, not a generic dashboard decoration.
+            The signature surface is compact, visible, and focused on the state
+            that matters: listening, processing, success, or recovery. It is
+            product proof, not a generic dashboard decoration.
           </p>
         </section>
 
@@ -224,6 +297,24 @@ export default function PublicHome() {
   );
 }
 
+function MarketingNav() {
+  return (
+    <header className="route-header marketing-home-header">
+      <Link className="route-brand" href="/" aria-label="RubyWhisper home">
+        <Image alt="" height={22} src="/rubywhisper-icon.png" width={22} />
+        <span>RubyWhisper</span>
+      </Link>
+      <nav className="route-nav" aria-label="Primary routes">
+        <Link href="/">Home</Link>
+        <Link href="/download">Download</Link>
+        <Link href="/pricing">Pricing</Link>
+        <Link href="/sign-up">Sign up</Link>
+        <Link href="/support">Support</Link>
+      </nav>
+    </header>
+  );
+}
+
 function ProductProof() {
   return (
     <aside
@@ -231,58 +322,92 @@ function ProductProof() {
       aria-label="RubyWhisper dictation preview"
     >
       <div className="product-proof-stage" aria-hidden="true">
-        <div className="product-proof-glow" />
-        <div className="product-proof-pill">
-          <button
-            className="product-proof-pill-cancel"
-            type="button"
-            aria-label="Cancel recording (demo)"
-            tabIndex={-1}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path
-                d="M1 1l8 8M9 1l-8 8"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-          <div className="product-proof-waveform" aria-hidden="true">
-            {Array.from({ length: 14 }).map((_, index) => (
-              <span
-                key={index}
-                style={{ animationDelay: `${index * 70}ms` }}
-              />
-            ))}
-          </div>
-          <button
-            className="product-proof-pill-stop"
-            type="button"
-            aria-label="Stop recording (demo)"
-            tabIndex={-1}
-          >
+        <div className="voice-profile" />
+        <div className="product-window product-window-mail">
+          <div className="window-controls">
             <span />
-          </button>
+            <span />
+            <span />
+          </div>
+          <div className="mail-line mail-line-short" />
+          <div className="mail-line" />
+          <div className="mail-line mail-line-soft" />
         </div>
-        <div className="product-proof-dock" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
+        <div className="product-window product-window-editor">
+          <div className="window-controls">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="editor-row">
+            <span>fn</span>
+            <i />
+            <strong>ruby draft</strong>
+          </div>
+          <div className="editor-copy">
+            Dictate the note, keep the cursor, send the cleaned text.
+          </div>
         </div>
+        <RecordingPill />
       </div>
 
       <dl className="product-proof-metrics">
-        {proofMetrics.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
+        <div>
+          <dt>Input</dt>
+          <dd>Fn hold</dd>
+        </div>
+        <div>
+          <dt>State</dt>
+          <dd>Recording</dd>
+        </div>
+        <div>
+          <dt>Output</dt>
+          <dd>Cleaned text</dd>
+        </div>
       </dl>
     </aside>
+  );
+}
+
+function RecordingPill() {
+  return (
+    <div className="product-proof-pill">
+      <button
+        className="product-proof-pill-cancel"
+        type="button"
+        aria-label="Cancel recording (demo)"
+        tabIndex={-1}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path
+            d="M1 1l8 8M9 1l-8 8"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+      <div className="product-proof-waveform" aria-hidden="true">
+        {Array.from({ length: 14 }).map((_, index) => (
+          <span key={index} style={{ animationDelay: `${index * 70}ms` }} />
+        ))}
+      </div>
+      <button
+        className="product-proof-pill-stop"
+        type="button"
+        aria-label="Stop recording (demo)"
+        tabIndex={-1}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path
+            d="M3 7.4 5.65 10 11 4"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+          />
+        </svg>
+      </button>
+    </div>
   );
 }

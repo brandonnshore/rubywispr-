@@ -190,6 +190,10 @@ function createPublicRequire() {
         return {
           default: linkComponent,
         };
+      case "next/image":
+        return {
+          default: imageComponent,
+        };
       default:
         throw new Error(`Unexpected public dependency ${specifier}`);
     }
@@ -247,6 +251,19 @@ function createAuthRequire() {
           ClerkProvider: ({ children }) => children,
           SignIn: () => null,
           SignUp: () => null,
+        };
+      case "next/link":
+        return {
+          default: ({ href, children, ...props }) =>
+            requireCommonJs("react").createElement(
+              "a",
+              { ...props, href },
+              children,
+            ),
+        };
+      case "next/image":
+        return {
+          default: imageComponent,
         };
       case "@/config/client":
         return {
@@ -381,6 +398,10 @@ function linkComponent({ href, children, ...props }) {
     { ...props, href },
     children,
   );
+}
+
+function imageComponent(props) {
+  return requireCommonJs("react").createElement("img", props);
 }
 
 function assertRouteLinks(markup, expectedHrefs) {
