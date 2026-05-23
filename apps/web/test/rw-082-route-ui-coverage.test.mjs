@@ -47,7 +47,8 @@ test("RW-082 public routes keep pricing, download, and account navigation discov
 
   assertRouteLinks(homeMarkup, ["/download", "/pricing", "/account"]);
   assertRouteLinks(homeMarkup, ["/sign-up", "/sign-in"]);
-  assert.match(homeMarkup, /Fast Mac dictation that works anywhere you can type/);
+  assert.match(homeMarkup, /Just speak\.<span>Write faster\.<\/span>/);
+  assert.match(homeMarkup, /RubyWhisper works anywhere you can type/);
   assert.match(homeMarkup, /Check beta download/);
   assert.match(homeMarkup, /View pricing/);
   assert.match(homeMarkup, /Audio and transcript content are not stored on RubyWhisper servers/);
@@ -242,6 +243,10 @@ function createPublicRequire() {
         return {
           default: linkComponent,
         };
+      case "next/image":
+        return {
+          default: imageComponent,
+        };
       default:
         throw new Error(`Unexpected public page dependency ${specifier}`);
     }
@@ -341,6 +346,10 @@ function linkComponent({ href, children, ...props }) {
     { ...props, href },
     children,
   );
+}
+
+function imageComponent(props) {
+  return requireCommonJs("react").createElement("img", props);
 }
 
 function assertRouteLinks(markup, expectedHrefs) {

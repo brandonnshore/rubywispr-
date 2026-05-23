@@ -45,13 +45,14 @@ test("home page first viewport keeps RubyWhisper positioning and literal offer",
   const heroText = textContent(heroMarkup);
 
   assert.match(heroText, /RubyWhisper/);
+  assert.match(heroText, /Just speak\. Write faster\./);
+  assert.match(heroText, /Turn your voice into polished text\./);
+  assert.match(heroText, /RubyWhisper works anywhere you can type\./);
   assert.match(
     heroText,
-    /Fast Mac dictation that works anywhere you can type\./,
+    /Hold a hotkey, speak, and keep writing while clean text lands/,
   );
-  assert.match(heroText, /Hold a hotkey, speak, and keep writing\./);
-  assert.match(heroText, /native-feeling Mac utility/);
-  assert.match(heroText, /quick dictation/);
+  assert.match(heroText, /For people who write while moving fast\./);
 });
 
 test("home page keeps download, pricing, account, and auth routes discoverable", async () => {
@@ -78,10 +79,7 @@ test("home page keeps product proof and privacy promises without private storage
   assert.match(pageText, /Product proof/);
   assert.match(pageText, /Built around the recording island\./);
   assert.match(pageText, /listening, processing, success, or recovery/);
-  assert.match(
-    pageText,
-    /The finished text appears where the cursor was already waiting\./,
-  );
+  assert.match(pageText, /Cleaned text lands in the active app/);
 
   assert.match(pageText, /Privacy promise/);
   assert.match(
@@ -135,10 +133,18 @@ function createPublicPageRequire() {
               children,
             ),
         };
+      case "next/image":
+        return {
+          default: imageComponent,
+        };
       default:
         throw new Error(`Unexpected public page dependency ${specifier}`);
     }
   };
+}
+
+function imageComponent(props) {
+  return requireCommonJs("react").createElement("img", props);
 }
 
 function extractSectionBefore(markup, { start, end }) {
