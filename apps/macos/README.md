@@ -153,6 +153,13 @@ values.
 - Autonomous agent work must not provide real Apple identities, notary
   profiles, private key paths, tokens, or release upload destinations.
 
+The source-safe guardrail smoke verifies those fail-closed paths without using
+real Apple credentials or submitting artifacts:
+
+```bash
+npm run qa:macos-release-guardrails
+```
+
 The paid beta release artifact remains human-gated by
 `docs/MAC_BETA_RELEASE_RUNBOOK.md`.
 
